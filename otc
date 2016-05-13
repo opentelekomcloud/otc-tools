@@ -205,22 +205,33 @@ getECSDetail() {
 }
 
 getVPCList() {
-	curlgetauth $TOKEN "$AUTH_URL_VPCS" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
+	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
 #| python -m json.tool
 }
 
 getPUBLICIPSList() {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=42" | jq '.[]'
+#| python -m json.tool
+}
+
+getSECGROUPListDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.[]'
 #| python -m json.tool
 }
 
 getSECGROUPList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+ 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
+#| python -m json.tool
+}
+
+getSECGROUPRULESListOld() {
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 #| python -m json.tool
 }
 
 getSECGROUPRULESList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
+
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
 
@@ -230,7 +241,7 @@ getEVSList() {
 
 
 getSUBNETList() {
-	curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -248,27 +259,27 @@ find_id()
 
 # convert functions 
 convertSUBNETNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS"
+	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
-	SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | find_id subnets "$SUBNETNAME"`
+	SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | find_id subnets "$SUBNETNAME"`
 	export SUBNETID
 }
 
 
 convertVPCNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_VPCS" 
-	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
-	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS" | find_id vpcs "$VPCNAME"`
+	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" 
+	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
+	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | find_id vpcs "$VPCNAME"`
 	#echo $VPCID
 	export VPCID
 }
 
 
 convertSECUGROUPNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" > ~/tmp/sg
+	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" > ~/tmp/sg
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$SECUGROUPNAME'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
-	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` != 1; then
 		echo "Warning: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
@@ -278,27 +289,37 @@ convertSECUGROUPNameToId() {
 
 
 convertIMAGENameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_IMAGES" > ~/tmp/img
+	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" > ~/tmp/img
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | find_id images "$IMAGENAME"`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$IMAGENAME"`
 	export IMAGE_ID
 }
 
 
 getIMAGEList() {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES"| jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
+#| python -m json.tool
+}
+
+getIMAGEDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
 
 
+getFLAVORListOld() {
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.[]'
+#| python -m json.tool
+}
+
 getFLAVORList() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS"| jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
 #| python -m json.tool
 }
 
 
 getKEYPAIRList() {
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=160" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -320,13 +341,14 @@ printHelp() {
    echo "otc vpc list                   list all vpc"
    echo "otc subnet list                list all subnet"
    echo "otc security-group list        list all security-group"
-   echo "otc security-group-rules list <group-id>     show rules of security group rules in <group-id> group"
+   echo "otc security-group-rules list <group-id>     show rules of security group <group-id>"
    echo "otc keypair list               list ssh key pairs"
    echo "otc vpc create --vpc-name <vpcname> --cidr <cidr>     create vpc "
-   echo "otc security-group create -g <groupname> --vpc-name <vpcn name> create security group" 
+   echo "otc security-group create -g <groupname> --vpc-name <vpc name> create security group" 
    echo "otc subnet create --subnet-name <subnetname> --cidr <cidr> --gateway-ip <gateway> --primary-dns <primary-dns> --secondary-dns <sec-dns> --availability-zone <avalibility zone> --vpc-name <vpcname>"
    echo "otc security-group-rules create --security-group-name <secgroupname> --direction <direction> --protocol <protocol: tcp, udp, icmp> --ethertype <ethtype: IPv4,IPv6>  --portmin <port min> --portmax <portmax>"
    echo "otc images list                list all images"
+   echo "otc images show <id>           show image details"
    echo "otc iam token                  generate a new iam token"
    echo ""
 }
@@ -390,26 +412,44 @@ getPersonalizationJSON() {
 
 
 ECSCreate() {
-        
-
-	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
-		# TODO: have to got from param 
-		PUBLICIPJSON='"publicip": { "eip": { "iptype": "5_bgp", "bandwidth": { "size": 25, "sharetype": "PER", "chargemode": "traffic" } } },'
+	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
+		echo "INSTANCE_NAME may only contain letters, digits, _ and -"
+		exit 2
 	fi
+       
+	getPersonalizationJSON
+
 	if [ -n "$ROOTDISKSIZE" ]; then
 		DISKSIZE=', "size": "'$ROOTDISKSIZE'"'
 	else
 		unset DISKSIZE
 	fi
 
-	getPersonalizationJSON
-	if test -n "$KEYNAME"; then
-		VMAUTH='"key_name": "'"$KEYNAME"'"'
-	else
-		VMAUTH='"adminPass": "'"$ADMINPASS"'"'
+	OPTIONAL=""	
+	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
+		# TODO: have to got from param 
+		OPTIONAL="$OPTIONAL
+		\"publicip\": { 
+			\"eip\": { 
+				\"iptype\": \"5_bgp\", 
+				\"bandwidth\": { 
+					\"size\": 25, 
+					\"sharetype\": \"PER\", 
+					\"chargemode\": \"traffic\" 
+				} 
+			} 
+		},"
 	fi
-	#echo "$VMAUTH"
-	#VNCKEYMAP='"__vnc_keymap": "en",'
+
+	if test -n "$KEYNAME"; then
+		OPTIONAL="$OPTIONAL
+		\"key_name\": \"$KEYNAME\","
+	fi
+	if test -n "$ADMINPASS"; then
+		OPTIONAL="$OPTIONAL
+		\"adminPass\": \"$ADMINPASS\","
+	fi
+	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 
 	REQ_CREATE_VM='{
 	    "server": {
@@ -419,13 +459,12 @@ ECSCreate() {
 		"root_volume": { 
 			"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
 		},
-		"flavorRef": "'"$INSTANCE_TYPE"'",'"$PERSONALIZATION"'
+		"flavorRef": "'"$INSTANCE_TYPE"'",
+		'"$PERSONALIZATION"'
 		"vpcid": "'"$VPCID"'",
 		"security_groups": [ { "id": "'"$SECUGROUP"'" } ],
 		"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
-		'"$PUBLICIPJSON"'
-		'"$VNCKEYMAP"'
-		'"$VMAUTH"',
+		'"$OPTIONAL"'
 		"count": "'"$NUMCOUNT"'"
 	    }
 	}'
@@ -933,9 +972,9 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
 	printHelp
 	exit 1 
    fi
-   SECUGROUP=$1   
+   SECUGROUP=$1
    AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
-   getSECGROUPRULESList
+   getSECGROUPRULESList $1
 
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
@@ -954,6 +993,9 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getIMAGEList
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
+   getIamToken
+   getIMAGEDetail $1
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getIamToken
    getFLAVORList
