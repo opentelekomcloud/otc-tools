@@ -12,3 +12,6 @@ how simple the REST calls can be done with curl if you want to
 build your own tooling. It uses the OpenStack APIs as well as some
 of the custom OTC APIs.
 
+Packages (RPMs/DEBs) on open Build Service home:garloff:OTC
+https://build.opensuse.org/package/show/home:garloff:OTC/otc-tools
+
