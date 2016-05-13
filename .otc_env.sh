@@ -44,7 +44,7 @@ export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
 
 # Optionally use a proxy for s3 and curl
 #export HTTPS_PROXY=
-#export OS_CACERT=/OTC-API-GW-CA-Bundle.pem
+#export OS_CACERT=/etc/ssl/OTC-API-GW-CA-Bundle.pem
 
 # HAVE TO CHANGE END ######
 
