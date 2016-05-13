@@ -1,0 +1,963 @@
+#!/bin/bash
+# == Module: Open Telekom Cloud Cli Interface 0.6.x
+#
+# Manage OTC via Command Line 
+#
+# === Parameters
+#
+# === Variables
+#
+# === Examples
+#
+# Examples 
+# ./otc iam token 
+# ./otc ecs list
+# ./otc s3 create newbucket
+# ./otc s3 list
+# ./otc s3 list mybucket/
+# ./otc s3 get mybucket/myfile.txt
+# ./otc s3 put mybucket/myfile.txt filename=/tmp/myfile.txt
+# ./otc vpc list
+# ./otc subnet list
+# ./otc security-group list
+# ./otc security-group-rules list zzzzzz-kkkk-zzzz-yyyyy-xxxxxxx
+# ./otc vpc create --vpc-name testvpc --cidr 10.0.0.0/8
+# ./otc security-group create -g testsecgroup --vpc-name testvpc
+# ./otc subnet create --subnet-name testsubnet --cidr 10.0.2.0/8 --gateway-ip 10.0.0.2 --primary-dns 217.150.148.148 --secondary-dns 195.244.235.14 --availability-zone eu-de-01 --vpc-name testvpc
+# ./otc security-group-rules create --security-group-name testsecgroup --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
+# ./otc security-group-rules create --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
+#./otc ecs create
+# ./otc ecs create --count 2
+# ./otc ecs create --count 2  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup
+# ./otc ecs create --count 3  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup --public true
+# ./otc ecs create --count 1  --public true --file1 /otc/targetfile=/otc/sorucefile
+# ./otc ecs delete ID [ID [ID]]
+# ./otc keypair list	aka ./otc ecs keyname-list
+# === Authors
+# 
+# Zsolt Nagy <Z.Nagy@t-systems.com>
+# Kurt Garloff <t-systems@garloff.de>
+#
+# === Copyright
+#
+# Copyright 2016 T-Systems International GmbH
+# License: CC-BY-SA
+#
+
+
+# Get Config ####################################################################
+otc_dir="$(dirname "$0")"
+if test -e ~/.otc_env.sh; then 
+	source ~/.otc_env.sh
+else
+	echo "Warning: No ~/.otc_env.sh found, no defaults for ECS creation"
+	if test -z "$OS_USERNAME"; then
+		test -e ~/novarc && source ~/novarc
+		test -e ~/.ostackrc && source ~/.ostackrc
+	fi
+fi
+
+if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
+	echo "Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_ID or OS_PROJECT_NAME environment"
+	echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY"
+	exit 1
+fi
+
+
+# ENVIROMENT SETTINGS ####################################################################
+test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
+
+if test -n "$OS_AUTH_URL"; then 
+	export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
+else
+	export IAM_AUTH_URL="https://iam.eu-de.otc.t-systems.com/v3/auth/tokens"
+fi
+
+# Shortcuts
+if test "$1" == "--insecure" -o "$1" == "-k"; then
+	INS=$1
+	shift
+else
+	unset INS
+	if test -n "$OS_CACERT"; then INS="--cacert $OS_CACERT"; fi
+fi
+
+curlpost()
+{
+	curl $INS -i -sS -H "Content-Type: application/json" -d "$@"
+}
+
+curlpostauth()
+{
+	TKN="$1"; shift
+	curl $INS -sS -H "Content-Type: application/json" -H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" -d "$@"
+}
+
+curlgetauth()
+{
+	TKN="$1"; shift
+	#echo curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@" 1>&2
+	curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@"
+}
+
+##########################################################################################
+
+
+
+#FUNCTIONS ###############################################################################
+
+getIamToken() {
+	if test -n "$OS_PROJECT_ID"; then
+	IAM_REQ='{
+	    "auth": {
+		"identity": {
+		    "methods": [ "password" ],
+		    "password": {
+		        "user": {
+		            "name": "'"$OS_USERNAME"'",
+		            "password": "'"$OS_PASSWORD"'",
+		            "domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+		        }
+		    }
+		},
+		"scope": {
+		    "project": { "id": "'"$OS_PROJECT_ID"'" }
+		}
+	    }
+	}
+	'
+	else
+	IAM_REQ='
+	{
+	    "auth": {
+		"identity": {
+		    "methods": [ "password" ],
+		    "password": {
+		        "user": {
+		            "name": "'"$OS_USERNAME"'",
+		            "password": "'"$OS_PASSWORD"'",
+		            "domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+		        }
+		    }
+		},
+		"scope": {
+		    "project": { "name": "'"$OS_PROJECT_NAME"'" }
+		}
+	    }
+	}
+	'
+	fi
+	export IAM_REQ
+	if test "$MAINCOM" == "debug"; then
+		echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "XXXXXX"/g'
+	fi
+	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
+	if test "$MAINCOM" == "debug"; then
+		echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*==/X-Subject-Token: MIIxxxxxxxxxxxxxxxxxx==/'
+	fi
+	TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
+	#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
+	if test -z "$OS_PROJECT_ID"; then
+		OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
+	fi
+	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then 
+		echo "Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
+		exit 2
+	fi
+
+	# SET ENDPOINTS
+	# TODO: Parse catalog instead
+
+	AUTH_URL_ECS="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/servers"
+	export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/jobs/$ECSTASKID"
+	export AUTH_URL_ECS_DETAIL="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/servers/detail"
+
+	AUTH_URL_ECS_CLOUD="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers"
+	AUTH_URL_ECS_CLOUD_ACTION="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/action"
+	AUTH_URL_ECS_CLOUD_DELETE="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/delete"
+
+	AUTH_URL_VPCS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/vpcs"
+	AUTH_URL_PUBLICIPS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/publicips"
+	AUTH_URL_SEC_GROUPS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-groups"
+	AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/security-group-rules"
+	AUTH_URL_SUBNETS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/subnets"
+
+	AUTH_URL_IMAGES="https://ims.eu-de.otc.t-systems.com/v2/images"
+
+	AUTH_URL_FLAVORS="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/flavors"
+
+	AUTH_URL_KEYNAMES="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/os-keypairs"
+}
+
+getECSVM() {
+        curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
+}
+
+getECSList() {
+	curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  ' 
+}   
+
+getECSDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | {VM:  .name, ID: .id, Detail: .}'
+}
+
+getVPCList() {
+	curlgetauth $TOKEN "$AUTH_URL_VPCS" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
+#| python -m json.tool
+}
+
+getPUBLICIPSList() {
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS" | jq '.[]'
+#| python -m json.tool
+}
+
+getSECGROUPList() {
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+#| python -m json.tool
+}
+
+getSECGROUPRULESList() {
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
+#| python -m json.tool
+}
+
+
+getSUBNETList() {
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.[]'
+#| python -m json.tool
+}
+
+getid() {
+	head -n1 | cut -d':' -f2 | tr -d '" ,'
+}
+
+# Params: ARRNM Value [attr [id]]
+find_id()
+{
+	ANM=${3:-name}
+	IDN=${4:-id}
+	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
+}
+
+# convert functions 
+convertSUBNETNameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS"
+	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
+	SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | find_id subnets "$SUBNETNAME"`
+	export SUBNETID
+}
+
+
+convertVPCNameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_VPCS" 
+	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
+	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS" | find_id vpcs "$VPCNAME"`
+	#echo $VPCID
+	export VPCID
+}
+
+
+convertSECUGROUPNameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" > ~/tmp/sg
+	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$SECUGROUPNAME'") | .id' | tr -d '" ,'`
+	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
+	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+	if test `echo "$SECUGROUP" | wc -w` != 1; then
+		echo "Warning: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
+		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
+	fi
+	export SECUGROUP
+}
+
+
+convertIMAGENameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_IMAGES" > ~/tmp/img
+	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | find_id images "$IMAGENAME"`
+	export IMAGE_ID
+}
+
+
+getIMAGEList() {
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES"| jq '.[]'
+#| python -m json.tool
+}
+
+
+getFLAVORList() {
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS"| jq '.[]'
+#| python -m json.tool
+}
+
+
+getKEYPAIRList() {
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES" | jq '.[]'
+#| python -m json.tool
+}
+
+
+printHelp() {
+   echo "Usage:"
+   echo "otc ecs list                   list ecs instances"
+   echo "otc ecs list-detail            list ecs instances in detail"
+   echo "otc ecs vm <id>                show instance <id>"
+   echo "otc ecs create -n <name>       create ecs instance <name>"
+   echo "otc ecs create --count 1  --public true --file1 /tmp/a=/otc/a		create vm with public ip and attach file from local drive /tmp/a to VM drive /otc/a directory"    
+   echo "otc ecs create --instance-type <FLAVOR> --instance-name <NAME> --image-name <IMAGE> --subnet-name <SUBNET> --vpc-name <VPC> --security-group-name <SGNAME> --admin-pass <PASSWD> --key-name <SSHKEYNAME> --public <true/false> --disksize <DISKGB>"
+   echo "otc ecs reboot-instances <id>  reboot ecs instance <id>"
+   echo "otc ecs stop-instances <id>    stop ecs instance <id>"
+   echo "otc ecs start-instances <id>   start ecs instance <id>"
+   echo "otc ecs job <id>               show status of job <id>"
+   echo "otc ecs delete <id> <id> ...   delete VM along with EIPs"
+   echo "otc vpc list                   list all vpc"
+   echo "otc subnet list                list all subnet"
+   echo "otc security-group list        list all security-group"
+   echo "otc security-group-rules list <group-id>     show rules of security group rules in <group-id> group"
+   echo "otc keypair list               list ssh key pairs"
+   echo "otc vpc create --vpc-name <vpcname> --cidr <cidr>     create vpc "
+   echo "otc security-group create -g <groupname> --vpc-name <vpcn name> create security group" 
+   echo "otc subnet create --subnet-name <subnetname> --cidr <cidr> --gateway-ip <gateway> --primary-dns <primary-dns> --secondary-dns <sec-dns> --availability-zone <avalibility zone> --vpc-name <vpcname>"
+   echo "otc security-group-rules create --security-group-name <secgroupname> --direction <direction> --protocol <protocol: tcp, udp, icmp> --ethertype <ethtype: IPv4,IPv6>  --portmin <port min> --portmax <portmax>"
+   echo "otc images list                list all images"
+   echo "otc iam token                  generate a new iam token"
+   echo ""
+}
+
+
+
+getECSJOBList() {
+	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB"
+
+	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB"`
+	#TODO: JUST FOR DEBUGING TO SEE THE TASK STATUS 
+	echo $ECSCREATEJOBSTATUSJSON
+	ECSCREATEJOBSTATUS=`echo $ECSCREATEJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
+
+	export ECSCREATEJOBSTATUS
+}
+
+
+getFileContentJSON() {
+	INJECTFILE=$1
+	if [ "$INJECTFILE" != "" ];then
+	        IFS='=' read -a FILE_AR <<< "${INJECTFILE}"	
+		FILENAME_NAME=${FILE_AR[1]}
+		TARGET_FILENAME=${FILE_AR[0]}
+                FILECONTENT=$( base64 "$FILENAME_NAME" )
+		FILE_TEMPLATE='{ "path": "'"$TARGET_FILENAME"'", "contents": "'"$FILECONTENT"'" }'
+
+		export FILEJSONITEM="$FILE_TEMPLATE"
+	fi
+	
+}
+
+
+getPersonalizationJSON() {
+	if [ "$FILE1" != "" ]; then
+		getFileContentJSON $FILE1
+		FILECOLLECTIONJSON="$FILEJSONITEM"
+	fi
+	if [ "$FILE2" != "" ]; then
+		getFileContentJSON $FILE2
+		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
+	fi	
+	if [ "$FILE3" != "" ]; then
+		getFileContentJSON $FILE3
+		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
+	fi
+	if [ "$FILE4" != "" ]; then
+		getFileContentJSON $FILE4
+		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
+	fi
+	if [ "$FILE5" != "" ]; then
+		getFileContentJSON $FILE5
+		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
+	fi
+
+	export PERSONALIZATION=""
+	if [ "$FILECOLLECTIONJSON" != "" ]; then
+		export PERSONALIZATION='"personality": [ '"$FILECOLLECTIONJSON"'],'
+	fi
+}
+
+
+ECSCreate() {
+        
+
+	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
+		# TODO: have to got from param 
+		PUBLICIPJSON='"publicip": { "eip": { "iptype": "5_bgp", "bandwidth": { "size": 25, "sharetype": "PER", "chargemode": "traffic" } } },'
+	fi
+	if [ -n "$ROOTDISKSIZE" ]; then
+		DISKSIZE=', "size": "'$ROOTDISKSIZE'"'
+	else
+		unset DISKSIZE
+	fi
+
+	getPersonalizationJSON
+	if test -n "$KEYNAME"; then
+		VMAUTH='"key_name": "'"$KEYNAME"'"'
+	else
+		VMAUTH='"adminPass": "'"$ADMINPASS"'"'
+	fi
+	#echo "$VMAUTH"
+	#VNCKEYMAP='"__vnc_keymap": "en",'
+
+	REQ_CREATE_VM='{
+	    "server": {
+		"availability_zone": "'"$AZ"'",
+		"name": "'"$INSTANCE_NAME"'",
+		"imageRef": "'"$IMAGE_ID"'",
+		"root_volume": { 
+			"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
+		},
+		"flavorRef": "'"$INSTANCE_TYPE"'",'"$PERSONALIZATION"'
+		"vpcid": "'"$VPCID"'",
+		"security_groups": [ { "id": "'"$SECUGROUP"'" } ],
+		"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
+		'"$PUBLICIPJSON"'
+		'"$VNCKEYMAP"'
+		'"$VMAUTH"',
+		"count": "'"$NUMCOUNT"'"
+	    }
+	}'
+	
+ 	echo "$REQ_CREATE_VM"
+
+	if [ "$IMAGE_ID" == "" ]; then
+		echo "Image definition not Correct ! Check avaliable images with following command:" 
+		echo 'otc images list'
+		exit 1 
+	fi
+	if [ "$INSTANCE_TYPE" == "" ]; then
+		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 
+		echo 'otc ecs flavor-list'
+		exit 1 
+	fi
+	if [ "$VPCID" == "" ]; then
+		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 
+		echo 'otc vpc list'
+		exit 1 
+	fi
+	if [ "$SECUGROUP" == "" ]; then
+		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 
+		echo 'otc security-group list'
+		exit 1 
+	fi
+	if [ "$SUBNETID" == "" ]; then
+		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 
+		echo 'otc subnet list'
+		exit 1 
+	fi
+
+	
+	ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	# this lines for DEBUG
+	export ECSTASKID
+}
+
+
+ECSAction() {
+	REQ_ECS_ACTION_VM='
+	{ 
+		"'"$ECSACTION"'": {
+			"type":"'"$ECSACTIONTYPE"'",
+			"servers": [ { "id": "'"$ECSACTIONSERVERID"'" } ]
+		 }
+	}'
+	export REQ_ECS_ACTION_VM
+	#echo $REQ_ECS_ACTION_VM
+	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
+}
+
+ECSDelete() {
+	IDS=""
+	for id in "$@"; do
+		IDS="$IDS { \"id\": \"$id\" },"
+	done
+	IDS="${IDS%,}"
+	# TODO: Allow options to control this
+	# Rationale for defaults: We have allocated the EIP, so clean up.
+	REQ_ECS_DELETE='{
+		"servers": [ '$IDS' ],
+		"delete_publicip": true,
+		"delete_volume": false
+	}'
+	export REQ_ECS_DELETE
+	#echo $REQ_ECS_DELETE
+	ECSRESP=`curlpostauth "$TOKEN" "$REQ_ECS_DELETE" "$AUTH_URL_ECS_CLOUD_DELETE"`
+	ECSTASKID=`echo "$ECSRESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	if test -n "$ECSTASKID"; then
+		echo "Delete task ID: $ECSTASKID"
+	else
+		echo "Error:"
+		echo "$ECSRESP" | jq '.[]'
+		return 1
+	fi
+}
+
+
+
+VPCCreate() {
+	REQ_CREATE_VPC='{
+		"vpc": {
+			"name": "'"$VPCNAME"'",
+			"cidr": "'"$CIDR"'"
+		}
+	}'
+	export REQ_CREATE_VPC
+	#echo $REQ_CREATE_VPC
+	curlpostauth "$TOKEN" "$REQ_CREATE_VPC" "$AUTH_URL_VPCS" | jq '.[]'
+}
+
+SUBNETCreate() {
+	REQ_CREATE_SUBNET='{
+		"subnet": {
+			"name": "'"$SUBNETNAME"'",
+			"cidr": "'"$CIDR"'",
+			"gateway_ip": "'"$GWIP"'",
+			"dhcp_enable": "true",
+			"primary_dns": "'"$PRIMARYDNS"'",
+			"secondary_dns": "'"$SECDNS"'",
+			"availability_zone":"'"$AZ"'",
+			"vpc_id":"'"$VPCID"'"
+		}
+	}'
+	#{ "subnet": { "name": "subnet", "cidr": "192.168.20.0/24", "gateway_ip": "192.168.20.1", "dhcp_enable": "true", "primary_dns": "114.114.114.114", "secondary_dns": "114.114.115.115", "availability_zone":"eu-de-01" ,"vpc_id":"3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
+	export REQ_CREATE_SUBNET
+	#echo $REQ_CREATE_SUBNET
+	curlpostauth "$TOKEN" "$REQ_CREATE_SUBNET" "$AUTH_URL_SUBNETS" | jq '.[]'
+}
+
+
+PUBLICIPSCreate() {
+#### TODO: NOT USED CURRENTLY 
+	REQ_CREATE_PUBLICIPS='{
+		"publicip": {
+			"type": "5_bgp"
+		},
+		"bandwidth": {
+			"name": "bandwidth123",
+			"size": 25,
+			"share_type": "PER"
+		}
+	}'
+	# { "publicip": { "type": "5_bgp" }, "bandwidth": { "name": "bandwidth123", "size": 10, "share_type": "PER" } }
+
+	export REQ_CREATE_PUBLICIPS
+	echo $REQ_CREATE_PUBLICIPS
+	curlpostauth "$TOKEN" "$REQ_CREATE_PUBLICIPS" "$AUTH_URL_PUBLICIPS" | jq '.[]'
+}
+
+SECGROUPCreate() {
+	REQ_CREATE_SECGROUP='{
+		"security_group": {
+			"name":"'"$SECUGROUPNAME"'",
+			"vpc_id" : "'"$VPCID"'"
+		}
+	}'
+	#{ "security_group": { "name":"qq", "vpc_id" : "3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
+	export REQ_CREATE_SECGROUP
+	echo $REQ_CREATE_SECGROUP
+	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+}
+
+
+SECGROUPRULECreate() {
+	REQ_CREATE_SECGROUPRULE='{
+		"security_group_rule": {
+			"direction":"'"$DIRECTION"'",
+			"port_range_min":"'"$PORTMIN"'",
+			"port_range_max":"'"$PORTMAX"'",
+			"ethertype":"'"$ETHERTYPE"'",
+			"protocol":"'"$PROTOCOL"'",
+			"security_group_id":"'"$SECUGROUP"'"
+		}
+	}'
+	#{"security_group_rule":{ "direction":"'"$DIRECTION"'", "port_range_min":"'"$PORTMIN"'", "ethertype":"'"$ETHERTYPE"'", "port_range_max":"'"$PORTMAX"'", "protocol":"'"$PROTOCOL"'", "remote_group_id":"'"$REMOTEGROUPID"'", "security_group_id":"'"$SECUGROUPID"'" } }
+	#{"security_group_rule":{ "direction":"ingress", "port_range_min":"80", "ethertype":"IPv4", "port_range_max":"80", "protocol":"tcp", "remote_group_id":"85cc3048-abc3-43cc-89b3-377341426ac5", "security_group_id":"a7734e61-b545-452d-a3cd-0189cbd9747a" } }
+	export REQ_CREATE_SECGROUPRULE
+	echo $REQ_CREATE_SECGROUPRULE
+	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
+}
+
+
+
+##########################################################################################
+
+
+# Package dependency #####################################################################
+# check libs3 installed 
+command -v s3 >/dev/null 2>&1 || { echo -n>&2 "OTC requires libs3 package to be installed. 
+Please run following command: 
+Fedora: 
+  sudo yum install libs3 
+Debian:
+  apt-get install libs3 
+SUSE:
+  zypper install libs3-2
+to install neccesary component.
+Aborting."; exit 1; }
+
+# check jq installed 
+command -v jq >/dev/null 2>&1 || { echo -n>&2 "OTC requires jq package to be installed.
+Please run following command: 
+Fedora: 
+  sudo yum install jq
+Debian:
+  apt-get install jq
+SUSE:
+  zypper install jq
+to install neccesary component.
+Aborting."; exit 1; }
+
+##########################################################################################
+
+
+# Command Line Parser ####################################################################
+# fetch main command 
+MAINCOM=$1
+shift
+# fetch subcommand 
+SUBCOM=$1
+shift
+
+
+#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
+if [ "$SUBCOM" == "create" ]; then
+
+while [[ $# > 1 ]]
+do
+key="$1"
+
+case $key in
+    -a|--admin-pass)
+    ADMINPASS="$2"
+    shift # past argument
+    ;;
+    -n|--instance-name)
+    INSTANCE_NAME="$2"
+    shift # past argument
+    ;;
+    --file1)
+    FILE1="$2"
+    shift # past argument
+    ;;
+    --file2)
+    FILE2="$2"
+    shift # past argument
+    ;;
+    --file3)
+    FILE3="$2"
+    shift # past argument
+    ;;
+    --file4)
+    FILE4="$2"
+    shift # past argument
+    ;;
+    --file5)
+    FILE5="$2"
+    shift # past argument
+    ;;
+    -t|--instance-type)
+    INSTANCE_TYPE="$2"
+    shift # past argument
+    ;;
+    -i|--image-name)
+    IMAGENAME="$2"
+    shift # past argument
+    ;;
+    --image-id)
+    IMAGE_ID="$2"
+    shift # past argument
+    ;;
+    -c|--count)
+    NUMCOUNT="$2"
+    shift # past argument
+    ;;
+    -b|--subnet-id)
+    SUBNETID="$2"
+    shift # past argument
+    ;;
+    --subnet-name)
+    SUBNETNAME="$2"
+    shift # past argument
+    ;;
+    -v|--vpc-id)
+    VPCID="$2"
+    shift # past argument
+    ;;
+    --vpc-name)
+    VPCNAME="$2"
+    shift # past argument
+    ;;
+    --cidr)
+    CIDR="$2"
+    shift # past argument
+    ;;
+    --gateway-ip)
+    GWIP="$2"
+    shift # past argument
+    ;;
+    --primary-dns)
+    PRIMARYDNS="$2"
+    shift # past argument
+    ;;
+    --secondary-dns)
+    SECDNS="$2"
+    shift # past argument
+    ;;
+    -z|--availability-zone)
+    AZ="$2"
+    shift # past argument
+    ;;
+    -s|--security-group-ids)
+    SECUGROUP="$2"
+    shift # past argument
+    ;;
+    -g|--security-group-name)
+    SECUGROUPNAME="$2"
+    shift # past argument
+    ;;
+    -p|--public)
+    CREATE_ECS_WITH_PUBLIC_IP="$2"
+    shift # past argument
+    ;;
+    --disksize)
+    ROOTDISKSIZE="$2"
+    shift # past argument
+    ;;
+    --direction)
+    DIRECTION="$2"
+    shift # past argument
+    ;;
+    --portmin)
+    PORTMIN="$2"
+    shift # past argument
+    ;;
+    --portmax)
+    PORTMAX="$2"
+    shift # past argument
+    ;;
+    --protocol)
+    PROTOCOL="$2"
+    shift # past argument
+    ;;
+    --ethertype)
+    ETHERTYPE="$2"
+    shift # past argument
+    ;;
+    --key-name)
+    KEYNAME="$2"
+    shift # past argument
+    ;;
+
+    --default)
+    DEFAULT=YES
+    ;;
+    *)
+            # unknown option
+    ;;
+esac
+
+shift # past argument or value
+
+done
+
+fi
+
+##########################################################################################
+
+
+# MAIN #########################################################################
+
+
+
+
+
+##########################################################################################
+
+#echo "Execute $MAINCOM $SUBCOM"
+ 
+if [ "$MAINCOM" == "s3" ];then
+   s3 $SUBCOM "$@"
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   getECSList
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ];then
+   getIamToken
+   getECSDetail
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
+   VM=$1
+   getIamToken
+   getECSVM
+elif [ "$MAINCOM" == "debug" ]; then
+   getIamToken 
+
+   if [ "$VPCNAME" != "" ];then convertVPCNameToId; fi
+   if [ "$SUBNETNAME" != "" ];then convertSUBNETNameToId; fi 
+   if [ "$IMAGENAME" != "" ];then convertIMAGENameToId; fi
+   if [ "$SECUGROUPNAME" != "" ];then convertSECUGROUPNameToId; fi
+   echo -e "Image : $IMAGENAME: $IMAGE_ID\nVPC   : $VPCNAME: $VPCID\nSubnet: $SUBNETNAME: $SUBNETID\nSecGrp: $SECUGROUPNAME: $SECUGROUP"
+
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken 
+
+   if [ "$VPCNAME" != "" ];then convertVPCNameToId; fi
+   if [ "$SUBNETNAME" != "" ];then convertSUBNETNameToId; fi 
+   if [ "$IMAGENAME" != "" ];then convertIMAGENameToId; fi
+   if [ "$SECUGROUPNAME" != "" ];then convertSECUGROUPNameToId; fi
+   
+   ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
+   echo "$ECSTASKID"
+
+
+   if [ "$WAIT_CREATE" == "true" ];then
+	   export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
+echo "JOBID:   $AUTH_URL_ECS_JOB"
+	   getECSJOBList
+	   printf "#"
+	   while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
+	   do
+	      sleep 5
+	      getECSJOBList
+	      echo -n "#"	    
+	   done
+     fi
+
+     echo "ECS Creation status: $ECSCREATEJOBSTATUS"
+     if [ "$ECSCREATEJOBSTATUS" != "SUCCESS" ];then
+        exit 1
+     fi
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
+   export ECSACTION="reboot"
+   export ECSACTIONSERVERID=$1
+
+   if [ "$ECSACTIONSERVERID" == "" ];then
+	echo "Error. Must be specify the Instance ID!"
+	printHelp
+	exit 1 
+   fi
+
+   getIamToken 
+   ECSAction
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
+   ECSACTION="os-start"
+   ECSACTIONSERVERID=$1
+   if [ "$ECSACTIONSERVERID" == "" ];then
+	echo "Error. Must be specify the Instance ID!"
+	printHelp
+	exit 1 
+   fi
+
+   getIamToken 
+   ECSAction
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
+   ECSACTION="os-stop"
+   ECSACTIONSERVERID=$1
+
+   if [ "$ECSACTIONSERVERID" == "" ];then
+	echo "Error. Must be specify the Instance ID!"
+	printHelp
+	exit 1 
+   fi
+
+   getIamToken 
+   ECSAction
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "job" ];then
+   ECSTASKID=$1
+   export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
+#   echo $AUTH_URL_ECS_JOB
+   getIamToken 
+   getECSJOBList
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
+   getIamToken
+   ECSDelete $@
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   getVPCList
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken 
+   VPCCreate 
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   getPUBLICIPSList
+
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken 
+   getSUBNETList
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
+   getIamToken 
+   IMAGENAME=$1
+    # convertSUBNETNameToId
+    # convertSECUGROUPNameToId
+    # convertIMAGENameToId
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken
+
+   if [ "$VPCNAME" != "" ];then
+	convertVPCNameToId
+   fi
+   SUBNETCreate
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   VPCNAME=$1
+   if [ "$VPCNAME" != "" ];then
+	convertVPCNameToId
+   fi
+
+   getSECGROUPList
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken
+
+   if [ "$VPCNAME" != "" ];then
+	convertVPCNameToId
+   fi
+
+   SECGROUPCreate
+elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   SECUGROUP=$1 
+
+   if [ "$SECUGROUP" == "" ];then
+	echo "Error. Must be specify the Security Rule Group ID!"
+	printHelp
+	exit 1 
+   fi
+   SECUGROUP=$1   
+   AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
+   getSECGROUPRULESList
+
+elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken
+
+   if [ "$VPCNAME" != "" ];then
+	convertVPCNameToId
+   fi
+
+   if [ "$SECUGROUPNAME" != "" ];then
+	convertSECUGROUPNameToId
+   fi
+   
+   AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules"
+   SECGROUPRULECreate
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
+   getIamToken
+   getIMAGEList
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
+   getIamToken
+   getFLAVORList
+elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
+   getIamToken
+   getKEYPAIRList
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
+   getIamToken
+   echo $TOKEN 
+
+else
+   printHelp
+fi

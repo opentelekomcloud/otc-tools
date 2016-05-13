@@ -1,0 +1,14 @@
+This is the otc tool for using the Open Telekom Cloud APIs.
+Copy the otc_env.sh into your home as ~/.otc_env.sh or create 
+and source a standard OpenStack .ostackrc or novarc file to 
+set the environment variables for the otc tool.
+
+Please have a look the otc_env.sh file and look at the output 
+from otc -- this provides sufficient information to get doing.
+
+Note that you can use standard OpenStack Client command line tools;
+have a look at the documentation. This tool is a demonstrator for
+how simple the REST calls can be done with curl if you want to 
+build your own tooling. It uses the OpenStack APIs as well as some
+of the custom OTC APIs.
+
