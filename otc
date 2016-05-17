@@ -1,7 +1,7 @@
 #!/bin/bash
 # == Module: Open Telekom Cloud Cli Interface 0.6.x
 #
-# Manage OTC via Command Line 
+# Manage OTC via Command Line
 #
 # === Parameters
 #
@@ -9,8 +9,8 @@
 #
 # === Examples
 #
-# Examples 
-# ./otc iam token 
+# Examples
+# ./otc iam token
 # ./otc ecs list
 # ./otc s3 create newbucket
 # ./otc s3 list
@@ -35,7 +35,7 @@
 # ./otc volume list
 # ./otc keypair list	aka ./otc ecs keyname-list
 # === Authors
-# 
+#
 # Zsolt Nagy <Z.Nagy@t-systems.com>
 # Kurt Garloff <t-systems@garloff.de>
 #
@@ -48,7 +48,7 @@
 
 # Get Config ####################################################################
 otc_dir="$(dirname "$0")"
-if test -e ~/.otc_env.sh; then 
+if test -e ~/.otc_env.sh; then
 	source ~/.otc_env.sh
 else
 	echo "Warning: No ~/.otc_env.sh found, no defaults for ECS creation"
@@ -69,7 +69,7 @@ fi
 # ENVIROMENT SETTINGS ####################################################################
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
-if test -n "$OS_AUTH_URL"; then 
+if test -n "$OS_AUTH_URL"; then
 	export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
 else
 	export IAM_AUTH_URL="https://iam.eu-de.otc.t-systems.com/v3/auth/tokens"
@@ -167,7 +167,7 @@ getIamToken() {
 	if test -z "$OS_PROJECT_ID"; then
 		OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
 	fi
-	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then 
+	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
 		echo "Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
 		exit 2
 	fi
@@ -202,8 +202,8 @@ getECSVM() {
 }
 
 getECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  ' 
-}   
+	curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
+}
 
 getECSDetail() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | {VM:  .name, ID: .id, Detail: .}'
@@ -262,7 +262,7 @@ find_id()
 	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
 }
 
-# convert functions 
+# convert functions
 convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
@@ -274,7 +274,7 @@ convertSUBNETNameToId() {
 
 
 convertVPCNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" 
+	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
 	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
 	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | find_id vpcs "$VPCNAME"`
 	#echo $VPCID
@@ -337,7 +337,7 @@ printHelp() {
    echo "otc ecs list-detail            list ecs instances in detail"
    echo "otc ecs vm <id>                show instance <id>"
    echo "otc ecs create -n <name>       create ecs instance <name>"
-   echo "otc ecs create --count 1  --public true --file1 /tmp/a=/otc/a		create vm with public ip and attach file from local drive /tmp/a to VM drive /otc/a directory"    
+   echo "otc ecs create --count 1  --public true --file1 /tmp/a=/otc/a		create vm with public ip and attach file from local drive /tmp/a to VM drive /otc/a directory"
    echo "otc ecs create --instance-type <FLAVOR> --instance-name <NAME> --image-name <IMAGE> --subnet-name <SUBNET> --vpc-name <VPC> --security-group-name <SGNAME> --admin-pass <PASSWD> --key-name <SSHKEYNAME> --public <true/false> --bandwidth <BW> --disksize <DISKGB> --disktype SATA|SAS|SSD --az <AZ> --[no]wait"
    echo "otc ecs reboot-instances <id>  reboot ecs instance <id>, optionally --soft/--hard"
    echo "otc ecs stop-instances <id>    stop ecs instance <id>, dito"
@@ -353,7 +353,7 @@ printHelp() {
    echo "otc subnet list                list all subnet"
    echo "otc security-group list        list all security-group"
    echo "otc security-group-rules list <group-id>     show rules of security group <group-id>"
-   echo "otc security-group create -g <groupname> --vpc-name <vpc name> create security group" 
+   echo "otc security-group create -g <groupname> --vpc-name <vpc name> create security group"
    echo "otc subnet create --subnet-name <subnetname> --cidr <cidr> --gateway-ip <gateway> --primary-dns <primary-dns> --secondary-dns <sec-dns> --availability-zone <avalibility zone> --vpc-name <vpcname>"
    echo "otc security-group-rules create --security-group-name <secgroupname> --direction <direction> --protocol <protocol: tcp, udp, icmp> --ethertype <ethtype: IPv4,IPv6>  --portmin <port min> --portmax <portmax>"
    echo
@@ -371,7 +371,7 @@ getECSJOBList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB"
 
 	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB"`
-	#TODO: JUST FOR DEBUGING TO SEE THE TASK STATUS 
+	#TODO: JUST FOR DEBUGING TO SEE THE TASK STATUS
 	echo $ECSCREATEJOBSTATUSJSON
 	ECSCREATEJOBSTATUS=`echo $ECSCREATEJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
 
@@ -382,7 +382,7 @@ getECSJOBList() {
 getFileContentJSON() {
 	INJECTFILE=$1
 	if [ "$INJECTFILE" != "" ];then
-	        IFS='=' read -a FILE_AR <<< "${INJECTFILE}"	
+	        IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
 		FILENAME_NAME=${FILE_AR[1]}
 		TARGET_FILENAME=${FILE_AR[0]}
                 FILECONTENT=$( base64 "$FILENAME_NAME" )
@@ -390,7 +390,7 @@ getFileContentJSON() {
 
 		export FILEJSONITEM="$FILE_TEMPLATE"
 	fi
-	
+
 }
 
 
@@ -402,7 +402,7 @@ getPersonalizationJSON() {
 	if [ "$FILE2" != "" ]; then
 		getFileContentJSON $FILE2
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
-	fi	
+	fi
 	if [ "$FILE3" != "" ]; then
 		getFileContentJSON $FILE3
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
@@ -428,7 +428,7 @@ ECSCreate() {
 		echo "INSTANCE_NAME may only contain letters, digits, _ and -"
 		exit 2
 	fi
-       
+
 	getPersonalizationJSON
 
 	if [ -n "$ROOTDISKSIZE" ]; then
@@ -455,17 +455,17 @@ ECSCreate() {
 
 	OPTIONAL=""
 	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
-		# TODO: have to got from param 
+		# TODO: have to got from param
 		OPTIONAL="$OPTIONAL
-		\"publicip\": { 
-			\"eip\": { 
-				\"iptype\": \"5_bgp\", 
-				\"bandwidth\": { 
-					\"size\": $BANDWIDTH, 
-					\"sharetype\": \"PER\", 
-					\"chargemode\": \"traffic\" 
-				} 
-			} 
+		\"publicip\": {
+			\"eip\": {
+				\"iptype\": \"5_bgp\",
+				\"bandwidth\": {
+					\"size\": $BANDWIDTH,
+					\"sharetype\": \"PER\",
+					\"chargemode\": \"traffic\"
+				}
+			}
 		},"
 	fi
 
@@ -485,7 +485,7 @@ ECSCreate() {
 		"availability_zone": "'"$AZ"'",
 		"name": "'"$INSTANCE_NAME"'",
 		"imageRef": "'"$IMAGE_ID"'",
-		"root_volume": { 
+		"root_volume": {
 			"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
 		},
 		"flavorRef": "'"$INSTANCE_TYPE"'",
@@ -497,36 +497,36 @@ ECSCreate() {
 		"count": '$NUMCOUNT'
 	    }
 	}'
-	
+
  	echo "$REQ_CREATE_VM"
 
 	if [ "$IMAGE_ID" == "" ]; then
-		echo "Image definition not Correct ! Check avaliable images with following command:" 
+		echo "Image definition not Correct ! Check avaliable images with following command:"
 		echo 'otc images list'
-		exit 1 
+		exit 1
 	fi
 	if [ "$INSTANCE_TYPE" == "" ]; then
-		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 
+		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:"
 		echo 'otc ecs flavor-list'
-		exit 1 
+		exit 1
 	fi
 	if [ "$VPCID" == "" ]; then
-		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 
+		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:"
 		echo 'otc vpc list'
-		exit 1 
+		exit 1
 	fi
 	if [ "$SECUGROUP" == "" ]; then
-		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 
+		echo "Security Group definition not Correct ! Please check avaliable security group with following command:"
 		echo 'otc security-group list'
-		exit 1 
+		exit 1
 	fi
 	if [ "$SUBNETID" == "" ]; then
-		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 
+		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:"
 		echo 'otc subnet list'
-		exit 1 
+		exit 1
 	fi
 
-	
+
 	ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	# this lines for DEBUG
 	export ECSTASKID
@@ -535,7 +535,7 @@ ECSCreate() {
 
 ECSAction() {
 	REQ_ECS_ACTION_VM='
-	{ 
+	{
 		"'"$ECSACTION"'": {
 			"type":"'"$ECSACTIONTYPE"'",
 			"servers": [ { "id": "'"$ECSACTIONSERVERID"'" } ]
@@ -607,7 +607,7 @@ SUBNETCreate() {
 
 
 PUBLICIPSCreate() {
-#### TODO: NOT USED CURRENTLY 
+#### TODO: NOT USED CURRENTLY
 	REQ_CREATE_PUBLICIPS='{
 		"publicip": {
 			"type": "5_bgp"
@@ -663,12 +663,12 @@ SECGROUPRULECreate() {
 
 
 # Package dependency #####################################################################
-# check libs3 installed 
-command -v s3 >/dev/null 2>&1 || { echo -n>&2 "OTC requires libs3 package to be installed for object storage operations. 
+# check libs3 installed
+command -v s3 >/dev/null 2>&1 || { echo -n>&2 "OTC requires libs3 package to be installed for object storage operations.
 Please install libs3 or libs3-2 using yum/apt-get/zypper.
 Continuing anyway ..."; }
 
-# check jq installed 
+# check jq installed
 command -v jq >/dev/null 2>&1 || { echo -n>&2 "OTC requires jq package to be installed.
 Please install jq  using yum/apt-get/zypper.
 Aborting."; exit 1; }
@@ -677,10 +677,10 @@ Aborting."; exit 1; }
 
 
 # Command Line Parser ####################################################################
-# fetch main command 
+# fetch main command
 MAINCOM=$1
 shift
-# fetch subcommand 
+# fetch subcommand
 SUBCOM=$1
 shift
 
@@ -860,7 +860,7 @@ fi
 ##########################################################################################
 
 #echo "Execute $MAINCOM $SUBCOM"
- 
+
 if [ "$MAINCOM" == "s3" ];then
    s3 $SUBCOM "$@"
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ];then
@@ -875,22 +875,22 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
    getIamToken
    getECSVM
 elif [ "$MAINCOM" == "debug" ]; then
-   getIamToken 
+   getIamToken
 
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
-   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi 
+   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
    if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
    if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId; fi
    echo -e "Image : $IMAGENAME: $IMAGE_ID\nVPC   : $VPCNAME: $VPCID\nSubnet: $SUBNETNAME: $SUBNETID\nSecGrp: $SECUGROUPNAME: $SECUGROUP"
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
-   getIamToken 
+   getIamToken
 
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
-   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi 
+   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
    if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
    if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId; fi
-   
+
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
 
@@ -904,7 +904,7 @@ echo "JOBID:   $AUTH_URL_ECS_JOB"
 	   do
 	      sleep 10
 	      getECSJOBList
-	      echo -n "#"	    
+	      echo -n "#"
 	   done
      fi
 
@@ -919,10 +919,10 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
    if [ "$ECSACTIONSERVERID" == "" ];then
 	echo "Error. Must be specify the Instance ID!"
 	printHelp
-	exit 1 
+	exit 1
    fi
 
-   getIamToken 
+   getIamToken
    ECSAction
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
    ECSACTION="os-start"
@@ -930,10 +930,10 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
    if [ "$ECSACTIONSERVERID" == "" ];then
 	echo "Error. Must be specify the Instance ID!"
 	printHelp
-	exit 1 
+	exit 1
    fi
 
-   getIamToken 
+   getIamToken
    ECSAction
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
    ECSACTION="os-stop"
@@ -942,10 +942,10 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
    if [ "$ECSACTIONSERVERID" == "" ];then
 	echo "Error. Must be specify the Instance ID!"
 	printHelp
-	exit 1 
+	exit 1
    fi
 
-   getIamToken 
+   getIamToken
    ECSAction
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "job" ];then
    getIamToken
@@ -960,17 +960,17 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getVPCList
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
-   getIamToken 
-   VPCCreate 
+   getIamToken
+   VPCCreate
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getPUBLICIPSList
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
-   getIamToken 
+   getIamToken
    getSUBNETList
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
-   getIamToken 
+   getIamToken
    IMAGENAME=$1
     # convertSUBNETNameToId
     # convertSECUGROUPNameToId
@@ -1000,12 +1000,12 @@ elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
    SECGROUPCreate
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
-   SECUGROUP=$1 
+   SECUGROUP=$1
 
    if [ "$SECUGROUP" == "" ];then
 	echo "Error. Must be specify the Security Rule Group ID!"
 	printHelp
-	exit 1 
+	exit 1
    fi
    SECUGROUP=$1
    AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
@@ -1021,7 +1021,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
    if [ "$SECUGROUPNAME" != "" ];then
 	convertSECUGROUPNameToId
    fi
-   
+
    AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules"
    SECGROUPRULECreate
 
@@ -1040,7 +1040,7 @@ elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
    getKEYPAIRList
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
    getIamToken
-   echo $TOKEN 
+   echo $TOKEN
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
