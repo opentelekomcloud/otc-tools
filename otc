@@ -26,13 +26,14 @@
 # ./otc subnet create --subnet-name testsubnet --cidr 10.0.2.0/8 --gateway-ip 10.0.0.2 --primary-dns 217.150.148.148 --secondary-dns 195.244.235.14 --availability-zone eu-de-01 --vpc-name testvpc
 # ./otc security-group-rules create --security-group-name testsecgroup --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
 # ./otc security-group-rules create --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
-#./otc ecs create
+# ./otc ecs create
 # ./otc ecs create --count 2
 # ./otc ecs create --count 2  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup
 # ./otc ecs create --count 3  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup --public true
 # ./otc ecs create --count 1  --public true --file1 /otc/targetfile=/otc/sorucefile
 # ./otc ecs delete ID [ID [ID]]
 # ./otc volume list
+# ./otc volume show <id>
 # ./otc keypair list	aka ./otc ecs keyname-list
 # === Authors
 #
@@ -44,7 +45,6 @@
 # Copyright 2016 T-Systems International GmbH
 # License: CC-BY-SA
 #
-
 
 # Get Config ####################################################################
 otc_dir="$(dirname "$0")"
@@ -195,6 +195,8 @@ getIamToken() {
 	AUTH_URL_KEYNAMES="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/os-keypairs"
 
 	AUTH_URL_VOLUMES="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes"
+
+	AUTH_URL_VOLUMES_DETAILS="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes/detail"
 }
 
 getECSVM() {
@@ -235,7 +237,6 @@ getSECGROUPRULESListOld() {
 }
 
 getSECGROUPRULESList() {
-
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
@@ -244,6 +245,9 @@ getEVSList() {
 	curlgetauth $TOKEN "$AUTH_URL_VOLUMES" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
+getEVSDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=160" | jq '.volumes[] | select(.id == "'$1'")'
+}
 
 getSUBNETList() {
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | jq '.[]'
@@ -361,18 +365,19 @@ printHelp() {
    echo "    --az                  <AZ>"
    echo "    --[no]wait"
    echo
-   echo "otc ecs reboot-instances <id>  # reboot ecs instance <id>, optionally --soft/--hard"
+   echo "otc ecs reboot-instances <id>  # reboot ecs instance <id>"
    echo "                               # optionally --soft/--hard"
    echo "otc ecs stop-instances <id>    # stop ecs instance <id>, dito"
    echo "otc ecs start-instances <id>   # start ecs instance <id>"
    echo "otc ecs delete <id> <id> ...   # delete VM along with EIPs"
    echo "otc ecs job <id>               # show status of job <id>"
-   echo 
+   echo
    echo "--- SSH Keys ---"
    echo "otc keypair list               # list ssh key pairs"
    echo
    echo "--- Elastic Volumes ---"
    echo "otc evs list                   # list all volumes"
+   echo "otc evs show <id>              # show details of volume <id>"
    echo
    echo "--- Virtual Private Network ---"
    echo "otc vpc list                   # list all vpc"
@@ -1100,6 +1105,12 @@ elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
    getIamToken
    getEVSList
+
+elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
+	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
+   getIamToken
+   getEVSDetail $1
 
 else
    printHelp
