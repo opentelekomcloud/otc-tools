@@ -47,6 +47,7 @@
 #
 
 # Get Config ####################################################################
+
 otc_dir="$(dirname "$0")"
 if test -e ~/.otc_env.sh; then
 	source ~/.otc_env.sh
@@ -65,8 +66,8 @@ if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
 	exit 1
 fi
 
-
 # ENVIROMENT SETTINGS ####################################################################
+
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
 if test -n "$OS_AUTH_URL"; then
@@ -106,8 +107,6 @@ curlgetauth()
 unset SUBNETAZ
 
 ##########################################################################################
-
-
 
 #FUNCTIONS ###############################################################################
 
@@ -276,7 +275,6 @@ convertSUBNETNameToId() {
 	export SUBNETID SUBNETAZ
 }
 
-
 convertVPCNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
 	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
@@ -284,7 +282,6 @@ convertVPCNameToId() {
 	#echo $VPCID
 	export VPCID
 }
-
 
 convertSECUGROUPNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" > ~/tmp/sg
@@ -298,14 +295,12 @@ convertSECUGROUPNameToId() {
 	export SECUGROUP
 }
 
-
 convertIMAGENameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" > ~/tmp/img
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$IMAGENAME"`
 	export IMAGE_ID
 }
-
 
 getIMAGEList() {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
@@ -317,7 +312,6 @@ getIMAGEDetail() {
 #| python -m json.tool
 }
 
-
 getFLAVORListOld() {
 	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.[]'
 #| python -m json.tool
@@ -328,12 +322,10 @@ getFLAVORList() {
 #| python -m json.tool
 }
 
-
 getKEYPAIRList() {
 	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=160" | jq '.[]'
 #| python -m json.tool
 }
-
 
 printHelp() {
    echo "Usage:"
@@ -423,8 +415,6 @@ printHelp() {
    echo "otc debug CMD1 CMD2 PARAMS # for debugging ..."
 }
 
-
-
 getECSJOBList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB"
 
@@ -435,7 +425,6 @@ getECSJOBList() {
 
 	export ECSCREATEJOBSTATUS
 }
-
 
 getFileContentJSON() {
 	INJECTFILE=$1
@@ -450,7 +439,6 @@ getFileContentJSON() {
 	fi
 
 }
-
 
 getPersonalizationJSON() {
 	if [ "$FILE1" != "" ]; then
@@ -479,7 +467,6 @@ getPersonalizationJSON() {
 		export PERSONALIZATION='"personality": [ '"$FILECOLLECTIONJSON"'],'
 	fi
 }
-
 
 ECSCreate() {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
@@ -584,12 +571,10 @@ ECSCreate() {
 		exit 1
 	fi
 
-
 	ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	# this lines for DEBUG
 	export ECSTASKID
 }
-
 
 ECSAction() {
 	REQ_ECS_ACTION_VM='
@@ -630,8 +615,6 @@ ECSDelete() {
 	fi
 }
 
-
-
 VPCCreate() {
 	REQ_CREATE_VPC='{
 		"vpc": {
@@ -662,7 +645,6 @@ SUBNETCreate() {
 	#echo $REQ_CREATE_SUBNET
 	curlpostauth "$TOKEN" "$REQ_CREATE_SUBNET" "$AUTH_URL_SUBNETS" | jq '.[]'
 }
-
 
 PUBLICIPSCreate() {
 #### TODO: NOT USED CURRENTLY
@@ -696,7 +678,6 @@ SECGROUPCreate() {
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
 }
 
-
 SECGROUPRULECreate() {
 	REQ_CREATE_SECGROUPRULE='{
 		"security_group_rule": {
@@ -715,12 +696,10 @@ SECGROUPRULECreate() {
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 }
 
-
-
 ##########################################################################################
 
-
 # Package dependency #####################################################################
+
 # check libs3 installed
 command -v s3 >/dev/null 2>&1 || { echo -n>&2 "OTC requires libs3 package to be installed for object storage operations.
 Please install libs3 or libs3-2 using yum/apt-get/zypper.
@@ -735,6 +714,7 @@ Aborting."; exit 1; }
 
 
 # Command Line Parser ####################################################################
+
 # fetch main command
 MAINCOM=$1
 shift
@@ -742,196 +722,188 @@ shift
 SUBCOM=$1
 shift
 
-
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" ]; then
+	while [[ $# > 1 ]]
+	do
+		key="$1"
 
-while [[ $# > 1 ]]
-do
-key="$1"
+		case $key in
+			-a|--admin-pass)
+			ADMINPASS="$2"
+			shift # past argument
+			;;
+			-n|--instance-name)
+			INSTANCE_NAME="$2"
+			shift # past argument
+			;;
+			--file1)
+			FILE1="$2"
+			shift # past argument
+			;;
+			--file2)
+			FILE2="$2"
+			shift # past argument
+			;;
+			--file3)
+			FILE3="$2"
+			shift # past argument
+			;;
+			--file4)
+			FILE4="$2"
+			shift # past argument
+			;;
+			--file5)
+			FILE5="$2"
+			shift # past argument
+			;;
+			-t|--instance-type)
+			INSTANCE_TYPE="$2"
+			shift # past argument
+			;;
+			-i|--image-name)
+			IMAGENAME="$2"
+			shift # past argument
+			;;
+			--image-id)
+			IMAGE_ID="$2"
+			shift # past argument
+			;;
+			-c|--count)
+			NUMCOUNT="$2"
+			shift # past argument
+			;;
+			-b|--subnet-id)
+			SUBNETID="$2"
+			shift # past argument
+			;;
+			--subnet-name)
+			SUBNETNAME="$2"
+			shift # past argument
+			;;
+			-v|--vpc-id)
+			VPCID="$2"
+			shift # past argument
+			;;
+			--vpc-name)
+			VPCNAME="$2"
+			shift # past argument
+			;;
+			--cidr)
+			CIDR="$2"
+			shift # past argument
+			;;
+			--gateway-ip)
+			GWIP="$2"
+			shift # past argument
+			;;
+			--primary-dns)
+			PRIMARYDNS="$2"
+			shift # past argument
+			;;
+			--secondary-dns)
+			SECDNS="$2"
+			shift # past argument
+			;;
+			-z|--availability-zone|--az)
+			AZ="$2"
+			shift # past argument
+			;;
+			-s|--security-group-ids)
+			SECUGROUP="$2"
+			shift # past argument
+			;;
+			-g|--security-group-name)
+			SECUGROUPNAME="$2"
+			shift # past argument
+			;;
+			-p|--public)
+			CREATE_ECS_WITH_PUBLIC_IP="$2"
+			shift # past argument
+			;;
+			--disktype)
+			VOLUMETYPE="$2"
+			shift # past argument
+			;;
+			--disksize)
+			ROOTDISKSIZE="$2"
+			shift # past argument
+			;;
+			--direction)
+			DIRECTION="$2"
+			shift # past argument
+			;;
+			--portmin)
+			PORTMIN="$2"
+			shift # past argument
+			;;
+			--portmax)
+			PORTMAX="$2"
+			shift # past argument
+			;;
+			--protocol)
+			PROTOCOL="$2"
+			shift # past argument
+			;;
+			--ethertype)
+			ETHERTYPE="$2"
+			shift # past argument
+			;;
+			--key-name)
+			KEYNAME="$2"
+			shift # past argument
+			;;
+			--bandwidth)
+			BANDWIDTH=$2
+			shift # past argument
+			;;
+			--wait)
+			WAIT_CREATE="true"
+			;;
+			--nowait)
+			WAIT_CREATE="false"
+			;;
+			--hard)
+			ECSACTIONTYPE="HARD"
+			;;
+			--soft)
+			ECSACTIONTYPE="SOFT"
+			;;
+			--default)
+			DEFAULT=YES
+			;;
+			*)
+			# unknown option
+			;;
+		esac
 
-case $key in
-    -a|--admin-pass)
-    ADMINPASS="$2"
-    shift # past argument
-    ;;
-    -n|--instance-name)
-    INSTANCE_NAME="$2"
-    shift # past argument
-    ;;
-    --file1)
-    FILE1="$2"
-    shift # past argument
-    ;;
-    --file2)
-    FILE2="$2"
-    shift # past argument
-    ;;
-    --file3)
-    FILE3="$2"
-    shift # past argument
-    ;;
-    --file4)
-    FILE4="$2"
-    shift # past argument
-    ;;
-    --file5)
-    FILE5="$2"
-    shift # past argument
-    ;;
-    -t|--instance-type)
-    INSTANCE_TYPE="$2"
-    shift # past argument
-    ;;
-    -i|--image-name)
-    IMAGENAME="$2"
-    shift # past argument
-    ;;
-    --image-id)
-    IMAGE_ID="$2"
-    shift # past argument
-    ;;
-    -c|--count)
-    NUMCOUNT="$2"
-    shift # past argument
-    ;;
-    -b|--subnet-id)
-    SUBNETID="$2"
-    shift # past argument
-    ;;
-    --subnet-name)
-    SUBNETNAME="$2"
-    shift # past argument
-    ;;
-    -v|--vpc-id)
-    VPCID="$2"
-    shift # past argument
-    ;;
-    --vpc-name)
-    VPCNAME="$2"
-    shift # past argument
-    ;;
-    --cidr)
-    CIDR="$2"
-    shift # past argument
-    ;;
-    --gateway-ip)
-    GWIP="$2"
-    shift # past argument
-    ;;
-    --primary-dns)
-    PRIMARYDNS="$2"
-    shift # past argument
-    ;;
-    --secondary-dns)
-    SECDNS="$2"
-    shift # past argument
-    ;;
-    -z|--availability-zone|--az)
-    AZ="$2"
-    shift # past argument
-    ;;
-    -s|--security-group-ids)
-    SECUGROUP="$2"
-    shift # past argument
-    ;;
-    -g|--security-group-name)
-    SECUGROUPNAME="$2"
-    shift # past argument
-    ;;
-    -p|--public)
-    CREATE_ECS_WITH_PUBLIC_IP="$2"
-    shift # past argument
-    ;;
-    --disktype)
-    VOLUMETYPE="$2"
-    shift # past argument
-    ;;
-    --disksize)
-    ROOTDISKSIZE="$2"
-    shift # past argument
-    ;;
-    --direction)
-    DIRECTION="$2"
-    shift # past argument
-    ;;
-    --portmin)
-    PORTMIN="$2"
-    shift # past argument
-    ;;
-    --portmax)
-    PORTMAX="$2"
-    shift # past argument
-    ;;
-    --protocol)
-    PROTOCOL="$2"
-    shift # past argument
-    ;;
-    --ethertype)
-    ETHERTYPE="$2"
-    shift # past argument
-    ;;
-    --key-name)
-    KEYNAME="$2"
-    shift # past argument
-    ;;
-    --bandwidth)
-    BANDWIDTH=$2
-    shift # past argument
-    ;;
-    --wait)
-    WAIT_CREATE="true"
-    ;;
-    --nowait)
-    WAIT_CREATE="false"
-    ;;
-    --hard)
-    ECSACTIONTYPE="HARD"
-    ;;
-    --soft)
-    ECSACTIONTYPE="SOFT"
-    ;;
-
-    --default)
-    DEFAULT=YES
-    ;;
-    *)
-            # unknown option
-    ;;
-esac
-
-shift # past argument or value
-
-done
-
+		shift # past argument or value
+	done
 fi
 
 ##########################################################################################
 
-
-# MAIN #########################################################################
-
-
-
-
-
-##########################################################################################
+# MAIN ###################################################################################
 
 #echo "Execute $MAINCOM $SUBCOM"
 
 if [ "$MAINCOM" == "s3" ];then
    s3 $SUBCOM "$@"
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getECSList
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ];then
    getIamToken
    getECSDetail
+
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
    VM=$1
    getIamToken
    getECSVM
+
 elif [ "$MAINCOM" == "debug" ]; then
    getIamToken
 
@@ -952,24 +924,23 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
 
-
    if [ "$WAIT_CREATE" == "true" ];then
-	   export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
-echo "JOBID:   $AUTH_URL_ECS_JOB"
-	   getECSJOBList
-	   printf "#"
-	   while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
-	   do
-	      sleep 10
-	      getECSJOBList
-	      echo -n "#"
-	   done
-     fi
+	export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
+	echo "JOBID:   $AUTH_URL_ECS_JOB"
+	getECSJOBList
+	printf "#"
+	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
+	do
+		sleep 10
+		getECSJOBList
+		echo -n "#"
+	done
+   fi
 
-     echo "ECS Creation status: $ECSCREATEJOBSTATUS"
-     if [ "$ECSCREATEJOBSTATUS" != "SUCCESS" ];then
-        exit 1
-     fi
+   echo "ECS Creation status: $ECSCREATEJOBSTATUS"
+   if [ "$ECSCREATEJOBSTATUS" != "SUCCESS" ];then
+	exit 1
+   fi
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
    export ECSACTION="reboot"
    export ECSACTIONSERVERID=$1
@@ -982,6 +953,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
 
    getIamToken
    ECSAction
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
    ECSACTION="os-start"
    ECSACTIONSERVERID=$1
@@ -993,6 +965,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
 
    getIamToken
    ECSAction
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
    ECSACTION="os-stop"
    ECSACTIONSERVERID=$1
@@ -1005,21 +978,26 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
 
    getIamToken
    ECSAction
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "job" ];then
    getIamToken
    ECSTASKID=$1
    export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
    #echo $AUTH_URL_ECS_JOB
    getECSJOBList
+
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
    getIamToken
    ECSDelete $@
+
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getVPCList
+
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
    VPCCreate
+
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getPUBLICIPSList
@@ -1027,12 +1005,14 @@ elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getSUBNETList
+
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
    getIamToken
    IMAGENAME=$1
     # convertSUBNETNameToId
     # convertSECUGROUPNameToId
     # convertIMAGENameToId
+
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
 
@@ -1040,6 +1020,7 @@ elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
 	convertVPCNameToId
    fi
    SUBNETCreate
+
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    VPCNAME=$1
@@ -1048,6 +1029,7 @@ elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
    fi
 
    getSECGROUPList
+
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
 
@@ -1056,6 +1038,7 @@ elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
    fi
 
    SECGROUPCreate
+
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    SECUGROUP=$1
@@ -1086,16 +1069,20 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getIMAGEList
+
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
    getIamToken
    getIMAGEDetail $1
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getIamToken
    getFLAVORList
+
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
    getIamToken
    getKEYPAIRList
+
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
    getIamToken
    echo $TOKEN
