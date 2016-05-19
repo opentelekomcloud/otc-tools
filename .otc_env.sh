@@ -18,8 +18,8 @@ test -e ~/novarc && source ~/novarc
 test -e ~/.novarc && source ~/.novarc
 test -e ~/.ostackrc && source ~/.ostackrc
 
-# === Parameters 
-# 
+# === Parameters
+#
 # HAVE TO CHANGE! ######
 
 # If you have not set the parameters via the openStack RC files, you can do it here
