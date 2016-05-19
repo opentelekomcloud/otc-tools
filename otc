@@ -10,40 +10,42 @@
 # === Examples
 #
 # Examples
-# ./otc iam token
-# ./otc ecs list
-# ./otc s3 create newbucket
-# ./otc s3 list
-# ./otc s3 list mybucket/
-# ./otc s3 get mybucket/myfile.txt
-# ./otc s3 put mybucket/myfile.txt filename=/tmp/myfile.txt
-# ./otc vpc list
-# ./otc subnet list
-# ./otc security-group list
-# ./otc security-group-rules list zzzzzz-kkkk-zzzz-yyyyy-xxxxxxx
-# ./otc vpc create --vpc-name testvpc --cidr 10.0.0.0/8
-# ./otc security-group create -g testsecgroup --vpc-name testvpc
-# ./otc subnet create --subnet-name testsubnet --cidr 10.0.2.0/8 --gateway-ip 10.0.0.2 --primary-dns 217.150.148.148 --secondary-dns 195.244.235.14 --availability-zone eu-de-01 --vpc-name testvpc
-# ./otc security-group-rules create --security-group-name testsecgroup --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
-# ./otc security-group-rules create --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
-# ./otc ecs create
-# ./otc ecs create --count 2
-# ./otc ecs create --count 2  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup
-# ./otc ecs create --count 3  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup --public true
-# ./otc ecs create --count 1  --public true --file1 /otc/targetfile=/otc/sorucefile
-# ./otc ecs delete ID [ID [ID]]
-# ./otc volume list
-# ./otc volume show <id>
-# ./otc keypair list	aka ./otc ecs keyname-list
+# otc iam token
+# otc s3 create newbucket
+# otc s3 list
+# otc s3 list mybucket/
+# otc s3 get mybucket/myfile.txt
+# otc s3 put mybucket/myfile.txt filename=/tmp/myfile.txt
+# otc vpc list
+# otc subnet list
+# otc security-group list
+# otc security-group-rules list zzzzzz-kkkk-zzzz-yyyyy-xxxxxxx
+# otc vpc create --vpc-name testvpc --cidr 10.0.0.0/8
+# otc security-group create -g testsecgroup --vpc-name testvpc
+# otc subnet create --subnet-name testsubnet --cidr 10.0.2.0/8 --gateway-ip 10.0.0.2 --primary-dns 217.150.148.148 --secondary-dns 195.244.235.14 --availability-zone eu-de-01 --vpc-name testvpc
+# otc security-group-rules create --security-group-name testsecgroup --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
+# otc security-group-rules create --direction ingress --protocol tcp --ethertype IPv4 --portmin 80 --portmax 80
+# otc ecs list
+# otc ecs create
+# otc ecs create --count 2
+# otc ecs create --count 2  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup
+# otc ecs create --count 3  --admin-pass testpass123! --instance-type computev1-1 --instance-name instancename --image-name Community-CentOS-7.0-x86_64-2015-0 --subnet-name testsubnet --vpc-name testvpc --security-group-name testsecgroup --public true
+# otc ecs create --count 1  --public true --file1 /otc/targetfile=/otc/sorucefile
+# otc ecs delete ID [ID [ID]]
+# otc volume list aka otc evs list
+# otc volume show <id>
+# otc keypair list	aka otc ecs keyname-list
+#
 # === Authors
 #
 # Zsolt Nagy <Z.Nagy@t-systems.com>
 # Kurt Garloff <t-systems@garloff.de>
+# Christian Kortwich <christian.kortwich@t-systems.com>
 #
 # === Copyright
 #
 # Copyright 2016 T-Systems International GmbH
-# License: CC-BY-SA
+# License: CC-BY-SA 3.0
 #
 
 # Get Config ####################################################################
