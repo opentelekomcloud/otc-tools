@@ -648,17 +648,17 @@ SUBNETCreate() {
 
 PUBLICIPSCreate() {
 #### TODO: NOT USED CURRENTLY
+	if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
 	REQ_CREATE_PUBLICIPS='{
 		"publicip": {
 			"type": "5_bgp"
 		},
 		"bandwidth": {
 			"name": "bandwidth123",
-			"size": 25,
+			"size": '$BANDWIDTH',
 			"share_type": "PER"
 		}
 	}'
-	# { "publicip": { "type": "5_bgp" }, "bandwidth": { "name": "bandwidth123", "size": 10, "share_type": "PER" } }
 
 	export REQ_CREATE_PUBLICIPS
 	echo $REQ_CREATE_PUBLICIPS
@@ -1095,6 +1095,7 @@ elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
 	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
    getIamToken
    getEVSDetail $1
