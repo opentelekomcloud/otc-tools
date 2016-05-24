@@ -726,7 +726,7 @@ shift
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" ]; then
-	while [[ $# > 1 ]]
+	while [[ $# > 0 ]]
 	do
 		key="$1"
 
