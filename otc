@@ -54,7 +54,7 @@ otc_dir="$(dirname "$0")"
 if test -e ~/.otc_env.sh; then
 	source ~/.otc_env.sh
 else
-	echo "Warning: No ~/.otc_env.sh found, no defaults for ECS creation"
+	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
 	if test -z "$OS_USERNAME"; then
 		test -e ~/novarc && source ~/novarc
 		test -e ~/.novarc && source ~/.novarc
@@ -63,7 +63,7 @@ else
 fi
 
 if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
-	echo "Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_ID or OS_PROJECT_NAME environment"
+	echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_NAME environment"
 	echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY"
 	exit 1
 fi
@@ -169,7 +169,7 @@ getIamToken() {
 		OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
 	fi
 	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
-		echo "Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
+		echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
 		exit 2
 	fi
 
@@ -291,7 +291,7 @@ convertSECUGROUPNameToId() {
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
 	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` != 1; then
-		echo "Warning: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
+		echo "WARNING: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
@@ -472,7 +472,7 @@ getPersonalizationJSON() {
 
 ECSCreate() {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
-		echo "INSTANCE_NAME may only contain letters, digits, _ and -"
+		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -"
 		exit 2
 	fi
 
@@ -491,7 +491,7 @@ ECSCreate() {
 		if test -n "$SUBNETAZ"; then
 			AZ="$SUBNETAZ"
 		else
-			echo "Need to specify AZ (or derive from subnet)"
+			echo "ERROR: Need to specify AZ (or derive from subnet)"
 			exit 2
 		fi
 	fi
@@ -611,7 +611,7 @@ ECSDelete() {
 	if test -n "$ECSTASKID"; then
 		echo "Delete task ID: $ECSTASKID"
 	else
-		echo "Error:"
+		echo "ERROR:"
 		echo "$ECSRESP" | jq '.[]'
 		return 1
 	fi
@@ -703,12 +703,12 @@ SECGROUPRULECreate() {
 # Package dependency #####################################################################
 
 # check libs3 installed
-command -v s3 >/dev/null 2>&1 || { echo -n>&2 "OTC requires libs3 package to be installed for object storage operations.
+command -v s3 >/dev/null 2>&1 || { echo -n>&2 "Note: otc requires libs3 package to be installed for object storage operations.
 Please install libs3 or libs3-2 using yum/apt-get/zypper.
 Continuing anyway ..."; }
 
 # check jq installed
-command -v jq >/dev/null 2>&1 || { echo -n>&2 "OTC requires jq package to be installed.
+command -v jq >/dev/null 2>&1 || { echo -n>&2 "ERROR: otc requires jq package to be installed.
 Please install jq  using yum/apt-get/zypper.
 Aborting."; exit 1; }
 
@@ -823,11 +823,11 @@ if [ "$SUBCOM" == "create" ]; then
 			CREATE_ECS_WITH_PUBLIC_IP="$2"
 			shift # past argument
 			;;
-			--disktype)
+			--disktype|--disk-type)
 			VOLUMETYPE="$2"
 			shift # past argument
 			;;
-			--disksize)
+			--disksize|--disk-size)
 			ROOTDISKSIZE="$2"
 			shift # past argument
 			;;
@@ -835,11 +835,11 @@ if [ "$SUBCOM" == "create" ]; then
 			DIRECTION="$2"
 			shift # past argument
 			;;
-			--portmin)
+			--portmin|--port-min)
 			PORTMIN="$2"
 			shift # past argument
 			;;
-			--portmax)
+			--portmax|--port-max)
 			PORTMAX="$2"
 			shift # past argument
 			;;
@@ -847,7 +847,7 @@ if [ "$SUBCOM" == "create" ]; then
 			PROTOCOL="$2"
 			shift # past argument
 			;;
-			--ethertype)
+			--ethertype|--ether-type)
 			ETHERTYPE="$2"
 			shift # past argument
 			;;
@@ -876,6 +876,8 @@ if [ "$SUBCOM" == "create" ]; then
 			;;
 			*)
 			# unknown option
+			echo "WARNING: unknown option \"$1\""
+			#exit 1
 			;;
 		esac
 
@@ -937,6 +939,8 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
 		getECSJOBList
 		echo -n "#"
 	done
+   else
+	echo "Note: Not waiting for completion, use otc ecs task $ECSTASKID to monitor"
    fi
 
    echo "ECS Creation status: $ECSCREATEJOBSTATUS"
@@ -948,7 +952,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
    export ECSACTIONSERVERID=$1
 
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "Error. Must be specify the Instance ID!"
+	echo "ERROR: Must be specify the Instance ID!"
 	printHelp
 	exit 1
    fi
@@ -960,7 +964,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
    ECSACTION="os-start"
    ECSACTIONSERVERID=$1
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "Error. Must be specify the Instance ID!"
+	echo "ERROR:: Must be specify the Instance ID!"
 	printHelp
 	exit 1
    fi
@@ -973,7 +977,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
    ECSACTIONSERVERID=$1
 
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "Error. Must be specify the Instance ID!"
+	echo "ERROR: Must be specify the Instance ID!"
 	printHelp
 	exit 1
    fi
@@ -1046,7 +1050,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
    SECUGROUP=$1
 
    if [ "$SECUGROUP" == "" ];then
-	echo "Error. Must be specify the Security Rule Group ID!"
+	echo "ERROR: Must be specify the Security Group ID!"
 	printHelp
 	exit 1
    fi
