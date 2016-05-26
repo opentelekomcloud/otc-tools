@@ -350,6 +350,7 @@ printHelp() {
    echo "    --subnet-name         <SUBNET>"
    echo "    --vpc-name            <VPC>"
    echo "    --security-group-name <SGNAME>"
+   echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
    echo "    --public              <true/false>"
@@ -527,6 +528,12 @@ ECSCreate() {
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
+	SECUGROUPIDS=""
+	for id in ${SECUGROUP//,/ }; do
+		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
+	done
+	SECUGROUPIDS="${SECUGROUPIDS%,}"
+
 	REQ_CREATE_VM='{
 	    "server": {
 		"availability_zone": "'"$AZ"'",
@@ -538,7 +545,7 @@ ECSCreate() {
 		"flavorRef": "'"$INSTANCE_TYPE"'",
 		'"$PERSONALIZATION"'
 		"vpcid": "'"$VPCID"'",
-		"security_groups": [ { "id": "'"$SECUGROUP"'" } ],
+		"security_groups": [ '"$SECUGROUPIDS"' ],
 		"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
 		'"$OPTIONAL"'
 		"count": '$NUMCOUNT'
@@ -923,7 +930,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
    if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
    if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
-   if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId; fi
+   if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then convertSECUGROUPNameToId; fi
 
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
