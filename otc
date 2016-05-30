@@ -351,25 +351,27 @@ printHelp() {
    echo "otc ecs create -n <name> # create ecs instance <name>"
    echo
    echo "otc ecs create             # create vm example"
-   echo "    --count 1              # one instance"
+   echo "    --count 1              # one instance (default)"
    echo "    --public true          # with public ip"
-   echo "    --file1 /tmp/a=/otc/a  # attach file from local drive /tmp/a"
-   echo "                           # to VM drive /otc/a directory"
+   echo "    --file1 /tmp/a=/otc/a  # attach local file /tmp/a to /otc/a in VM"
+   echo "    --file2 ...            # Up to 5 files can be injected this way"
    echo
-   echo "otc ecs create             # create vm (all options)"
+   echo "otc ecs create             # create vm (addtl. options)"
    echo "    --instance-type       <FLAVOR>"
    echo "    --instance-name       <NAME>"
    echo "    --image-name          <IMAGE>"
    echo "    --subnet-name         <SUBNET>"
    echo "    --vpc-name            <VPC>"
    echo "    --security-group-name <SGNAME>"
+   echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
    echo "    --public              <true/false>"
-   echo "    --bandwidth           <BW>"
+   echo "    --bandwidth           <BW>		# defaults to 25"
+   echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
    echo "    --disksize            <DISKGB>"
-   echo "    --disktype            SATA|SAS|SSD"
-   echo "    --az                  <AZ>"
+   echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+   echo "    --az                  <AZ>		# determined from subnet by default"
    echo "    --[no]wait"
    echo
    echo "otc ecs reboot-instances <id>  # reboot ecs instance <id>"
@@ -426,8 +428,8 @@ printHelp() {
    echo "    --direction           <direction>"
    echo "    --protocol            <protocol: tcp, udp, icmp>"
    echo "    --ethertype           <ethtype: IPv4,IPv6>"
-   echo "    --portmin             <port min>"
-   echo "    --portmax             <portmax>"
+   echo "    --portmin             <port range lower end>"
+   echo "    --portmax             <port range upper end>"
    echo
    echo "--- Image Service ---"
    echo "otc images list         # list all images"
@@ -550,6 +552,12 @@ ECSCreate() {
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
+	SECUGROUPIDS=""
+	for id in ${SECUGROUP//,/ }; do
+		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
+	done
+	SECUGROUPIDS="${SECUGROUPIDS%,}"
+
 	REQ_CREATE_VM='{
 	    "server": {
 		"availability_zone": "'"$AZ"'",
@@ -561,7 +569,7 @@ ECSCreate() {
 		"flavorRef": "'"$INSTANCE_TYPE"'",
 		'"$PERSONALIZATION"'
 		"vpcid": "'"$VPCID"'",
-		"security_groups": [ { "id": "'"$SECUGROUP"'" } ],
+		"security_groups": [ '"$SECUGROUPIDS"' ],
 		"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
 		'"$OPTIONAL"'
 		"count": '$NUMCOUNT'
@@ -982,7 +990,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
    if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
    if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
-   if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId; fi
+   if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then convertSECUGROUPNameToId; fi
 
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
