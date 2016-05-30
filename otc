@@ -99,12 +99,26 @@ curlpostauth()
 		-H "X-Auth-Token: $TKN" -d "$@"
 }
 
+curlputauth()
+{
+	TKN="$1"; shift
+	curl $INS -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" -d "$@"
+}
+
 curlgetauth()
 {
 	TKN="$1"; shift
 	#echo curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@" 1>&2
 	curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@"
 }
+
+curldeleteauth()
+{
+	TKN="$1"; shift
+	curl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@"
+}
+
 
 unset SUBNETAZ
 
@@ -196,12 +210,12 @@ getIamToken() {
 	AUTH_URL_KEYNAMES="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/os-keypairs"
 
 	AUTH_URL_VOLUMES="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes"
-
 	AUTH_URL_VOLUMES_DETAILS="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes/detail"
 }
 
 getECSVM() {
         curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
+        curlgetauth $TOKEN "$AUTH_URL_ECS/$VM/os-interface" | jq -r '.[]'
 }
 
 getECSList() {
@@ -218,8 +232,7 @@ getVPCList() {
 }
 
 getPUBLICIPSList() {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=42" | jq '.[]'
-#| python -m json.tool
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=42" | jq '.publicips[]  | {id: .id, pubip: .public_ip_address, privip: .private_ip_address, status: .status, bid: .bandwidth_id, bandwidth: .bandwidth_size|tostring , bandwidth_share_type: .bandwidth_share_type} | .id +"   " +.pubip +"   " +.privip +"   " +.status +"   " +.bid +"   " +.bandwidth +"   " +.bandwidth_share_type ' | tr -d '"'
 }
 
 getSECGROUPListDetail() {
@@ -390,6 +403,16 @@ printHelp() {
    echo "    --secondary-dns     <sec-dns>"
    echo "    --availability-zone <avalibility zone>"
    echo "    --vpc-name          <vpcname>"
+   echo
+   echo "otc publicip list              # list all publicips"
+   echo
+   echo "otc publicip create            # create a publicip"
+   echo "    --bandwidth-name    <bandwidthame>"
+   echo "    --bandwidth         <bandwidth>"
+   echo
+   echo "otc publicip delete <id>       # delete a publicip"
+   echo "otc publicip bind <publicip-id> <port-id> # delete a publicip"
+   echo "otc publicip unbind <publicip-id>         # delete a publicip"
    echo
    echo "otc security-group list                   # list all sec. group"
    echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
@@ -649,14 +672,14 @@ SUBNETCreate() {
 }
 
 PUBLICIPSCreate() {
-#### TODO: NOT USED CURRENTLY
 	if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
+	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
 	REQ_CREATE_PUBLICIPS='{
 		"publicip": {
 			"type": "5_bgp"
 		},
 		"bandwidth": {
-			"name": "bandwidth123",
+			"name": "'"$BANDWIDTH_NAME"'",
 			"size": '$BANDWIDTH',
 			"share_type": "PER"
 		}
@@ -665,6 +688,38 @@ PUBLICIPSCreate() {
 	export REQ_CREATE_PUBLICIPS
 	echo $REQ_CREATE_PUBLICIPS
 	curlpostauth "$TOKEN" "$REQ_CREATE_PUBLICIPS" "$AUTH_URL_PUBLICIPS" | jq '.[]'
+}
+
+PUBLICIPSDelete() {
+	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$@" | jq '.[]'
+}
+
+PUBLICIPSBind() {
+	ID=$1
+	PORT_ID=$2
+	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to."; exit 1; fi
+	REQ_BIND_PUBLICIPS='{
+		"publicip": {
+			"port_id": "'"$PORT_ID"'"
+		}
+	}'
+
+	export REQ_BIND_PUBLICIPS
+	echo $REQ_BIND_PUBLICIPS
+	curlputauth "$TOKEN" "$REQ_BIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
+}
+
+PUBLICIPSUnbind() {
+	ID=$1
+	REQ_UNBIND_PUBLICIPS='{
+		"publicip": {
+			"port_id": ""
+		}
+	}'
+
+	export REQ_UNBIND_PUBLICIPS
+	echo $REQ_UNBIND_PUBLICIPS
+	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
 }
 
 SECGROUPCreate() {
@@ -677,7 +732,7 @@ SECGROUPCreate() {
 	#{ "security_group": { "name":"qq", "vpc_id" : "3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
 	export REQ_CREATE_SECGROUP
 	echo $REQ_CREATE_SECGROUP
-	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+	curlputauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
 }
 
 SECGROUPRULECreate() {
@@ -855,6 +910,10 @@ if [ "$SUBCOM" == "create" ]; then
 			KEYNAME="$2"
 			shift # past argument
 			;;
+			--bandwidth-name)
+			BANDWIDTH_NAME=$2
+			shift # past argument
+			;;
 			--bandwidth)
 			BANDWIDTH=$2
 			shift # past argument
@@ -1007,6 +1066,22 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
    getPUBLICIPSList
+
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ];then
+   getIamToken
+   PUBLICIPSCreate
+
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ];then
+   getIamToken
+   PUBLICIPSDelete $@
+
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "bind" ];then
+   getIamToken
+   PUBLICIPSBind $@
+
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "unbind" ];then
+   getIamToken
+   PUBLICIPSUnbind $@
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
    getIamToken
