@@ -15,3 +15,4 @@ of the custom OTC APIs.
 Packages (RPMs/DEBs) on open Build Service home:garloff:OTC
 https://build.opensuse.org/package/show/home:garloff:OTC/otc-tools
 
+A docker container image [tsiotc/otc-client](https://hub.docker.com/r/tsiotc/otc-client) is available on dockerhub.
