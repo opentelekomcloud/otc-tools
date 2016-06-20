@@ -14,44 +14,37 @@
 # If you are using the otc tool along with native openstack client tools
 # just put the normal OS_ variables in novarc or .ostackrc and you're good to go
 
-test -e ~/novarc && source ~/novarc
-test -e ~/.novarc && source ~/.novarc
-test -e ~/.ostackrc && source ~/.ostackrc
+OLD_OS_PASSWORD="$OS_PASSWORD"
 
 # === Parameters
 #
-# HAVE TO CHANGE! ######
-
-# If you have not set the parameters via the openStack RC files, you can do it here
-## You don't need any of the below if you have your environment set up using
-# the standard OpenStack environment variables in novarc or .ostackrc.
-# Just defaults, IF you want.
-
-#export OS_PROJECT_NAME=eu-de
-#export OS_USERNAME="NUMBER OTC000....."
-#export OS_CACERT=/path/to/cacrt.pem
-#export PASSWORD="your generated API key"
-#export S3_ACCESS_KEY_ID=S3 KEY
-#export S3_SECRET_ACCESS_KEY=S3 SECRET
+# Note: You CAN set the OpenStack and S3 environment variable here.
+# However, it is reocmmended to NOT do this here, but rather leave it
+# for the otc script to read and parse the normal OpenStack environment
+# settings files ~/.ostackrc or ~/.novarc or ~/novarc.
 
 # These variables are in openstack environment format ...
-#export OS_USERNAME="$OS_USERNAME"
-#export OS_PASSWORD="$OS_PASSWORD"
-# Those two don't change for OTC in Europe region ...
-export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
-export OS_PROJECT_NAME="eu-de"
+#export OS_USERNAME="NUMBER OTC000....."
+#export OS_PASSWORD="your generated API key"
+#export OS_PROJECT_NAME=eu-de
+#export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
 
 #export S3_ACCESS_KEY_ID=XXXXXXXXXXXXXXXXXXXX
 #export S3_SECRET_ACCESS_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-# export S3_HOSTNAME=obs.otc.t-systems.com
+#export S3_HOSTNAME=obs.otc.t-systems.com
 
 # Optionally use a proxy for s3 and curl
 #export HTTPS_PROXY=
+# And in case you don't have the root CA certs on your system
 #export OS_CACERT=/etc/ssl/OTC-API-GW-CA-Bundle.pem
 
-# HAVE TO CHANGE END ######
+# ===
 
-# Defaults ( override from command line )
+# And display warning for common scenario
+if test -n "$OLD_OS_PASSWORD" -a "$OLD_OS_PASSWORD" != "$OS_PASSWORD"; then
+	echo "Note: OS_ environment overriden by ~/.otc_env.sh"
+fi
+# === Defaults ( override from command line )
 
 # Default VOLUMETYPE: SATA, SAS or SSD
 export VOLUMETYPE="SATA"
@@ -67,16 +60,21 @@ export IMAGENAME="Standard_openSUSE_42.1_JeOS_latest"
 export INSTANCE_TYPE="computev1-1"
 export INSTANCE_NAME="otcVM-$$"
 
-# Password to inject (only works with some images) or SSH keypair name
+# Password to inject or (better) SSH keypair name for user linux
 #export ADMINPASS="start"`date +%m%d`"!"
-#export KEYNAME=""
-# Only if you want non-default root disk size (in GB)
+#export KEYNAME="SSHkey-XYZ"
+# Only if you want non-default root disk size (in GB), ensure it's larger 
+# than the minimum required by the  image you are using
 #export ROOTDISKSIZE=8
 
+# Don't allocate and assign a public IP by default
 export CREATE_ECS_WITH_PUBLIC_IP="false"
-
-export ECSACTIONTYPE="HARD"
-export WAIT_CREATE="true"
+# Adjust bandwidth of created public IP
 #export BANDWIDTH=25
+
+# Hard reboot/delete ...
+export ECSACTIONTYPE="HARD"
+# Wait for long actions (such as ECS creation) to complete
+export WAIT_CREATE="true"
 ##########################################################################################
 

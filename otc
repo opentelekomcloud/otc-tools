@@ -49,16 +49,52 @@
 #
 
 # Get Config ####################################################################
+may_read_env_files()
+{
+	for file in "$*"; do
+		if test -r "$file"; then
+			echo "Note: Reading environment from $file ..."
+			source "$file"
+			if test -n "$OS_PASSWORD" -a -n "$OS_USERNAME"; then break; fi
+		fi
+	done
+}
 
 otc_dir="$(dirname "$0")"
-if test -e ~/.otc_env.sh; then
+# Parse otc-tools specific config file
+if test -r ~/.otc_env.sh; then
 	source ~/.otc_env.sh
 else
 	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
-	if test -z "$OS_USERNAME"; then
-		test -e ~/novarc && source ~/novarc
-		test -e ~/.novarc && source ~/.novarc
-		test -e ~/.ostackrc && source ~/.ostackrc
+fi
+# Parse standard OpenStack environment setting files if needed
+if test -n "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
+	may_read_env_files ~/.ostackrc ~/.novarc ~/novarc
+fi
+# Defaults
+if test -z "$OS_USER_DOMAIN_NAME"; then
+	export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
+fi
+if test -z "$OS_PROJECT_NAME"; then
+	export OS_PROJECT_NAME="eu-de"
+fi
+# S3 environment
+if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc; then
+	echo "Note: Reading S3 environment from ~/.s3rc ..."
+	source ~/.s3rc
+fi
+# Alternatively parse CSV as returned by OTC
+if test -z "$S3_ACCESS_KEY_ID" -a -r ~/credentials.csv; then
+	echo -n "Note: Parsing S3 ~/credentials.csv ... "
+	LN=$(tail -n1 ~/credentials.csv | sed 's/"//g')
+	UNM=${LN%%,*}
+	LN=${LN#*,}
+	if test "$UNM" = "$OS_USERNAME"; then
+		echo "succeeded"
+		export S3_ACCESS_KEY_ID="${LN%,*}"
+		export S3_SECRET_ACCESS_KEY="${LN#*,}"
+	else
+		echo "user mismatch \"$UNM\" != \"$OS_USERNAME\""
 	fi
 fi
 
