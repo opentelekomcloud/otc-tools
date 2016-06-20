@@ -123,36 +123,48 @@ else
 	if test -n "$OS_CACERT"; then INS="--cacert $OS_CACERT"; fi
 fi
 
+# Generic wrapper to facilitate debugging
+docurl()
+{
+	if test -n "$DEBUG"; then
+		echo DEBUG: curl "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
+		ANS=`curl "$@"`
+		echo "DEBUG: $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+		echo "$ANS"
+	else
+		curl "$@"
+	fi
+}
+
 curlpost()
 {
-	curl $INS -i -sS -H "Content-Type: application/json" -d "$@"
+	docurl $INS -i -sS -H "Content-Type: application/json" -d "$1" "$2"
 }
 
 curlpostauth()
 {
 	TKN="$1"; shift
-	curl $INS -sS -H "Content-Type: application/json" -H "Accept: application/json" \
-		-H "X-Auth-Token: $TKN" -d "$@"
+	docurl $INS -sS -H "Content-Type: application/json" -H "Accept: application/json" \
+			-H "X-Auth-Token: $TKN" -d "$1" "$2"
 }
 
 curlputauth()
 {
 	TKN="$1"; shift
-	curl $INS -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
-		-H "X-Auth-Token: $TKN" -d "$@"
+	docurl $INS -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" -d "$1" "$2"
 }
 
 curlgetauth()
 {
 	TKN="$1"; shift
-	#echo curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@" 1>&2
-	curl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@"
+	docurl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
 curldeleteauth()
 {
 	TKN="$1"; shift
-	curl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$@"
+	docurl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
 
@@ -206,13 +218,13 @@ getIamToken() {
 	'
 	fi
 	export IAM_REQ
-	if test "$MAINCOM" == "debug"; then
-		echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "XXXXXX"/g'
-	fi
+	#if test -n "$DEBUG"; then
+	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g'
+	#fi
 	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
-	if test "$MAINCOM" == "debug"; then
-		echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*==/X-Subject-Token: MIIxxxxxxxxxxxxxxxxxx==/'
-	fi
+	#if test -n "$DEBUG"; then
+	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/'
+	#fi
 	TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 	#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
 	if test -z "$OS_PROJECT_ID"; then
@@ -288,6 +300,7 @@ getSECGROUPRULESListOld() {
 
 getSECGROUPRULESList() {
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
+	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES/$1?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
 
@@ -448,9 +461,9 @@ printHelp() {
    echo "    --bandwidth-name    <bandwidthame>"
    echo "    --bandwidth         <bandwidth>"
    echo
-   echo "otc publicip delete <id>       # delete a publicip"
-   echo "otc publicip bind <publicip-id> <port-id> # delete a publicip"
-   echo "otc publicip unbind <publicip-id>         # delete a publicip"
+   echo "otc publicip delete <id>       # delete a publicip (EIP)"
+   echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
+   echo "otc publicip unbind <publicip-id>         # unbind a publicip"
    echo
    echo "otc security-group list                   # list all sec. group"
    echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
@@ -816,6 +829,7 @@ Aborting."; exit 1; }
 
 # Command Line Parser ####################################################################
 
+if test "$1" = "debug"; then DEBUG=1; shift; fi
 # fetch main command
 MAINCOM=$1
 shift
@@ -1011,15 +1025,6 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
    getIamToken
    getECSVM
 
-elif [ "$MAINCOM" == "debug" ]; then
-   getIamToken
-
-   if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
-   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
-   if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
-   if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId; fi
-   echo -e "Image : $IMAGENAME: $IMAGE_ID\nVPC   : $VPCNAME: $VPCID\nSubnet: $SUBNETNAME: $SUBNETID\nSecGrp: $SECUGROUPNAME: $SECUGROUP"
-
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
 
@@ -1173,9 +1178,8 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
 	printHelp
 	exit 1
    fi
-   SECUGROUP=$1
-   AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
-   getSECGROUPRULESList $1
+   #AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
+   getSECGROUPRULESList $SECUGROUP
 
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
    getIamToken
@@ -1188,7 +1192,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 	convertSECUGROUPNameToId
    fi
 
-   AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules"
+   #AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules"
    SECGROUPRULECreate
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
