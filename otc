@@ -231,7 +231,8 @@ getIamToken() {
 	AUTH_URL_VOLUMES="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes"
 	AUTH_URL_VOLUMES_DETAILS="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes/detail"
 	
-	AUTH_URL_ELB="https://elb.eu-de.otc.t-systems.com:443/v1.0/$OS_PROJECT_ID/elbaas/loadbalancers"
+	AUTH_URL_ELB="https://elb.eu-de.otc.t-systems.com:443/v1.0/$OS_PROJECT_ID/elbaas"
+	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 }
 
 getECSVM() {
@@ -380,22 +381,82 @@ createELB() {
 	if test -n "$1"; then VPCID=$1; fi
 	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId; fi
 	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC"; exit 1; fi
-	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", \"bandwidth\": $BANDWIDTH, $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", \"bandwidth\": $BANDWIDTH, $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
 
 }
 
 getELBList() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB?limit=100" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=100" | jq '.[]'
 }
 
 getELBDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/$1" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.[]'
 }
 
 deleteELB() {
-	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB/$1" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
+}
+
+getListenerList() {
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
+}
+
+deleteListener() {
+	curldeleteauth $TOKEN "$AUTH_URL_ELB/listeners/$1"
+}
+
+# echo "otc elb createlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+createListener() {
+	ALG="$5"
+	BEPROTO="$6"
+	BEPORT=$7
+	if test -z "$ALG"; then ALG="source"; fi
+	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
+	if test -z "$BEPORT"; then BEPORT=$4; fi
+	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then STICKY="\"session_sticky\": \"true\", "; fi
+	curlpostauth $TOKEN "{ \"name\": $2, \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
+
+}
+
+#echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
+createCheck() {
+	HTHR="$6"
+	UTHR="$7"
+	if test -z "$HTHR"; then HTHR=3; fi
+	if test -z "$UTHR"; then UTHR=$HTHR; fi
+	URI="$8"
+	if test "$2" = "HTTP" -o "$2" = "HTTPS" && test -z "$URI"; then URI="/"; fi
+	if test -n "$URI"; then URI="\"healthcheck_uri\": \"$URI\", "; fi
+
+	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
+}
+
+
+deleteCheck() {
+	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1"
+}
+
+getCheck() {
+	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1" | jq '.[]'
+}
+
+#   echo "otc elb listmember <lid>"
+getMemberList() {
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq '.[]'
+}
+
+#   echo "otc elb addmember <lid> <vmid> <vmip>"
+createMember() {
+	curlpostauth $TOKEN "{ \"server_id\": \"$2\", \"address\": \"$3\" }" "$AUTH_URL_ELB/listeners/$1/members"
+	#TODO JOB_ID ...
+}
+
+#   echo "otc elb delmember <lid> <mid> <addr>"
+deleteMember() {
+	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$2\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$1/members/action"
+	#TODO JOB_ID ...
 }
 
 
@@ -503,8 +564,18 @@ printHelp() {
    echo "     --vpc-name <vpcname>"
    echo "     --bandwidth <bandwidth>    # in Mbps"
    echo "     --subnet-name/id <subnet>  # creates internal ELB listening on subnet"
-   echo "otc elb delete <id>     # Delete ELB"
-   # TODO: elb listeners, backends, healthchecks
+   echo "otc elb delete <eid>    # Delete ELB with <eid>"
+
+   echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
+   echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+   echo "otc elb dellistener <lid>"
+   echo "otc elb listmember <lid>"
+   echo "otc elb addmember <lid> <vmid> <vmip>"
+   echo "otc elb delmember <lid> <mid> <vmip>"
+   #elb listcheck <lid> is missing (!)
+   echo "otc elb showcheck <cid>"
+   echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
+   echo "otc elb delcheck <cid>"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1259,6 +1330,26 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
    createELB "$@"
    echo "$ELBJOBID"
    WaitForTask $ELBJOBID 2
+
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
+    getListenerList "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
+     [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
+    createListener "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
+    deleteListenerList "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
+    getMemberList "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
+    createMember "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delmember" ]; then
+    deleteMember "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showcheck" ]; then
+    getCheck "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
+    createCheck "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
+    deleteCheck "$@"
 
 else
    printHelp
