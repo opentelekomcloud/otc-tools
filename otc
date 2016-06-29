@@ -365,6 +365,21 @@ getKEYPAIRList() {
 #| python -m json.tool
 }
 
+getKEYPAIR() {
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES/$1" | jq '.[]'
+#| python -m json.tool
+}
+
+createKEYPAIR() {
+	if test -n "$2"; then PKEY="\"public_key\": \"$2\", "; fi
+	curlpostauth $TOKEN "{ \"keypair\": { $PKEY \"name\": \"$1\" } }" "$AUTH_URL_KEYNAMES" | jq '.'
+}
+
+deleteKEYPAIR() {
+	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
+}
+
+
 createELB() {
 	if test -n "$3"; then BANDWIDTH=$3; fi
 	if test -n "$2"; then NAME="$2"; fi
@@ -503,6 +518,9 @@ printHelp() {
    echo
    echo "--- SSH Keys ---"
    echo "otc keypair list                # list ssh key pairs"
+   echo "otc keypair show <KPNAME>       # show ssh key pair"
+   echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
+   echo "otc keypair delete <KPNAME>     # delete ssh key pair"
    #TODO keypair creation, deletion, ...
    echo
    echo "--- Elastic Volumes ---"
@@ -568,6 +586,7 @@ printHelp() {
 
    echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
    echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+   #not implemented: modifylistener
    echo "otc elb dellistener <lid>"
    echo "otc elb listmember <lid>"
    echo "otc elb addmember <lid> <vmid> <vmip>"
@@ -1111,10 +1130,13 @@ if [ "$SUBCOM" == "create" ]; then
 			--default)
 			DEFAULT=YES
 			;;
-			*)
+			-*)
 			# unknown option
-			echo "WARNING: unknown option \"$1\""
-			#exit 1
+			echo "ERROR: unknown option \"$1\""
+			exit 1
+			;;
+			*)
+			break
 			;;
 		esac
 
@@ -1300,6 +1322,19 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
    getKEYPAIRList
+
+elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "show" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ];then
+   getKEYPAIR "$@"
+
+elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "create" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ];then
+   createKEYPAIR "$@"
+
+elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
+	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ];then
+   deleteKEYPAIR "$@"
+
 
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
    echo $TOKEN
