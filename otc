@@ -391,7 +391,7 @@ getELBList() {
 }
 
 getELBDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.'
 }
 
 deleteELB() {
@@ -407,7 +407,7 @@ deleteListener() {
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/listeners/$1"
 }
 
-# echo "otc elb createlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+# echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
 createListener() {
 	ALG="$5"
 	BEPROTO="$6"
@@ -416,7 +416,7 @@ createListener() {
 	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
 	if test -z "$BEPORT"; then BEPORT=$4; fi
 	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then STICKY="\"session_sticky\": \"true\", "; fi
-	curlpostauth $TOKEN "{ \"name\": $2, \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
+	curlpostauth $TOKEN "{ \"name\": \"$3\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
 
 }
 
@@ -439,7 +439,7 @@ deleteCheck() {
 }
 
 getCheck() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1" | jq '.'
 }
 
 #   echo "otc elb listmember <lid>"
@@ -449,7 +449,7 @@ getMemberList() {
 
 #   echo "otc elb addmember <lid> <vmid> <vmip>"
 createMember() {
-	curlpostauth $TOKEN "{ \"server_id\": \"$2\", \"address\": \"$3\" }" "$AUTH_URL_ELB/listeners/$1/members"
+	curlpostauth $TOKEN "[ { \"server_id\": \"$2\", \"address\": \"$3\" } ]" "$AUTH_URL_ELB/listeners/$1/members"
 	#TODO JOB_ID ...
 }
 
@@ -559,7 +559,7 @@ printHelp() {
    echo
    echo "--- Elastic Load Balancer ---"
    echo "otc elb list            # list all load balancer"
-   #echo "otc elb show <id>       # show elb details"
+   echo "otc elb show <id>       # show elb details"
    echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
    echo "     --vpc-name <vpcname>"
    echo "     --bandwidth <bandwidth>    # in Mbps"
@@ -1337,7 +1337,7 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
     createListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
-    deleteListenerList "$@"
+    deleteListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
     getMemberList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
