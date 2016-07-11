@@ -208,30 +208,31 @@ getIamToken() {
 
 	# SET ENDPOINTS
 	# TODO: Parse catalog instead
+	export BASEURL=${IAM_AUTH_URL%%/v3*}
 
-	AUTH_URL_ECS="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/servers"
-	export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/jobs/$ECSTASKID"
-	export AUTH_URL_ECS_DETAIL="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/servers/detail"
+	AUTH_URL_ECS="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers"
+	export AUTH_URL_ECS_JOB="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/jobs"
+	export AUTH_URL_ECS_DETAIL="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers/detail"
 
-	AUTH_URL_ECS_CLOUD="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers"
-	AUTH_URL_ECS_CLOUD_ACTION="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/action"
-	AUTH_URL_ECS_CLOUD_DELETE="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/delete"
+	AUTH_URL_ECS_CLOUD="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers"
+	AUTH_URL_ECS_CLOUD_ACTION="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/action"
+	AUTH_URL_ECS_CLOUD_DELETE="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/delete"
 
-	AUTH_URL_VPCS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/vpcs"
-	AUTH_URL_PUBLICIPS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/publicips"
-	AUTH_URL_SEC_GROUPS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-groups"
-	AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/security-group-rules"
-	AUTH_URL_SUBNETS="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/subnets"
+	AUTH_URL_VPCS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/vpcs"
+	AUTH_URL_PUBLICIPS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/publicips"
+	AUTH_URL_SEC_GROUPS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-groups"
+	AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v2/$OS_PROJECT_ID/security-group-rules"
+	AUTH_URL_SUBNETS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/subnets"
 
-	AUTH_URL_IMAGES="https://ims.eu-de.otc.t-systems.com/v2/images"
+	AUTH_URL_IMAGES="${BASEURL/iam/ims}/v2/images"
 
-	AUTH_URL_FLAVORS="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/cloudservers/flavors"
-	AUTH_URL_KEYNAMES="https://ecs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/os-keypairs"
+	AUTH_URL_FLAVORS="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/flavors"
+	AUTH_URL_KEYNAMES="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/os-keypairs"
 
-	AUTH_URL_VOLUMES="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes"
-	AUTH_URL_VOLUMES_DETAILS="https://evs.eu-de.otc.t-systems.com/v2/$OS_PROJECT_ID/cloudvolumes/detail"
+	AUTH_URL_VOLUMES="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes"
+	AUTH_URL_VOLUMES_DETAILS="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes/detail"
 	
-	AUTH_URL_ELB="https://elb.eu-de.otc.t-systems.com:443/v1.0/$OS_PROJECT_ID/elbaas"
+	AUTH_URL_ELB="${BASEURL/iam/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 }
 
@@ -605,9 +606,13 @@ printHelp() {
 }
 
 getECSJOBList() {
-	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB"
+	if test -z "$1"; then echo
+		echo "ERROR: Need to pass job ID to getECSJOBList"
+		exit 1
+	fi
+	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
 
-	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB"`
+	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
 	#TODO: JUST FOR DEBUGING TO SEE THE TASK STATUS
 	echo $ECSCREATEJOBSTATUSJSON
 	ECSCREATEJOBSTATUS=`echo $ECSCREATEJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
@@ -919,27 +924,25 @@ SECGROUPRULECreate() {
 }
 
 WaitForTask() {
-   export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$1"
    if [ "$WAIT_CREATE" == "true" ];then
-	echo "Waiting for Job:   $AUTH_URL_ECS_JOB"
-	getECSJOBList
+	echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1"
+	getECSJOBList $1
 	echo -n "#"
 	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 	do
 		sleep $2
-		getECSJOBList
+		getECSJOBList $1
 		echo -n "#"
 	done
    else
-	getECSJOBList
+	getECSJOBList $1
 	echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
    fi
 }
 
 # Does not seem to work :-(
 DeleteTask() {
-	export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$1"
-	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_JOB"
+	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"
 }
 
 ##########################################################################################
@@ -1223,10 +1226,9 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
      [ "$MAINCOM" == "task" -a "$SUBCOM" == "show" ]; then
-   ECSTASKID=$1
-   export AUTH_URL_ECS_JOB="https://ecs.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/jobs/$ECSTASKID"
-   #echo $AUTH_URL_ECS_JOB
-   getECSJOBList
+   #ECSTASKID=$1
+   #echo $AUTH_URL_ECS_JOB/$1
+   getECSJOBList $1
 
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
    DeleteTask $1
@@ -1294,7 +1296,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
 	printHelp
 	exit 1
    fi
-   #AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
+   #AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
    getSECGROUPRULESList $SECUGROUP
 
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
@@ -1307,7 +1309,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 	convertSECUGROUPNameToId
    fi
 
-   #AUTH_URL_SEC_GROUP_RULES="https://vpc.eu-de.otc.t-systems.com/v1/$OS_PROJECT_ID/security-group-rules"
+   #AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
    SECGROUPRULECreate
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
