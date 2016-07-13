@@ -1340,6 +1340,10 @@ elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
 
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
    echo $TOKEN
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq #'.[]'
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
