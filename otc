@@ -211,7 +211,7 @@ getIamToken() {
 	export BASEURL=${IAM_AUTH_URL%%/v3*}
 
 	AUTH_URL_ECS="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers"
-	export AUTH_URL_ECS_JOB="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/jobs"
+	export AUTH_URL_ECS_JOB="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/jobs"
 	export AUTH_URL_ECS_DETAIL="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers/detail"
 
 	AUTH_URL_ECS_CLOUD="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers"
@@ -575,6 +575,7 @@ printHelp() {
    echo "--- Image Service ---"
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
+   echo "otc images upload <id> bucket:objname     # specify image source (s3)"
    echo
    echo "--- Elastic Load Balancer ---"
    echo "otc elb list            # list all load balancer"
@@ -1317,6 +1318,9 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
    getIMAGEDetail $1
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ];then
+   curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
