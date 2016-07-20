@@ -1,4 +1,5 @@
 #!/bin/bash
+# vi:set ts=3 sw=3:
 # == Module: Open Telekom Cloud Cli Interface 0.6.x
 #
 # Manage OTC via Command Line
