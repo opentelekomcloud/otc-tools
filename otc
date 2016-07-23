@@ -600,6 +600,7 @@ printHelp() {
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
+   echo "otc iam project         # output project_id/tenant_id"
    echo
    echo "--- Global flags ---"
    echo "otc debug CMD1 CMD2 PARAMS      # for debugging REST calls ..."
@@ -1348,6 +1349,9 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
    curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
    curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq #'.[]'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
+     [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
+   echo $OS_PROJECT_ID
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
