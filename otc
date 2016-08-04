@@ -904,7 +904,7 @@ SECGROUPCreate() {
 	#{ "security_group": { "name":"qq", "vpc_id" : "3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
 	export REQ_CREATE_SECGROUP
 	echo $REQ_CREATE_SECGROUP
-	curlputauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
 }
 
 SECGROUPRULECreate() {
