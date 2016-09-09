@@ -306,6 +306,16 @@ getRDSInstanceList() {
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
+getRDSDatastoreDetails() {
+	local datastore_name
+	for datastore_name in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/datastores/${datastore_name}/versions"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.dataStores[]'
+	done
+}
+
 getRDSAPIVersionList() {
 	curlgetauth $TOKEN "${AUTH_URL_RDS}/" | \
 		jq -r  '.versions[] | {id: .id, status: .status, updated: .updated} | .id+" "+.status+" "+.updated'
@@ -624,9 +634,13 @@ printHelp() {
    echo "otc elb delcheck <cid>"
    echo
 	echo "--- Relational Database Service (RDS) ---"
-   echo "otc rds [list|listinstances]   # list database instances"
-   echo "otc rds [apis|listapis]        # list API ids"
+   echo "otc rds list"
+   echo "otc rds listinstances          # list database instances"
+   echo "otc rds apis"
+   echo "otc rds listapis               # list API ids"
    echo "otc rds showapi <aid> ...      # show API detail information"
+	echo "otc rds showdatastore <name> ..."
+	echo "otc rds datastore <name> ...   # show datastore details (like MySQL)"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1441,7 +1455,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
 	getRDSAPIVersionList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 	getRDSAPIDetails "$@"
-
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
+	getRDSDatastoreDetails "$@"
 else
    printHelp
 fi
