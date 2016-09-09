@@ -285,7 +285,6 @@ getSECGROUPRULESListOld() {
 
 getSECGROUPRULESList() {
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
-	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES/$1?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
 
@@ -464,7 +463,6 @@ createCheck() {
 	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
 }
 
-
 deleteCheck() {
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1"
 }
@@ -489,7 +487,6 @@ deleteMember() {
 	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$2\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$1/members/action"
 	#TODO JOB_ID ...
 }
-
 
 printHelp() {
    echo "Usage:"
@@ -1400,24 +1397,24 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
    WaitForTask $ELBJOBID 2
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
-    getListenerList "$@"
+	getListenerList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
-    createListener "$@"
+	createListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
-    deleteListener "$@"
+	deleteListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
-    getMemberList "$@"
+	getMemberList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
-    createMember "$@"
+	createMember "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delmember" ]; then
-    deleteMember "$@"
+	deleteMember "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showcheck" ]; then
-    getCheck "$@"
+	getCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
-    createCheck "$@"
+	createCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
-    deleteCheck "$@"
+	deleteCheck "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ]; then
    getRDSList
