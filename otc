@@ -242,8 +242,9 @@ getIamToken() {
 	AUTH_URL_ELB="${BASEURL/iam/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 
-	AUTH_URL_RDS="${BASEURL/iam/rds}/rds/v1/$OS_USER_DOMAIN_ID/instances"
+	AUTH_URL_RDS="${BASEURL/iam/rds}/rds"
 	AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
+	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
 }
 
 getECSVM() {
@@ -301,10 +302,14 @@ getSUBNETList() {
 #| python -m json.tool
 }
 
-getRDSList() {
-	curlgetauth $TOKEN "$AUTH_URL_RDS" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+getRDSInstanceList() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
+getRDSAPIVersionList() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS}/" | \
+		jq -r  '.versions[] | {id: .id, status: .status, updated: .updated} | .id+" "+.status+" "+.updated'
+}
 
 getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
@@ -609,6 +614,10 @@ printHelp() {
    echo "otc elb showcheck <cid>"
    echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
    echo "otc elb delcheck <cid>"
+   echo
+	echo "--- Relational Database Service (RDS) ---"
+   echo "otc rds [list|listinstances]   # list database instances"
+   echo "otc rds listapis               # list API version information"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -974,11 +983,10 @@ Continuing anyway ..."; }
 
 # check jq installed
 command -v jq >/dev/null 2>&1 || { echo -n>&2 "ERROR: otc requires jq package to be installed.
-Please install jq  using yum/apt-get/zypper.
+Please install jq using yum/apt-get/zypper.
 Aborting."; exit 1; }
 
 ##########################################################################################
-
 
 # Command Line Parser ####################################################################
 
@@ -1416,8 +1424,12 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
 
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ]; then
-   getRDSList
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
+   getRDSInstanceList
+
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+	getRDSAPIVersionList
 
 else
    printHelp
