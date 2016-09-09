@@ -311,6 +311,14 @@ getRDSAPIVersionList() {
 		jq -r  '.versions[] | {id: .id, status: .status, updated: .updated} | .id+" "+.status+" "+.updated'
 }
 
+getRDSAPIDetails() {
+	local api_id
+	for api_id in $*
+	do
+		curlgetauth $TOKEN "${AUTH_URL_RDS}/${api_id}" | jq .versions[]
+	done
+}
+
 getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
 }
@@ -617,7 +625,8 @@ printHelp() {
    echo
 	echo "--- Relational Database Service (RDS) ---"
    echo "otc rds [list|listinstances]   # list database instances"
-   echo "otc rds listapis               # list API version information"
+   echo "otc rds [apis|listapis]        # list API ids"
+   echo "otc rds showapi <aid> ...      # show API detail information"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1427,9 +1436,11 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
    getRDSInstanceList
-
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
+	getRDSAPIDetails "$@"
 
 else
    printHelp
