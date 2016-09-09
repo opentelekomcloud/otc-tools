@@ -193,6 +193,9 @@ getIamToken() {
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g'
 	#fi
 	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
+
+	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C . 
+
 	#if test -n "$DEBUG"; then
 	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/'
 	#fi
@@ -245,6 +248,7 @@ getIamToken() {
 	AUTH_URL_RDS="${BASEURL/iam/rds}/rds"
 	AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
+	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
 }
 
 getECSVM() {
@@ -306,6 +310,10 @@ getRDSInstanceList() {
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
+getRDSInstanceDetails() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r .instances[]
+}
+
 getRDSDatastoreDetails() {
 	local datastore_name
 	for datastore_name in $*
@@ -327,6 +335,16 @@ getRDSAPIDetails() {
 	do
 		curlgetauth $TOKEN "${AUTH_URL_RDS}/${api_id}" | jq .versions[]
 	done
+}
+
+getRDSFlavorList() {
+	local dbid=$1;   shift
+	local region=$1; shift
+	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
+	local URI="${AUTH_URL_RDS_PROJECT}/flavors?dbid=${dbid}&region=${region}"
+	# echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r . 
+	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
 getid() {
@@ -619,7 +637,7 @@ printHelp() {
    echo "     --vpc-name <vpcname>"
    echo "     --bandwidth <bandwidth>    # in Mbps"
    echo "     --subnet-name/id <subnet>  # creates internal ELB listening on subnet"
-   echo "otc elb delete <eid>    # Delete ELB with <eid>"
+   echo "otc elb delete <eid>            # Delete ELB with <eid>"
 
    echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
    echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
@@ -635,12 +653,16 @@ printHelp() {
    echo
 	echo "--- Relational Database Service (RDS) ---"
    echo "otc rds list"
-   echo "otc rds listinstances          # list database instances"
+   echo "otc rds listinstances            # list database instances"
+   echo "otc rds show"
+   echo "otc rds showinstances            # show database instances details"
    echo "otc rds apis"
-   echo "otc rds listapis               # list API ids"
-   echo "otc rds showapi <aid> ...      # show API detail information"
+   echo "otc rds listapis                 # list API ids"
+   echo "otc rds showapi <aid> ...        # show API detail information"
 	echo "otc rds showdatastore <name> ..."
-	echo "otc rds datastore <name> ...   # show datastore details (like MySQL)"
+	echo "otc rds datastore <name> ...     # show datastore details (like MySQL)"
+	echo "otc rds listflavors"
+	echo "otc rds flavors                  # list RDS flavors"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1450,6 +1472,9 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
    getRDSInstanceList
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
+   getRDSInstanceDetails
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
@@ -1458,6 +1483,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
+	getRDSFlavorList "$@"
 else
    printHelp
 fi
