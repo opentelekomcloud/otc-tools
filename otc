@@ -310,8 +310,23 @@ getRDSInstanceList() {
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
-getRDSInstanceDetails() {
+getRDSAllInstanceDetailsImpl() {
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r .instances[]
+}
+
+getRDSInstanceDetailsImpl() {
+	local instanceid
+	for instanceid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.instance'
+	done
+}
+
+getRDSInstanceDetails() {
+	[ $# -eq 0 ] && getRDSAllInstanceDetailsImpl
+	[ $# -ne 0 ] && getRDSInstanceDetailsImpl "$@"
 }
 
 getRDSDatastoreDetails() {
@@ -662,17 +677,17 @@ printHelp() {
    echo
 	echo "--- Relational Database Service (RDS) ---"
    echo "otc rds list"
-   echo "otc rds listinstances            # list database instances"
-   echo "otc rds show"
-   echo "otc rds showinstances            # show database instances details"
+   echo "otc rds listinstances             # list database instances"
+   echo "otc rds show [<id> ...]"
+   echo "otc rds showinstances  [<id> ...] # show database instances details"
    echo "otc rds apis"
-   echo "otc rds listapis                 # list API ids"
-   echo "otc rds showapi <aid> ...        # show API detail information"
+   echo "otc rds listapis                  # list API ids"
+   echo "otc rds showapi <id> ...          # show API detail information"
 	echo "otc rds showdatastore <name> ..."
-	echo "otc rds datastore <name> ...     # show datastore details (like MySQL)"
+	echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
 	echo "otc rds listflavors"
-	echo "otc rds flavors                  # list RDS flavors"
-	echo "otc rds showflavor <id> ...      # RDS flavor details"
+	echo "otc rds flavors                   # list RDS flavors"
+	echo "otc rds showflavor <id> ...       # RDS flavor details"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1484,7 +1499,7 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
    getRDSInstanceList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
-   getRDSInstanceDetails
+   getRDSInstanceDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
