@@ -194,7 +194,7 @@ getIamToken() {
 	#fi
 	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
 
-	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C . 
+	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
 
 	#if test -n "$DEBUG"; then
 	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/'
@@ -343,8 +343,17 @@ getRDSFlavorList() {
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
 	local URI="${AUTH_URL_RDS_PROJECT}/flavors?dbid=${dbid}&region=${region}"
 	# echo "URI: $URI"
-	curlgetauth $TOKEN "$URI" | jq -r . 
+	curlgetauth $TOKEN "$URI" | jq -r .
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+}
+
+getRDSFlavorDetails() {
+	for flavorid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/flavors/${flavorid}"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.flavor'
+	done
 }
 
 getid() {
@@ -663,6 +672,7 @@ printHelp() {
 	echo "otc rds datastore <name> ...     # show datastore details (like MySQL)"
 	echo "otc rds listflavors"
 	echo "otc rds flavors                  # list RDS flavors"
+	echo "otc rds showflavor <id> ...      # RDS flavor details"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1486,6 +1496,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
+	getRDSFlavorDetails "$@"
+
 else
    printHelp
 fi
