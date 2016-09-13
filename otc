@@ -116,8 +116,12 @@ curlpost()
 curlpostauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -H "Content-Type: application/json" -H "Accept: application/json" \
-			-H "X-Auth-Token: $TKN" -d "$1" "$2"
+	docurl $INS -sS -X POST \
+		-H "Content-Type: application/json" \
+		-H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" \
+		-H "X-Language: en-us" \
+		-d "$1" "$2"
 }
 
 curlputauth()
@@ -369,6 +373,30 @@ getRDSFlavorDetails() {
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.flavor'
 	done
+}
+
+createRDSInstanceImpl() {
+	# Parameter $* as descibed in
+	# API Reference Issue 01 2016-06-30,
+	# 4.7 Creating an Instance
+	local URI="${AUTH_URL_RDS_DOMAIN}/instances"
+	#echo "Parameter: $*"
+	#echo "URI: $URI"
+	curlpostauth $TOKEN "$*" "$URI" | jq '.'
+}
+
+createRDSInstance() {
+	local rds_parameters="",zwerg;
+	if [ $# -eq 0 ]; then
+		# no parameter file given, read from stdin
+		while read zwerg
+		do
+			rds_parameters.="$zwerg"
+		done
+	else
+		rds_parameters=`cat $1`
+	fi
+	createRDSInstanceImpl "$rds_parameters"
 }
 
 getid() {
@@ -688,6 +716,8 @@ printHelp() {
 	echo "otc rds listflavors"
 	echo "otc rds flavors                   # list RDS flavors"
 	echo "otc rds showflavor <id> ...       # RDS flavor details"
+	echo "otc rds create [<configfile>]     # create RDS instance, read from"
+	echo "                                  # stdin when no config file is given"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -724,7 +754,6 @@ getFileContentJSON() {
 
 		export FILEJSONITEM="$FILE_TEMPLATE"
 	fi
-
 }
 
 getPersonalizationJSON() {
@@ -1513,6 +1542,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
 	getRDSFlavorList "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
 	getRDSFlavorDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
+	createRDSInstance "$@"
 
 else
    printHelp
