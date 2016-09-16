@@ -399,6 +399,23 @@ createRDSInstance() {
 	createRDSInstanceImpl "$rds_parameters"
 }
 
+deleteRDSInstanceImpl() {
+	local instanceid
+	for instanceid in "$@"
+	do
+		#local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
+		local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
+		echo "Try deleting instance $instanceid"
+		#echo "URI: $URI"
+		curldeleteauth $TOKEN "$URI"
+	done
+}
+
+deleteRDSInstance() {
+	[ $# -ne 0 ] && deleteRDSInstanceImpl "$@"
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete" 
+}
+
 getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
 }
@@ -718,6 +735,7 @@ printHelp() {
 	echo "otc rds showflavor <id> ...       # RDS flavor details"
 	echo "otc rds create [<configfile>]     # create RDS instance, read from"
 	echo "                                  # stdin when no config file is given"
+	echo "otc rds delete <id> ...           # remove RDS instances"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1544,6 +1562,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
 	getRDSFlavorDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
 	createRDSInstance "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
+	deleteRDSInstance "$@"
 
 else
    printHelp
