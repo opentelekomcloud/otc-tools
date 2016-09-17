@@ -1,4 +1,5 @@
 #!/bin/bash
+# vi:set ts=3 sw=3:
 # == Module: Open Telekom Cloud Cli Interface 0.6.x
 #
 # Manage OTC via Command Line
@@ -115,8 +116,12 @@ curlpost()
 curlpostauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -H "Content-Type: application/json" -H "Accept: application/json" \
-			-H "X-Auth-Token: $TKN" -d "$1" "$2"
+	docurl $INS -sS -X POST \
+		-H "Content-Type: application/json" \
+		-H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" \
+		-H "X-Language: en-us" \
+		-d "$1" "$2"
 }
 
 curlputauth()
@@ -129,7 +134,7 @@ curlputauth()
 curlgetauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X GET -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+	docurl $INS -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
 curldeleteauth()
@@ -137,7 +142,6 @@ curldeleteauth()
 	TKN="$1"; shift
 	docurl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
-
 
 unset SUBNETAZ
 
@@ -150,41 +154,41 @@ unset SUBNETAZ
 getIamToken() {
 	if test -n "$OS_PROJECT_ID"; then
 	IAM_REQ='{
-	    "auth": {
-		"identity": {
-		    "methods": [ "password" ],
-		    "password": {
-		        "user": {
-		            "name": "'"$OS_USERNAME"'",
-		            "password": "'"$OS_PASSWORD"'",
-		            "domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
-		        }
-		    }
-		},
-		"scope": {
-		    "project": { "id": "'"$OS_PROJECT_ID"'" }
+			"auth": {
+			"identity": {
+				"methods": [ "password" ],
+				"password": {
+					"user": {
+						"name": "'"$OS_USERNAME"'",
+						"password": "'"$OS_PASSWORD"'",
+						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+					}
+				}
+			},
+			"scope": {
+				"project": { "id": "'"$OS_PROJECT_ID"'" }
+			}
 		}
-	    }
 	}
 	'
 	else
 	IAM_REQ='
 	{
-	    "auth": {
-		"identity": {
-		    "methods": [ "password" ],
-		    "password": {
-		        "user": {
-		            "name": "'"$OS_USERNAME"'",
-		            "password": "'"$OS_PASSWORD"'",
-		            "domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
-		        }
-		    }
+		"auth": {
+			"identity": {
+			"methods": [ "password" ],
+				"password": {
+				"user": {
+					"name": "'"$OS_USERNAME"'",
+					"password": "'"$OS_PASSWORD"'",
+					"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+				}
+			}
 		},
-		"scope": {
-		    "project": { "name": "'"$OS_PROJECT_NAME"'" }
+			"scope": {
+				"project": { "name": "'"$OS_PROJECT_NAME"'" }
+			}
 		}
-	    }
 	}
 	'
 	fi
@@ -193,6 +197,9 @@ getIamToken() {
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g'
 	#fi
 	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
+
+	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
+
 	#if test -n "$DEBUG"; then
 	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/'
 	#fi
@@ -203,6 +210,13 @@ getIamToken() {
 	fi
 	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
 		echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
+		exit 2
+	fi
+	if test -z "$OS_USER_DOMAIN_ID"; then
+		OS_USER_DOMAIN_ID=`echo "$IAMRESP" | getUserDomainIdFromIamResponse `
+	fi
+	if test -z "$OS_USER_DOMAIN_ID"; then
+		echo "ERROR: Failed to determine user domain id from $IAM_AUTH_URL for user $OS_USERNAME"
 		exit 2
 	fi
 
@@ -231,14 +245,19 @@ getIamToken() {
 
 	AUTH_URL_VOLUMES="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes"
 	AUTH_URL_VOLUMES_DETAILS="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes/detail"
-	
+
 	AUTH_URL_ELB="${BASEURL/iam/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
+
+	AUTH_URL_RDS="${BASEURL/iam/rds}/rds"
+	AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
+	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
+	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
 }
 
 getECSVM() {
-        curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
-        curlgetauth $TOKEN "$AUTH_URL_ECS/$VM/os-interface" | jq -r '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ECS/$VM/os-interface" | jq -r '.[]'
 }
 
 getECSList() {
@@ -264,7 +283,7 @@ getSECGROUPListDetail() {
 }
 
 getSECGROUPList() {
- 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -275,7 +294,6 @@ getSECGROUPRULESListOld() {
 
 getSECGROUPRULESList() {
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
-	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES/$1?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
 #| python -m json.tool
 }
 
@@ -290,6 +308,112 @@ getEVSDetail() {
 getSUBNETList() {
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | jq '.[]'
 #| python -m json.tool
+}
+
+getRDSInstanceList() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+}
+
+getRDSAllInstanceDetailsImpl() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r .instances[]
+}
+
+getRDSInstanceDetailsImpl() {
+	local instanceid
+	for instanceid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.instance'
+	done
+}
+
+getRDSInstanceDetails() {
+	[ $# -eq 0 ] && getRDSAllInstanceDetailsImpl
+	[ $# -ne 0 ] && getRDSInstanceDetailsImpl "$@"
+}
+
+getRDSDatastoreDetails() {
+	local datastore_name
+	for datastore_name in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/datastores/${datastore_name}/versions"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.dataStores[]'
+	done
+}
+
+getRDSAPIVersionList() {
+	curlgetauth $TOKEN "${AUTH_URL_RDS}/" | \
+		jq -r  '.versions[] | {id: .id, status: .status, updated: .updated} | .id+" "+.status+" "+.updated'
+}
+
+getRDSAPIDetails() {
+	local api_id
+	for api_id in $*
+	do
+		curlgetauth $TOKEN "${AUTH_URL_RDS}/${api_id}" | jq .versions[]
+	done
+}
+
+getRDSFlavorList() {
+	local dbid=$1;   shift
+	local region=$1; shift
+	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
+	local URI="${AUTH_URL_RDS_PROJECT}/flavors?dbid=${dbid}&region=${region}"
+	# echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r .
+	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+}
+
+getRDSFlavorDetails() {
+	for flavorid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/flavors/${flavorid}"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.flavor'
+	done
+}
+
+createRDSInstanceImpl() {
+	# Parameter $* as descibed in
+	# API Reference Issue 01 2016-06-30,
+	# 4.7 Creating an Instance
+	local URI="${AUTH_URL_RDS_DOMAIN}/instances"
+	#echo "Parameter: $*"
+	#echo "URI: $URI"
+	curlpostauth $TOKEN "$*" "$URI" | jq '.'
+}
+
+createRDSInstance() {
+	local rds_parameters="",zwerg;
+	if [ $# -eq 0 ]; then
+		# no parameter file given, read from stdin
+		while read zwerg
+		do
+			rds_parameters.="$zwerg"
+		done
+	else
+		rds_parameters=`cat $1`
+	fi
+	createRDSInstanceImpl "$rds_parameters"
+}
+
+deleteRDSInstanceImpl() {
+	local instanceid
+	for instanceid in "$@"
+	do
+		#local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
+		local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
+		echo "Try deleting instance $instanceid"
+		#echo "URI: $URI"
+		curldeleteauth $TOKEN "$URI"
+	done
+}
+
+deleteRDSInstance() {
+	[ $# -ne 0 ] && deleteRDSInstanceImpl "$@"
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete" 
 }
 
 getid() {
@@ -309,7 +433,7 @@ convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
 	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
-       	SUBNETID=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME"`
+   SUBNETID=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME" name availability_zone`
 	export SUBNETID SUBNETAZ
 }
@@ -449,7 +573,6 @@ createCheck() {
 	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
 }
 
-
 deleteCheck() {
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1"
 }
@@ -474,7 +597,6 @@ deleteMember() {
 	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$2\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$1/members/action"
 	#TODO JOB_ID ...
 }
-
 
 printHelp() {
    echo "Usage:"
@@ -584,7 +706,7 @@ printHelp() {
    echo "     --vpc-name <vpcname>"
    echo "     --bandwidth <bandwidth>    # in Mbps"
    echo "     --subnet-name/id <subnet>  # creates internal ELB listening on subnet"
-   echo "otc elb delete <eid>    # Delete ELB with <eid>"
+   echo "otc elb delete <eid>            # Delete ELB with <eid>"
 
    echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
    echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
@@ -597,6 +719,23 @@ printHelp() {
    echo "otc elb showcheck <cid>"
    echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
    echo "otc elb delcheck <cid>"
+   echo
+	echo "--- Relational Database Service (RDS) ---"
+   echo "otc rds list"
+   echo "otc rds listinstances             # list database instances"
+   echo "otc rds show [<id> ...]"
+   echo "otc rds showinstances  [<id> ...] # show database instances details"
+   echo "otc rds apis"
+   echo "otc rds listapis                  # list API ids"
+   echo "otc rds showapi <id> ...          # show API detail information"
+	echo "otc rds showdatastore <name> ..."
+	echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
+	echo "otc rds listflavors"
+	echo "otc rds flavors                   # list RDS flavors"
+	echo "otc rds showflavor <id> ...       # RDS flavor details"
+	echo "otc rds create [<configfile>]     # create RDS instance, read from"
+	echo "                                  # stdin when no config file is given"
+	echo "otc rds delete <id> ...           # remove RDS instances"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -625,15 +764,14 @@ getECSJOBList() {
 getFileContentJSON() {
 	INJECTFILE=$1
 	if [ "$INJECTFILE" != "" ];then
-	        IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
+		IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
 		FILENAME_NAME=${FILE_AR[1]}
 		TARGET_FILENAME=${FILE_AR[0]}
-                FILECONTENT=$( base64 "$FILENAME_NAME" )
+		FILECONTENT=$( base64 "$FILENAME_NAME" )
 		FILE_TEMPLATE='{ "path": "'"$TARGET_FILENAME"'", "contents": "'"$FILECONTENT"'" }'
 
 		export FILEJSONITEM="$FILE_TEMPLATE"
 	fi
-
 }
 
 getPersonalizationJSON() {
@@ -724,24 +862,24 @@ ECSCreate() {
 	SECUGROUPIDS="${SECUGROUPIDS%,}"
 
 	REQ_CREATE_VM='{
-	    "server": {
-		"availability_zone": "'"$AZ"'",
-		"name": "'"$INSTANCE_NAME"'",
-		"imageRef": "'"$IMAGE_ID"'",
-		"root_volume": {
-			"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
-		},
-		"flavorRef": "'"$INSTANCE_TYPE"'",
-		'"$PERSONALIZATION"'
-		"vpcid": "'"$VPCID"'",
-		"security_groups": [ '"$SECUGROUPIDS"' ],
-		"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
-		'"$OPTIONAL"'
-		"count": '$NUMCOUNT'
-	    }
+		"server": {
+			"availability_zone": "'"$AZ"'",
+			"name": "'"$INSTANCE_NAME"'",
+			"imageRef": "'"$IMAGE_ID"'",
+			"root_volume": {
+				"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
+			},
+			"flavorRef": "'"$INSTANCE_TYPE"'",
+			'"$PERSONALIZATION"'
+			"vpcid": "'"$VPCID"'",
+			"security_groups": [ '"$SECUGROUPIDS"' ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
+			'"$OPTIONAL"'
+			"count": '$NUMCOUNT'
+		}
 	}'
 
- 	echo "$REQ_CREATE_VM"
+	echo "$REQ_CREATE_VM"
 
 	if [ "$IMAGE_ID" == "" ]; then
 		echo "Image definition not Correct ! Check avaliable images with following command:"
@@ -780,7 +918,7 @@ ECSAction() {
 		"'"$ECSACTION"'": {
 			"type":"'"$ECSACTIONTYPE"'",
 			"servers": [ { "id": "'"$ECSACTIONSERVERID"'" } ]
-		 }
+		}
 	}'
 	export REQ_ECS_ACTION_VM
 	#echo $REQ_ECS_ACTION_VM
@@ -947,6 +1085,10 @@ DeleteTask() {
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"
 }
 
+getUserDomainIdFromIamResponse() {
+	tail -n1 | jq -r .token.user.domain.id
+}
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -958,11 +1100,10 @@ Continuing anyway ..."; }
 
 # check jq installed
 command -v jq >/dev/null 2>&1 || { echo -n>&2 "ERROR: otc requires jq package to be installed.
-Please install jq  using yum/apt-get/zypper.
+Please install jq using yum/apt-get/zypper.
 Aborting."; exit 1; }
 
 ##########################################################################################
-
 
 # Command Line Parser ####################################################################
 
@@ -1381,24 +1522,48 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
    WaitForTask $ELBJOBID 2
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
-    getListenerList "$@"
+	getListenerList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
-    createListener "$@"
+	createListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
-    deleteListener "$@"
+	deleteListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
-    getMemberList "$@"
+	getMemberList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
-    createMember "$@"
+	createMember "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delmember" ]; then
-    deleteMember "$@"
+	deleteMember "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showcheck" ]; then
-    getCheck "$@"
+	getCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
-    createCheck "$@"
+	createCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
-    deleteCheck "$@"
+	deleteCheck "$@"
+
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
+   getRDSInstanceList
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
+   getRDSInstanceDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+	getRDSAPIVersionList
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
+	getRDSAPIDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
+	getRDSDatastoreDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
+	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
+	getRDSFlavorList "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
+	getRDSFlavorDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
+	createRDSInstance "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
+	deleteRDSInstance "$@"
 
 else
    printHelp
