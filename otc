@@ -25,28 +25,40 @@
 # License: CC-BY-SA 3.0
 #
 
+VERSION=0.6.19
+
 # Get Config ####################################################################
+warn_too_open()
+{
+	PERM=$(stat -Lc "%a" "$1")
+	if test "${PERM:2:1}" != "0"; then
+		echo "Warning: $1 permissions too open ($PERM)"
+	fi
+}
+
 may_read_env_files()
 {
-	for file in "$*"; do
+	for file in "$@"; do
 		if test -r "$file"; then
 			echo "Note: Reading environment from $file ..."
 			source "$file"
+			warn_too_open "$file"
 			if test -n "$OS_PASSWORD" -a -n "$OS_USERNAME"; then break; fi
 		fi
 	done
 }
 
 otc_dir="$(dirname "$0")"
-# Parse otc-tools specific config file
+# Parse otc-tools specific config file (deprecated)
 if test -r ~/.otc_env.sh; then
 	source ~/.otc_env.sh
-else
-	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
+	warn_too_open ~/.otc_env.sh
+#else
+#	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
 fi
 # Parse standard OpenStack environment setting files if needed
 if test -n "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
-	may_read_env_files ~/.ostackrc ~/.novarc ~/novarc
+	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc 
 fi
 # Defaults
 if test -z "$OS_USER_DOMAIN_NAME"; then
@@ -56,14 +68,25 @@ if test -z "$OS_PROJECT_NAME"; then
 	export OS_PROJECT_NAME="eu-de"
 fi
 # S3 environment
+if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
+	echo "Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..."
+	source ~/.s3rc.$OTC_TENANT
+	warn_too_open ~/.s3rc.$OTC_TENANT
+fi
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc; then
 	echo "Note: Reading S3 environment from ~/.s3rc ..."
 	source ~/.s3rc
+	warn_too_open ~/.s3rc
 fi
 # Alternatively parse CSV as returned by OTC
-if test -z "$S3_ACCESS_KEY_ID" -a -r ~/credentials.csv; then
-	echo -n "Note: Parsing S3 ~/credentials.csv ... "
-	LN=$(tail -n1 ~/credentials.csv | sed 's/"//g')
+if test -r ~/credentials-$OTC_TENANT.csv; then
+	CRED=credentials-$OTC_TENANT.csv
+else
+	CRED=credentials.csv
+fi
+if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
+	echo -n "Note: Parsing S3 $CRED ... "
+	LN=$(tail -n1 ~/$CRED | sed 's/"//g')
 	UNM=${LN%%,*}
 	LN=${LN#*,}
 	if test "$UNM" = "$OS_USERNAME"; then
@@ -73,6 +96,7 @@ if test -z "$S3_ACCESS_KEY_ID" -a -r ~/credentials.csv; then
 	else
 		echo "user mismatch \"$UNM\" != \"$OS_USERNAME\""
 	fi
+	warn_too_open ~/$CRED
 fi
 
 if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
@@ -599,6 +623,7 @@ deleteMember() {
 }
 
 printHelp() {
+   echo "otc-tools version $VERSION: OTC API tool"
    echo "Usage:"
    echo "--- Elastic Cloud Server (VM management) ---"
    echo "otc ecs list               # list ecs instances"
