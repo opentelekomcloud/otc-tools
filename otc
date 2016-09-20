@@ -167,6 +167,18 @@ curldeleteauth()
 	docurl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
+curldeleteauthwithjsonparameter()
+{
+	# $1: TOKEN
+	# $2: PARAMETER
+	# $3: URI 
+	TKN="$1"; shift
+	docurl $INS -sS -X DELETE \
+	-H "Content-Type: application/json" \
+	-H "X-Language: en-us" \
+	-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq .
+}
+
 unset SUBNETAZ
 
 ##########################################################################################
@@ -384,8 +396,8 @@ getRDSFlavorList() {
 	local dbid=$1;   shift
 	local region=$1; shift
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
-	local URI="${AUTH_URL_RDS_PROJECT}/flavors?dbid=${dbid}&region=${region}"
-	# echo "URI: $URI"
+	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbid=${dbid}&region=${region}"
+	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r .
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
@@ -424,20 +436,22 @@ createRDSInstance() {
 }
 
 deleteRDSInstanceImpl() {
-	local instanceid
-	for instanceid in "$@"
-	do
-		#local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
-		local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
-		echo "Try deleting instance $instanceid"
-		#echo "URI: $URI"
-		curldeleteauth $TOKEN "$URI"
-	done
+	local instanceid=$1
+	local numberOfManualBackupsToKeep=$2
+	local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
+	#local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
+	echo "Try deleting instance $instanceid"
+	#echo "URI: $URI"
+	#echo "TOKEN: $TOKEN"
+	curldeleteauthwithjsonparameter \
+		$TOKEN \
+		"{ \"keepLastManualBackup\":\"${numberOfManualBackupsToKeep}\" }" \
+		"$URI" 
 }
 
 deleteRDSInstance() {
-	[ $# -ne 0 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete" 
+	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 
 }
 
 getid() {
@@ -760,7 +774,7 @@ printHelp() {
 	echo "otc rds showflavor <id> ...       # RDS flavor details"
 	echo "otc rds create [<configfile>]     # create RDS instance, read from"
 	echo "                                  # stdin when no config file is given"
-	echo "otc rds delete <id> ...           # remove RDS instances"
+	echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
