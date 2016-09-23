@@ -396,7 +396,7 @@ getRDSFlavorList() {
 	local dbid=$1;   shift
 	local region=$1; shift
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
-	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbid=${dbid}&region=${region}"
+	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbId=${dbid}&region=${region}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r .
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
@@ -769,9 +769,9 @@ printHelp() {
    echo "otc rds showapi <id> ...          # show API detail information"
 	echo "otc rds showdatastore <name> ..."
 	echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
-	echo "otc rds listflavors"
-	echo "otc rds flavors                   # list RDS flavors"
-	echo "otc rds showflavor <id> ...       # RDS flavor details"
+	echo "otc rds listflavors <id>" 
+	echo "otc rds flavors <id>              # list flavors for RDS datastore <id>"
+	echo "otc rds showflavor <id> ...       # show details for RDS flavor <id>"
 	echo "otc rds create [<configfile>]     # create RDS instance, read from"
 	echo "                                  # stdin when no config file is given"
 	echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
