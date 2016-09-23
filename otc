@@ -1,5 +1,5 @@
 #!/bin/bash
-# vi:set ts=3 sw=3:
+# vi:set ts=8 sw=8:
 # == Module: Open Telekom Cloud Cli Interface 0.6.x
 #
 # Manage OTC via Command Line
@@ -58,7 +58,7 @@ if test -r ~/.otc_env.sh; then
 fi
 # Parse standard OpenStack environment setting files if needed
 if test -n "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
-	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc 
+	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc
 fi
 # Defaults
 if test -z "$OS_USER_DOMAIN_NAME"; then
@@ -171,7 +171,7 @@ curldeleteauthwithjsonparameter()
 {
 	# $1: TOKEN
 	# $2: PARAMETER
-	# $3: URI 
+	# $3: URI
 	TKN="$1"; shift
 	docurl $INS -sS -X DELETE \
 	-H "Content-Type: application/json" \
@@ -396,7 +396,7 @@ getRDSFlavorList() {
 	local dbid=$1;   shift
 	local region=$1; shift
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
-	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbid=${dbid}&region=${region}"
+	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbId=${dbid}&region=${region}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r .
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
@@ -446,12 +446,12 @@ deleteRDSInstanceImpl() {
 	curldeleteauthwithjsonparameter \
 		$TOKEN \
 		"{ \"keepLastManualBackup\":\"${numberOfManualBackupsToKeep}\" }" \
-		"$URI" 
+		"$URI"
 }
 
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep"
 }
 
 getid() {
@@ -471,7 +471,7 @@ convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
 	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
-   SUBNETID=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME"`
+	SUBNETID=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME" name availability_zone`
 	export SUBNETID SUBNETAZ
 }
@@ -769,9 +769,9 @@ printHelp() {
    echo "otc rds showapi <id> ...          # show API detail information"
 	echo "otc rds showdatastore <name> ..."
 	echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
-	echo "otc rds listflavors"
-	echo "otc rds flavors                   # list RDS flavors"
-	echo "otc rds showflavor <id> ...       # RDS flavor details"
+	echo "otc rds listflavors <id>"
+	echo "otc rds flavors <id>              # list flavors for RDS datastore <id>"
+	echo "otc rds showflavor <id> ...       # show details for RDS flavor <id>"
 	echo "otc rds create [<configfile>]     # create RDS instance, read from"
 	echo "                                  # stdin when no config file is given"
 	echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
@@ -1581,21 +1581,21 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
-   getRDSInstanceList
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
+	getRDSInstanceList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
-   getRDSInstanceDetails "$@"
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
+getRDSInstanceDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 	getRDSAPIDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
 	getRDSFlavorDetails "$@"
