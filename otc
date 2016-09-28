@@ -57,7 +57,7 @@ if test -r ~/.otc_env.sh; then
 #	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
 fi
 # Parse standard OpenStack environment setting files if needed
-if test -n "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
+if test -z "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
 	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc 
 fi
 # Defaults
