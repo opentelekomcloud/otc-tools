@@ -25,7 +25,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.19
+VERSION=0.6.20
 
 # Get Config ####################################################################
 warn_too_open()
@@ -275,6 +275,7 @@ getIamToken() {
 	AUTH_URL_SUBNETS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/subnets"
 
 	AUTH_URL_IMAGES="${BASEURL/iam/ims}/v2/images"
+	AUTH_URL_IMAGESV1="${BASEURL/iam/ims}/v1/cloudimages"
 
 	AUTH_URL_FLAVORS="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/flavors"
 	AUTH_URL_KEYNAMES="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/os-keypairs"
@@ -736,7 +737,7 @@ printHelp() {
    echo "--- Image Service ---"
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
-   echo "otc images upload <id> bucket:objname     # specify image source (s3)"
+   echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
    echo
    echo "--- Elastic Load Balancer ---"
    echo "otc elb list            # list all load balancer"
@@ -1500,8 +1501,18 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
    getIMAGEDetail $1
 
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ];then
-   curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
+   # The image upload via s3 bucket has been moved to v1 endpoint
+   ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
+   # Fall back to intermediate solution which abused the v2 OpenStack API
+   case "$ANS" in
+	*"Api does not exist"*)
+		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
+		;;
+	*)
+		echo "$ANS"
+		;;
+   esac
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
