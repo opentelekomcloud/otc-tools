@@ -515,8 +515,8 @@ getIMAGEDetail() {
 #| python -m json.tool
 }
 
-createImage() {
-	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi<
+createIMAGE() {
+	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
 	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
 	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
 	unset OSVJSON
@@ -525,10 +525,10 @@ createImage() {
 		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 		\"min_ram\": $MINRAM, \"name\": \"$1\",
 		\"visibility\": \"private\", \"protected\": false }"
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.[]'
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq #'.[]'
 }
 
-deleteImage() {
+deleteIMAGE() {
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1"
 }
 
