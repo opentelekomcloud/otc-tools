@@ -912,11 +912,11 @@ ECSCreate() {
 
 	if test -n "$KEYNAME"; then
 		OPTIONAL="$OPTIONAL
-		\"key_name\": \"$KEYNAME\","
+			\"key_name\": \"$KEYNAME\","
 	fi
 	if test -n "$ADMINPASS"; then
 		OPTIONAL="$OPTIONAL
-		\"adminPass\": \"$ADMINPASS\","
+			\"adminPass\": \"$ADMINPASS\","
 	fi
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
