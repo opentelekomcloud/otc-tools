@@ -25,7 +25,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.20
+VERSION=0.6.21
 
 # Get Config ####################################################################
 warn_too_open()
@@ -657,11 +657,13 @@ printHelp() {
    echo "    --instance-name       <NAME>"
    echo "    --image-name          <IMAGE>"
    echo "    --subnet-name         <SUBNET>"
+   echo "    --fixed-ip            <IP>"
    echo "    --vpc-name            <VPC>"
    echo "    --security-group-name <SGNAME>"
    echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
+	echo "    --user-data           <USERDYAMLSTRG>"
    echo "    --public              <true/false>"
    echo "    --bandwidth           <BW>		# defaults to 25"
    echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
@@ -738,6 +740,11 @@ printHelp() {
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
    echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
+   echo "otc images create NAME  # create (private) image with name"
+   echo "   --min-disk     <GB>"
+   echo "   --min-ram      <MB>"
+   echo "   --os-version   <os_version>"
+   echo "   --disk-format  <disk-format>"
    echo
    echo "--- Elastic Load Balancer ---"
    echo "otc elb list            # list all load balancer"
@@ -768,14 +775,14 @@ printHelp() {
    echo "otc rds apis"
    echo "otc rds listapis                  # list API ids"
    echo "otc rds showapi <id> ...          # show API detail information"
-	echo "otc rds showdatastore <name> ..."
-	echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
-	echo "otc rds listflavors"
-	echo "otc rds flavors                   # list RDS flavors"
-	echo "otc rds showflavor <id> ...       # RDS flavor details"
-	echo "otc rds create [<configfile>]     # create RDS instance, read from"
-	echo "                                  # stdin when no config file is given"
-	echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
+   echo "otc rds showdatastore <name> ..."
+   echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
+   echo "otc rds listflavors"
+   echo "otc rds flavors                   # list RDS flavors"
+   echo "otc rds showflavor <id> ...       # RDS flavor details"
+   echo "otc rds create [<configfile>]     # create RDS instance, read from"
+   echo "                                  # stdin when no config file is given"
+   echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
