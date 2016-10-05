@@ -934,7 +934,7 @@ ECSCreate() {
 	USERDATAJSON=""
 	if test -n "$USERDATA"; then
 		# FIXME: Need to base64 encode
-		USERDATAJSON="\"user_data\": \"$(base64 $USERDATA)\""
+		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
 	fi
 
 	REQ_CREATE_VM='{
@@ -950,7 +950,7 @@ ECSCreate() {
 			'"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" $FIXEDIPJSON } ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } ],
 			'"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
