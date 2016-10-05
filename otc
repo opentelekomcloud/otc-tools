@@ -110,6 +110,7 @@ fi
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
 if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
+if test -z "$MINRAM"; then MINRAM=1024; fi
 
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
@@ -514,6 +515,23 @@ getIMAGEDetail() {
 #| python -m json.tool
 }
 
+createImage() {
+	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi<
+	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
+	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
+	unset OSVJSON
+	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
+	REQ="{ $OSVJSON  \"container_format\": \"bare\", 
+		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
+		\"min_ram\": $MINRAM, \"name\": \"$1\",
+		\"visibility\": \"private\", \"protected\": false }"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.[]'
+}
+
+deleteImage() {
+	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1"
+}
+
 getFLAVORListOld() {
 	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.[]'
 #| python -m json.tool
@@ -663,7 +681,7 @@ printHelp() {
    echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
-	echo "    --user-data           <USERDYAMLSTRG>"
+   echo "    --user-data           <USERDYAMLSTRG>"
    echo "    --public              <true/false>"
    echo "    --bandwidth           <BW>		# defaults to 25"
    echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
@@ -740,11 +758,12 @@ printHelp() {
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
    echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
-   echo "otc images create NAME  # create (private) image with name"
-   echo "   --min-disk     <GB>"
-   echo "   --min-ram      <MB>"
-   echo "   --os-version   <os_version>"
+   echo "otc images create NAME          # create (private) image with name"
    echo "   --disk-format  <disk-format>"
+   echo "   --min-disk     <GB>"
+   echo "   --min-ram      <MB>          # optional (default 1024)"
+   echo "   --os-version   <os_version>  # optional (default Other)"
+   echo "otc images delete <id>          # delete (private) image by ID"
    echo
    echo "--- Elastic Load Balancer ---"
    echo "otc elb list            # list all load balancer"
@@ -908,6 +927,16 @@ ECSCreate() {
 	done
 	SECUGROUPIDS="${SECUGROUPIDS%,}"
 
+	FIXEDIPJSON=""
+	if test -n "$FIXEDIP"; then
+		FIXEDIPJSON=", \"ip_address\": \"$FIXEDIP\""
+	fi
+	USERDATAJSON=""
+	if test -n "$USERDATA"; then
+		# FIXME: Need to base64 encode
+		USERDATAJSON="\"user_data\": \"$(base64 $USERDATA)\""
+	fi
+
 	REQ_CREATE_VM='{
 		"server": {
 			"availability_zone": "'"$AZ"'",
@@ -918,9 +947,10 @@ ECSCreate() {
 			},
 			"flavorRef": "'"$INSTANCE_TYPE"'",
 			'"$PERSONALIZATION"'
+			'"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" } ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" $FIXEDIPJSON } ],
 			'"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
@@ -1320,8 +1350,32 @@ if [ "$SUBCOM" == "create" ]; then
 			--soft)
 			ECSACTIONTYPE="SOFT"
 			;;
+			--fixed-ip)
+			FIXEDIP=$2
+			shift
+			;;
+			--user-data)
+			USERDATA=$2
+			shift
+			;;
 			--default)
 			DEFAULT=YES
+			;;
+			--min-disk)
+			MINDISK=$2
+			shift
+			;;
+			--min-ram)
+			MINRAM=$2
+			shift
+			;;
+			--disk-format|--diskformat)
+			DISKFORMAT=$2
+			shift
+			;;
+			--os-version)
+			OSVERSION="$2"
+			shift
 			;;
 			-*)
 			# unknown option
@@ -1520,6 +1574,11 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
 		echo "$ANS"
 		;;
    esac
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
+   createIMAGE $1
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
+   deleteIMAGE $1
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
