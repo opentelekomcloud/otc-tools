@@ -156,6 +156,13 @@ curlputauth()
 		-H "X-Auth-Token: $TKN" -d "$1" "$2"
 }
 
+curlputauthbinfile()
+{
+	TKN="$1"; shift
+	docurl $INS -sS -X PUT -H "Content-Type: application/octet-stream" \
+		-H "X-Auth-Token: $TKN" -T "$1" "$2"
+}
+
 curlgetauth()
 {
 	TKN="$1"; shift
@@ -304,6 +311,11 @@ getECSList() {
 
 getECSDetail() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | {VM:  .name, ID: .id, Detail: .}'
+}
+
+getLimits()
+{
+	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq
 }
 
 getVPCList() {
@@ -487,7 +499,6 @@ convertVPCNameToId() {
 }
 
 convertSECUGROUPNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" > ~/tmp/sg
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$SECUGROUPNAME'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
 	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
@@ -499,7 +510,6 @@ convertSECUGROUPNameToId() {
 }
 
 convertIMAGENameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" > ~/tmp/img
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$IMAGENAME"`
 	export IMAGE_ID
@@ -530,6 +540,28 @@ createIMAGE() {
 
 deleteIMAGE() {
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1"
+}
+
+uploadIMAGEobj()
+{
+   # The image upload via s3 bucket has been moved to v1 endpoint
+   ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
+   # Fall back to intermediate solution which abused the v2 OpenStack API
+   case "$ANS" in
+	*"Api does not exist"*)
+		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
+		;;
+	*)
+		echo "$ANS"
+		;;
+   esac
+}
+
+uploadIMAGEfile()
+{
+	sz=$(stat -c "%s" "$2")
+	echo "INFO: Uploading $sz bytes from $2 to image $1 ..."
+	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
 }
 
 getFLAVORListOld() {
@@ -698,6 +730,7 @@ printHelp() {
    echo "otc ecs job <id>                # show status of job <id>"
    #echo "otc task show <id>              # show status of job <id>"
    #echo "otc task delete <id>            # cancel job <id>"
+	echo "otc ecs limits                  # display project quotas"
    echo
    echo "--- SSH Keys ---"
    echo "otc keypair list                # list ssh key pairs"
@@ -758,6 +791,7 @@ printHelp() {
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
    echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
+	echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
    echo "otc images create NAME          # create (private) image with name"
    echo "   --disk-format  <disk-format>"
    echo "   --min-disk     <GB>"
@@ -1191,6 +1225,13 @@ else
 	if test -n "$OS_CACERT"; then INS="--cacert $OS_CACERT"; else unset INS; fi
 fi
 
+# Proxy Auth
+case "$HTTPS_PROXY" in
+	*@*)
+		INS="$INS --proxy-any"
+		;;
+esac
+
 # Debugging
 if test "$1" = "debug"; then DEBUG=1; shift; fi
 
@@ -1417,6 +1458,9 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
    VM=$1
    getECSVM
 
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
+   getLimits
+
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
@@ -1563,17 +1607,11 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
    getIMAGEDetail $1
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
-   # The image upload via s3 bucket has been moved to v1 endpoint
-   ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
-   # Fall back to intermediate solution which abused the v2 OpenStack API
-   case "$ANS" in
-	*"Api does not exist"*)
-		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
-		;;
-	*)
-		echo "$ANS"
-		;;
-   esac
+	if test -r "$2"; then
+		uploadIMAGEfile $1 $2
+	else
+		uploadIMAGEobj $1 $2
+	fi
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
    createIMAGE $1
