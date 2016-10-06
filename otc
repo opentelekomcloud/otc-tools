@@ -713,7 +713,7 @@ printHelp() {
    echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
-   echo "    --user-data           <USERDYAMLSTRG>"
+   echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
    echo "    --public              <true/false>"
    echo "    --bandwidth           <BW>		# defaults to 25"
    echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
