@@ -533,8 +533,16 @@ createIMAGE() {
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
-		pstr=`echo "$prop" } sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
-		OSVJSON="$OSVJSON, $pstr"
+		val="${prop##*=}"
+		case $val in
+			[0-9]*|false|False|true|True)
+				pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
+				;;
+			*)
+				pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": "\2"/'`
+				;;
+		esac
+		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
 	REQ="{ $OSVJSON  \"container_format\": \"bare\", 
