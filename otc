@@ -535,7 +535,7 @@ createIMAGE() {
 	for prop in $PROPS; do
 		pstr=`echo "$prop" } sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
 		OSVJSON="$OSVJSON, $pstr"
-	done <( echo "$PROPS" )
+	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
 	REQ="{ $OSVJSON  \"container_format\": \"bare\", 
 		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
@@ -1627,7 +1627,7 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
    createIMAGE $1
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
-   deleteIMAGE $1
+	for img in "$@"; do deleteIMAGE $img; done
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
