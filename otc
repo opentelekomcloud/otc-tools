@@ -184,7 +184,7 @@ curldeleteauthwithjsonparameter()
 	docurl $INS -sS -X DELETE \
 	-H "Content-Type: application/json" \
 	-H "X-Language: en-us" \
-	-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq .
+	-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq '.'
 }
 
 unset SUBNETAZ
@@ -315,7 +315,7 @@ getECSDetail() {
 
 getLimits()
 {
-	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq
+	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq '.'
 }
 
 getVPCList() {
@@ -412,7 +412,7 @@ getRDSFlavorList() {
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
 	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbid=${dbid}&region=${region}"
 	#echo "URI: $URI"
-	curlgetauth $TOKEN "$URI" | jq -r .
+	curlgetauth $TOKEN "$URI" | jq -r '.'
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
@@ -535,7 +535,7 @@ createIMAGE() {
 		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 		\"min_ram\": $MINRAM, \"name\": \"$1\",
 		\"visibility\": \"private\", \"protected\": false }"
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq #'.[]'
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 }
 
 deleteIMAGE() {
@@ -1641,9 +1641,9 @@ elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
    echo $TOKEN
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq #'.[]'
+   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq #'.[]'
+   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
    echo $OS_PROJECT_ID
