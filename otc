@@ -531,6 +531,12 @@ createIMAGE() {
 	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
+	OLDIFS="$IFS"; IFS=","
+	for prop in $PROPS; do
+		pstr=`echo "$prop" } sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
+		OSVJSON="$OSVJSON, $pstr"
+	done <( echo "$PROPS" )
+	IFS="$OLDIFS"
 	REQ="{ $OSVJSON  \"container_format\": \"bare\", 
 		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 		\"min_ram\": $MINRAM, \"name\": \"$1\",
@@ -797,6 +803,7 @@ printHelp() {
    echo "   --min-disk     <GB>"
    echo "   --min-ram      <MB>          # optional (default 1024)"
    echo "   --os-version   <os_version>  # optional (default Other)"
+   echo "   --property     <key=val>     # optional properties"
    echo "otc images delete <id>          # delete (private) image by ID"
    echo
    echo "--- Elastic Load Balancer ---"
@@ -1416,6 +1423,10 @@ if [ "$SUBCOM" == "create" ]; then
 			;;
 			--os-version)
 			OSVERSION="$2"
+			shift
+			;;
+			--property)
+			if test -z "$PROPS"; then PROPS="$2"; else PROPS="$PROPS,$2"; fi
 			shift
 			;;
 			-*)
