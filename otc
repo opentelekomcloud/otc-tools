@@ -1573,7 +1573,11 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
    if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
    if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
    if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
-   if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then convertSECUGROUPNameToId; fi
+   SECUGROUPNAMELIST="$SECUGROUPNAME"
+   if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
+      SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId; printf ",$SECUGROUP";done)
+      SECUGROUP="${SECUGROUP#,}"
+   fi
 
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
