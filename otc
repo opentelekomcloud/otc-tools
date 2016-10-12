@@ -124,24 +124,24 @@ fi
 docurl()
 {
 	if test -n "$DEBUG"; then
-		echo DEBUG: curl "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
-		ANS=`curl "$@"`
+		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
+		ANS=`curl $INS "$@"`
 		echo "DEBUG: $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 		echo "$ANS"
 	else
-		curl "$@"
+		curl $INS "$@"
 	fi
 }
 
 curlpost()
 {
-	docurl $INS -i -sS -H "Content-Type: application/json" -d "$1" "$2"
+	docurl -i -sS -H "Content-Type: application/json" -d "$1" "$2"
 }
 
 curlpostauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X POST \
+	docurl -sS -X POST \
 		-H "Content-Type: application/json" \
 		-H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" \
@@ -152,27 +152,69 @@ curlpostauth()
 curlputauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
+	docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" -d "$1" "$2"
 }
 
 curlputauthbinfile()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X PUT -H "Content-Type: application/octet-stream" \
+	docurl -sS -X PUT -H "Content-Type: application/octet-stream" \
 		-H "X-Auth-Token: $TKN" -T "$1" "$2"
 }
 
 curlgetauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
 curldeleteauth()
 {
 	TKN="$1"; shift
-	docurl $INS -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+	docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+}
+
+curlpatchauth()
+{
+	TKN="$1"; shift
+	if test -z "$3"; then CTYPE="application/json"; else CTYPE="$3"; fi
+	docurl -sS -X PATCH \
+		-H "Content-Type: $CTYPE" \
+		-H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" \
+		-d "$1" "$2"
+}
+
+# ARGS: TKN URL PATH OP VALUE [CONTENTTYPE]
+curldopatch()
+{
+	TKN="$1"; shift
+	if test -z "$3"; then OP="remove"; else OP="$3"; VAL="\"value\": \"$4\", "; fi
+	if test -z "$5"; then CTYPE="application/json"; else CTYPE="$5"; fi
+	curlpatchauth "$TKN" "[{\"path\": \"$2\", $VAL\"op\": \"$OP\"}]" "$1" "$CTYPE"
+}
+
+# ARGS: TKN URL PATH VALUE [CONTENTTYPE]
+curladdorreplace()
+{
+	TKN="$1"; shift
+	if test -z "$4"; then CTYPE="application/json"; else CTYPE="$4"; fi
+	VAL=`curlgetauth "$TKN" "$1" | jq ".$2"`
+	echo "DEBUG: /$2: $VAL -> $3"
+	if test "$VAL" = "null"; then
+		if test -z "$3"; then
+			echo "WARN: Nothing to do, /$2 already non-existent"
+		else
+			curldopatch "$TKN" "$1" "/$2" "add" "$3" "$CTYPE"
+		fi
+	else
+		if test -z "$3"; then
+			curldopatch "$TKN" "$1" "/$2" "remove" "$CTYPE"
+		else
+			curldopatch "$TKN" "$1" "/$2" "replace" "$3" "$CTYPE"
+		fi
+	fi
 }
 
 curldeleteauthwithjsonparameter()
@@ -181,7 +223,7 @@ curldeleteauthwithjsonparameter()
 	# $2: PARAMETER
 	# $3: URI 
 	TKN="$1"; shift
-	docurl $INS -sS -X DELETE \
+	docurl -sS -X DELETE \
 	-H "Content-Type: application/json" \
 	-H "X-Language: en-us" \
 	-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq '.'
@@ -503,7 +545,7 @@ convertSECUGROUPNameToId() {
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
 	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` != 1; then
-		echo "WARNING: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
+		echo "WARN: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
@@ -576,6 +618,16 @@ uploadIMAGEfile()
 	sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..."
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
+}
+
+updateIMAGE()
+{
+	# FIXME: This only updates one single value at a time, could be optimized a lot
+	OLDIFS="$IFS"; IFS=","
+	for prop in $PROPS; do
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "${prop%%=*}" "${prop#*=}" "application/openstack-images-v2.1-json-patch"
+	done
+	IFS="$OLDIFS"
 }
 
 getFLAVORListOld() {
@@ -728,6 +780,7 @@ printHelp() {
    echo "    --admin-pass          <PASSWD>"
    echo "    --key-name            <SSHKEYNAME>"
    echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
+   echo "    --user-data-file      <USERDFILEG>    # don't forget #cloud-config header"
    echo "    --public              <true/false>"
    echo "    --bandwidth           <BW>		# defaults to 25"
    echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
@@ -745,6 +798,7 @@ printHelp() {
    #echo "otc task show <id>              # show status of job <id>"
    #echo "otc task delete <id>            # cancel job <id>"
 	echo "otc ecs limits                  # display project quotas"
+	echo "otc ecs update <id>             # change VM data (same parms as create)"
    echo
    echo "--- SSH Keys ---"
    echo "otc keypair list                # list ssh key pairs"
@@ -980,10 +1034,16 @@ ECSCreate() {
 	if test -n "$FIXEDIP"; then
 		FIXEDIPJSON=", \"ip_address\": \"$FIXEDIP\""
 	fi
+	# TODO: Support both/multiple user data pieces
 	USERDATAJSON=""
 	if test -n "$USERDATA"; then
-		# FIXME: Need to base64 encode
+		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config"; fi
 		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
+	fi
+	if test -n "$USERDATAFILE"; then
+		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string"; fi
+		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config"; fi
+		USERDATAJSON="\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
 	REQ_CREATE_VM='{
@@ -1049,6 +1109,29 @@ ECSAction() {
 	export REQ_ECS_ACTION_VM
 	#echo $REQ_ECS_ACTION_VM
 	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
+}
+
+
+appparm()
+{
+	if test -z "$PARMS"; then
+		PARMS="$1"
+	else
+		PARMS="$PARMS, $1"
+	fi
+}
+
+ECSUpdate()
+{
+	PARMS=""
+	if test -n "$INSTANCE_NAME"; then appparm "\"name\": \"$INSTANCE_NAME\""; fi
+	if test -n "$IMAGENAME"; then appparm "\"image\": \"$IMAGENAME\""; fi
+	OLDIFS="$IFS"; IFS=","
+	for prop in $PROPS; do
+		appparm "\"${prop%%=*}\": \"${prop#*=}\""
+	done
+	IFS="$OLDIFS"
+	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$1"
 }
 
 ECSDelete() {
@@ -1243,7 +1326,8 @@ fi
 # Proxy Auth
 case "$HTTPS_PROXY" in
 	*@*)
-		INS="$INS --proxy-any"
+		if test -z "$INS"; then INS="--proxy-anyauth";
+		else INS="--proxy-anyauth $INS"; fi
 		;;
 esac
 
@@ -1256,7 +1340,7 @@ MAINCOM=$1; shift
 SUBCOM=$1; shift
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
-if [ "$SUBCOM" == "create" ]; then
+if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" ]; then
 	while [[ $# > 0 ]]
 	do
 		key="$1"
@@ -1414,6 +1498,10 @@ if [ "$SUBCOM" == "create" ]; then
 			USERDATA=$2
 			shift
 			;;
+			--user-data-file)
+			USERDATAFILE=$2
+			shift
+			;;
 			--default)
 			DEFAULT=YES
 			;;
@@ -1542,6 +1630,8 @@ elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
    ECSDelete $@
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
+   ECSUpdate $1
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getVPCList
@@ -1636,6 +1726,8 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
    createIMAGE $1
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
 	for img in "$@"; do deleteIMAGE $img; done
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
+	updateIMAGE $1
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
