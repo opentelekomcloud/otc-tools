@@ -1,19 +1,33 @@
-This is the otc tool for using the Open Telekom Cloud APIs.
-Copy the otc_env.sh into your home as ~/.otc_env.sh or better 
-create and source a standard OpenStack .ostackrc or novarc file to 
-set the environment variables for the otc tool. When managing multipe
-domains, you may create ~/.ostackrc.SUFFIX and ~/.s3rc.SUFFIX
-and set OTC_DOMAIN=SUFFIX to make otc use these files.
+About otc-tools
+===============
+This is the otc tool for using the Open Telekom Cloud APIs.  It is a simple
+demonstrator using shell/curl/jq to use the OpenTelekomCloud's OpenStack and
+OTC specific REST interfaces.  It is used for testing by the OTC engineering
+team and can be used as a blueprint for own tooling. Unlike the more
+extensive tool, this one does not pull in a load of dependencies.
 
-Please have a look the otc_env.sh file and look at the output 
-from otc -- this provides sufficient information to get doing.
+For production use, we recommend using the native OpenStack python client tools
+(python-novaclient etc or the newer python-openstackclient), complemented by
+the python-otcctools for specific OTC functions.  Or of course higher level
+tools, such as ansible with python-shade or terraform.
 
-Note that you can use standard OpenStack Client command line tools;
-have a look at the documentation. This tool is a demonstrator for
-how simple the REST calls can be done with curl if you want to 
-build your own tooling. It uses the OpenStack APIs as well as some
-of the custom OTC APIs.
+Usage
+-----
+Set your OpenStack environment (OS_ variables) just like you do for the native
+OpenStack clients (typically by sourcing a ~/.ostackrc or ~/novarc or ~/.openrc
+file).
 
+Optionally, you can also set some additional defaults on otc_env.sh by editing
+it and copying it into your home as ~/.otc_env.sh.
+
+When managing multipe OTC domains, you may create ~/.ostackrc.SUFFIX and
+~/.s3rc.SUFFIX and set OTC_DOMAIN=SUFFIX to make otc use these files.
+
+Please have a look the otc_env.sh file and look at the output from otc help --
+this provides sufficient information to get doing.
+
+Packages
+--------
 Packages (RPMs/DEBs) on open Build Service home:garloff:OTC
 https://build.opensuse.org/package/show/home:garloff:OTC/otc-tools
 
