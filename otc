@@ -503,6 +503,23 @@ printHelp() {
    echo "                                  # stdin when no config file is given"
    echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
    echo
+   echo "--- DNS ---"
+	echo "otc domain list         # show all zones/domains"  
+	echo "otc domain show zid     # show details of zone/domain <zid>"  
+	echo "otc domain delete zid   # deleted zone/domain <zid>"
+	echo "otc domain create domain [desc [type [mail [ttl]]]]"
+	echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
+	echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
+	echo "otc domain addrecord	zid name. type ttl val [desc]"
+	echo "                        # add record to zone <zid> for <name> with <type>, <ttl>"
+	echo "                        # type could be A, AAAA, MX, CNAME, PTR, TXT, NS"
+	echo "                        # val is a comma sep list of record values, e.g."
+	echo "                        # IPADDR, NR NAME, NAME, NAME, STRING, NAME."
+	echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
+	echo "otc domain listrecords [zid]      # list records for zone <zid>"
+	echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
+
+	echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
    echo "otc iam project         # output project_id/tenant_id"
@@ -687,6 +704,70 @@ listDomains() {
    curlgetauth $TOKEN $AUTH_URL_DNS | jq .
 }
 
+# Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
+createDomain() {
+	if test "${1: -1:1}" != "."; then 
+		echo "WARN: Name shoud end in '.'"
+	fi
+   REQ="{ \"name\": \"$1\""
+	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
+	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
+	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
+	if test -n "$5"; then REQ="$REQ, \"ttl\": $5"; fi
+	REQ="$REQ }"
+	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS | jq .
+}
+
+showDomain() {
+	curlgetauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+}
+
+deleteDomain() {
+	curldeleteauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+}
+
+# Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
+addRecord() {
+	if test -z "$5"; then
+		echo "ERROR: Need to provide more params"
+		exit 1
+	fi
+	case "$3" in
+		A|AAAA|MX|PTR|CNAME|NS|TXT)
+			;;
+		*)
+			echo "WARN: Unknown record type \"$3\""
+			;;
+	esac
+	if test "${2: -1:1}" != "."; then 
+		echo "WARN: Name shoud end in '.'"
+	fi
+	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
+	if test -n "$6"; then REQ="$REQ, \"description\": \"$6\""; fi
+	OLDIFS="$IFS"
+	VLAS=""
+	IFS=","
+	for val in $5; do VALS="$VALS \"$val\","; done
+	IFS="$OLDIFS"
+	REQ="$REQ, \"records\": [ ${VALS%,} ] }"
+	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$1/recordsets | jq .
+}
+
+showRecord() {
+	curlgetauth $OTKEN $AUTH_URL_DNS/$1/recordsets/$2 | jq .
+}
+
+listRecords() {
+	if test -z "$1"; then
+		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets" | jq .
+	else
+		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq .
+	fi
+}
+
+deleteRecord() {
+	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
+}
 
 getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
@@ -1852,6 +1933,20 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
    listDomains
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "create" ]; then
+   createDomain "$@"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "show" ]; then
+   showDomain "$1"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delete" ]; then
+   deleteDomain "$1"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "listrecords" ]; then
+   listRecords "$1"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "showrecord" ]; then
+   showRecord "$@"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
+   deleteRecord "$@"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
+   addRecord "$@"
 
 
 else
