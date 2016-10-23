@@ -190,7 +190,8 @@ curlpatchauth()
 curldopatch()
 {
 	TKN="$1"; shift
-	if test -z "$3"; then OP="remove"; else OP="$3"; VAL="\"value\": \"$4\", "; fi
+	#if test -z "$4"; then OP="remove"; else OP="$3"; VAL="\"value\": \"$4\", "; fi
+	if test "$3" != "remove"; then VAL="\"value\": \"$4\", "; fi
 	if test -z "$5"; then CTYPE="application/json"; else CTYPE="$5"; fi
 	curlpatchauth "$TKN" "[{\"path\": \"$2\", $VAL\"op\": \"$OP\"}]" "$1" "$CTYPE"
 }
@@ -210,7 +211,7 @@ curladdorreplace()
 		fi
 	else
 		if test -z "$3"; then
-			curldopatch "$TKN" "$1" "/$2" "remove" "$CTYPE"
+			curldopatch "$TKN" "$1" "/$2" "remove" "" "$CTYPE"
 		else
 			curldopatch "$TKN" "$1" "/$2" "replace" "$3" "$CTYPE"
 		fi
