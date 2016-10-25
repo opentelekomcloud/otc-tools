@@ -58,7 +58,7 @@ if test -r ~/.otc_env.sh; then
 fi
 # Parse standard OpenStack environment setting files if needed
 if test -z "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
-	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc 
+	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc
 fi
 # Defaults
 if test -z "$OS_USER_DOMAIN_NAME"; then
@@ -222,7 +222,7 @@ curldeleteauthwithjsonparameter()
 {
 	# $1: TOKEN
 	# $2: PARAMETER
-	# $3: URI 
+	# $3: URI
 	TKN="$1"; shift
 	docurl -sS -X DELETE \
 	-H "Content-Type: application/json" \
@@ -379,7 +379,8 @@ printHelp() {
    echo "    --key-name            <SSHKEYNAME>"
    echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
    echo "    --user-data-file      <USERDFILEG>    # don't forget #cloud-config header"
-   echo "    --public              <true/false>"
+   echo "    --public              <true/false/IP>"
+   echo "    --volumes             <device:volume>[<device,volume>[,..]]    # attach volumes as named devices"
    echo "    --bandwidth           <BW>		# defaults to 25"
    echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
    echo "    --disksize            <DISKGB>"
@@ -391,7 +392,11 @@ printHelp() {
    echo "                                # optionally --soft/--hard"
    echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
    echo "otc ecs start-instances <id>    # start ecs instance <id>"
-   echo "otc ecs delete <id> <id> ...    # delete VM along with EIPs"
+   echo "otc ecs delete                  # delete VM"
+   echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm"
+   echo "    --keepEIP                   # default: delete EIP too"
+   echo "    --delVolume                 # default: delete only system volume, not any volume attached"
+   echo "    <ecs> <ecs> ...             # you could give IDs or names"
    echo "otc ecs job <id>                # show status of job <id>"
    #echo "otc task show <id>              # show status of job <id>"
    #echo "otc task delete <id>            # cancel job <id>"
@@ -408,7 +413,13 @@ printHelp() {
    echo "--- Elastic Volumes ---"
    echo "otc evs list                    # list all volumes"
    echo "otc evs show <id>               # show details of volume <id>"
-   #TODO volume attach, detach, create, change, delete ...
+   echo
+   echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
+   echo "otc evs attach --name ecsname  device:volume      # use names instead of ids"
+   echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
+   echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
+   echo
+   #TODO volume create, change, delete ...
    echo
    echo "--- Virtual Private Network ---"
    echo "otc vpc list                    # list all vpc"
@@ -505,8 +516,8 @@ printHelp() {
    echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
    echo
    echo "--- DNS ---"
-	echo "otc domain list         # show all zones/domains"  
-	echo "otc domain show zid     # show details of zone/domain <zid>"  
+	echo "otc domain list         # show all zones/domains"
+	echo "otc domain show zid     # show details of zone/domain <zid>"
 	echo "otc domain delete zid   # deleted zone/domain <zid>"
 	echo "otc domain create domain [desc [type [mail [ttl]]]]"
 	echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
@@ -693,12 +704,12 @@ deleteRDSInstanceImpl() {
 	curldeleteauthwithjsonparameter \
 		$TOKEN \
 		"{ \"keepLastManualBackup\":\"${numberOfManualBackupsToKeep}\" }" \
-		"$URI" 
+		"$URI"
 }
 
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep"
 }
 
 listDomains() {
@@ -707,7 +718,7 @@ listDomains() {
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
 createDomain() {
-	if test "${1: -1:1}" != "."; then 
+	if test "${1: -1:1}" != "."; then
 		echo "WARN: Name shoud end in '.'"
 	fi
    REQ="{ \"name\": \"$1\""
@@ -740,7 +751,7 @@ addRecord() {
 			echo "WARN: Unknown record type \"$3\""
 			;;
 	esac
-	if test "${2: -1:1}" != "."; then 
+	if test "${2: -1:1}" != "."; then
 		echo "WARN: Name shoud end in '.'"
 	fi
 	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
@@ -847,7 +858,7 @@ createIMAGE() {
 		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
-	REQ="{ $OSVJSON  \"container_format\": \"bare\", 
+	REQ="{ $OSVJSON  \"container_format\": \"bare\",
 		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 		\"min_ram\": $MINRAM, \"name\": \"$1\",
 		\"visibility\": \"private\", \"protected\": false }"
@@ -1069,6 +1080,68 @@ getPersonalizationJSON() {
 	fi
 }
 
+ECSAttachVolumeListName() {
+      local dev_vol ecs="$1" DEV_VOL="$2"
+      for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
+            ECSAttachVolumeName "$ecs" $dev_vol
+         done
+}
+
+ECSAttachVolumeName() {
+	local server_name="$1" dev_vol="$2" ecsid volid
+	ecsid=$(getECSList |  while read id name  ; do [ "$name" = "$server_name"  ] && echo $id && break; done)
+	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
+	ECSAttachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
+}
+
+# future: evs attach ecs dev:vol[,dev:vol[..]]
+# today:  evs attach ecs dev:vol
+ECSAttachVolumeId() {
+	local server_id="$1" dev_vol="$2" dev vol req
+	IFS=: read dev vol <<< "$dev_vol"
+	if test -z "$vol"; then
+		echo "ERROR: wrong usage of ECSAttachVolumeId(): '$dev_vol' should be 'device:VolumeID'"
+		exit 2
+	fi
+	dev="/dev/${dev#/dev/}"
+	req='{
+            "volumeAttachment": {
+                "volumeId": "'"$vol"'",
+                "device": "'"$dev"'"
+            }
+	}'
+	curlpostauth "$TOKEN" "$REQ_AttachVolume" "$AUTH_URL_ECS_CLOUD/$server_id/attachvolume" | jq '.[]'
+}
+
+ECSDetachVolumeListName() {
+	local dev_vol ecs="$1" DEV_VOL="$2"
+	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
+			ECSDetachVolumeName "$ecs" $dev_vol
+		done
+	##### perhaps we have to wait here until detachment was finished
+}
+
+ECSDetachVolumeName() {
+	local server_name="$1" dev_vol="$2" ecsid volid  ##### dev_vol could be of the form <device>:<volume> or just <volume>
+	ecsid=$(getECSList |  while read id     name; do [ "$name" = "$server_name"  ] &&                          echo $id && break; done)
+	volid=$(getEVSList |  while read id ecs name; do [ "$name" = "${dev_vol#*:}" ] && [ "$ecsid" = "$ecs" ] && echo $id && break; done)
+	if test -z "$volid"; then
+		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique"
+		exit 2
+	fi
+	ECSDetachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
+}
+
+ECSDetachVolumeId() {
+	local server_id="$1" dev_vol="$2" volume         ##### dev_vol could be of the form <device>:<volumeid> or just <volumeid>
+	volume="${dev_vol#*:}"
+	if test -z "$volume"; then
+		echo "ERROR: wrong usage of volume detach function: volume is not set"
+		exit 2
+	fi
+	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_CLOUD/$server_id/detachvolume/$volume" | jq '.[]'
+}
+
 ECSCreate() {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
 		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -"
@@ -1233,17 +1306,31 @@ ECSUpdate()
 }
 
 ECSDelete() {
+	local DEV_VOL="" delete_publicip="true" delete_volume="false" id ecs
 	IDS=""
-	for id in "$@"; do
-		IDS="$IDS { \"id\": \"$id\" },"
+	while [ $# -gt 0 ]
+		do
+			case "$1"
+				in
+					--umount)    DEV_VOL="$2"           ; shift 2;;##### works only if $ecs is a name, not an id
+					--keepEIP)   delete_publicip="false"; shift  ;;
+					--delVolume) delete_volume="true"   ; shift  ;;
+					*)           break;;
+				esac
+		done
+	for ecs in $@; do
+		# convert $ecs to an id if given ecs is a name, otherwize keep the ecs=id
+		for id in $(getECSList | while read ecsid name; do [ "$ecsid" = "$ecs" ]||[ "$name" = "$ecs" ]||continue; echo "$ecsid";done)
+			do
+				IDS="$IDS { \"id\": \"$id\" },"
+				[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$ecs" "$DEV_VOL" ##### detach some external volumes before deleting the vm
+			done
 	done
 	IDS="${IDS%,}"
-	# TODO: Allow options to control this
-	# Rationale for defaults: We have allocated the EIP, so clean up.
 	REQ_ECS_DELETE='{
 		"servers": [ '$IDS' ],
-		"delete_publicip": true,
-		"delete_volume": false
+		"delete_publicip": '$delete_publicip',
+		"delete_volume": '$delete_volume'
 	}'
 	export REQ_ECS_DELETE
 	#echo $REQ_ECS_DELETE
@@ -1311,6 +1398,20 @@ PUBLICIPSDelete() {
 	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$@" | jq '.[]'
 }
 
+BindPublicIpToCreatingVM() {
+	ECSID=$(getECSJOBList $ECSSUBTASKID | jq '.entities.server_id' | sed 's/"//g')
+	##### use this ecs server id to attach volumes, external ip_addresses, ...
+	PRTID=$(VM=$ECSID; getECSVM | sed -n '/^\[/,/^\]/p' \
+	        | jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
+	        | while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
+	##### input: $EIP
+	EIPID=$(getPUBLICIPSList | sed 's/  /;/g' | while IFS=";" read id eip iip status bid b type;do
+	        [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]||continue
+	        [ "$status" = "DOWN" ] && echo "$id"
+	        echo "ERROR: requested external IP is of wrong status: $status" >&2)
+	PUBLICIPSBind "$ECSID" "$PRTID"
+}
+
 PUBLICIPSBind() {
 	ID=$1
 	PORT_ID=$2
@@ -1370,21 +1471,35 @@ SECGROUPRULECreate() {
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 }
 
-WaitForTask() {
-   if [ "$WAIT_CREATE" == "true" ];then
-	echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1"
+WaitForSubTask() {
+	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1"
 	getECSJOBList $1
 	echo -n "#"
 	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 	do
+		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' | sed 's/"//g')
+		[ -n "$ECSSUBTASKID" ] && break
 		sleep $2
 		getECSJOBList $1
 		echo -n "#"
 	done
-   else
-	getECSJOBList $1
-	echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
-   fi
+}
+
+WaitForTask() {
+	if [ "$WAIT_CREATE" == "true" ];then
+		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1"
+		getECSJOBList $1
+		echo -n "#"
+		while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
+		do
+			sleep $2
+			getECSJOBList $1
+			echo -n "#"
+		done
+	else
+		getECSJOBList $1
+		echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
+	fi
 }
 
 # Does not seem to work :-(
@@ -1532,10 +1647,14 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" ]; then
 			SECUGROUPNAME="$2"
 			shift # past argument
 			;;
-			-p|--public)
-			CREATE_ECS_WITH_PUBLIC_IP="$2"
-			shift # past argument
-			;;
+			-p|--public)   case "$2" in
+			                     true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
+			                     [0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
+			                     *)           echo "ERROR: unsupported value for public IPs"; exit 2;;
+			                  esac
+			               shift;;     # past argument
+			--volumes)     DEV_VOL="$2"
+                        shift;;     # past argument
 			--disktype|--disk-type)
 			VOLUMETYPE="$2"
 			shift # past argument
@@ -1679,6 +1798,12 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
    echo "$ECSTASKID"
+
+   if [ "$NUMCOUNT" = 1 ]; then
+      WaitForSubTask $ECSTASKID 10    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
+      [ -n "$EIP"     ] && BindPublicIpToCreatingVM
+      [ -n "$DEV_VOL" ] && ECSAttachVolumeListName
+   fi
 
    WaitForTask $ECSTASKID 10
    echo "ECS Creation status: $ECSCREATEJOBSTATUS"
@@ -1871,6 +1996,22 @@ elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
 	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
 	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
    getEVSDetail $1
+
+elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
+   if [ "$1" = -n ] || [ "$1" = --name ]
+      then
+         ECSAttachVolumeName "$2" "$3"
+      else
+         ECSAttachVolumeId   "$1" "$2"
+      fi
+
+elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
+   if [ "$1" = -n ] || [ "$1" = --name ]
+      then
+         ECSDetachVolumeName "$2" "$3"
+      else
+         ECSDetachVolumeId   "$1" "$2"
+      fi
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
    getELBList
