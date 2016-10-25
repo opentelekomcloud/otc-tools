@@ -1110,7 +1110,7 @@ ECSAttachVolumeId() {
                 "device": "'"$dev"'"
             }
 	}'
-	curlpostauth "$TOKEN" "$REQ_AttachVolume" "$AUTH_URL_ECS_CLOUD/$server_id/attachvolume" | jq '.[]'
+	curlpostauth "$TOKEN" "$req" "$AUTH_URL_ECS_CLOUD/$server_id/attachvolume" | jq '.[]'
 }
 
 ECSDetachVolumeListName() {
@@ -1123,8 +1123,8 @@ ECSDetachVolumeListName() {
 
 ECSDetachVolumeName() {
 	local server_name="$1" dev_vol="$2" ecsid volid  ##### dev_vol could be of the form <device>:<volume> or just <volume>
-	ecsid=$(getECSList |  while read id     name; do [ "$name" = "$server_name"  ] &&                          echo $id && break; done)
-	volid=$(getEVSList |  while read id ecs name; do [ "$name" = "${dev_vol#*:}" ] && [ "$ecsid" = "$ecs" ] && echo $id && break; done)
+	ecsid=$(getECSList |  while read id name; do [ "$name" = "$server_name"  ] && echo $id && break; done)
+	volid=$(getEVSList |  while read id name; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
 	if test -z "$volid"; then
 		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique"
 		exit 2
