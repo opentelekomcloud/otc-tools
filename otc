@@ -393,7 +393,7 @@ printHelp() {
    echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
    echo "otc ecs start-instances <id>    # start ecs instance <id>"
    echo "otc ecs delete                  # delete VM"
-   echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm"
+   #echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
    echo "    --keepEIP                   # default: delete EIP too"
    echo "    --delVolume                 # default: delete only system volume, not any volume attached"
    echo "    <ecs> <ecs> ...             # you could give IDs or names"
@@ -1118,7 +1118,6 @@ ECSDetachVolumeListName() {
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 			ECSDetachVolumeName "$ecs" $dev_vol
 		done
-	##### perhaps we have to wait here until detachment was finished
 }
 
 ECSDetachVolumeName() {
@@ -1326,6 +1325,7 @@ ECSDelete() {
 				[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$ecs" "$DEV_VOL" ##### detach some external volumes before deleting the vm
 			done
 	done
+	##### TODO: we have to wait here until detachments were finished -- otherwize we run into a deadlock!
 	IDS="${IDS%,}"
 	REQ_ECS_DELETE='{
 		"servers": [ '$IDS' ],
