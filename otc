@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.26
+VERSION=0.6.27
 
 # Get Config ####################################################################
 warn_too_open()
@@ -120,6 +120,8 @@ if test -n "$OS_AUTH_URL"; then
 else
 	export IAM_AUTH_URL="https://iam.eu-de.otc.t-systems.com/v3/auth/tokens"
 fi
+
+# REST call curl wrappers ###########################################################
 
 # Generic wrapper to facilitate debugging
 docurl()
@@ -544,6 +546,13 @@ printHelp() {
 
 
 # Functions
+
+# Check if $1 is in uuid format
+is_uuid()
+{
+	echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1
+}
+
 
 getECSVM() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
@@ -1400,7 +1409,7 @@ PUBLICIPSDelete() {
 	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$@" | jq '.[]'
 }
 
-getPRTID() {
+getPortID() {
 	(  VM=$1; getECSVM | sed -n '/^\[/,/^\]/p' \
 	   | jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
 	   | while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
@@ -1408,7 +1417,7 @@ getPRTID() {
 
 BindPublicIpToCreatingVM() {
 	##### use ecs server id to attach volumes, external ip_addresses, ...
-	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPRTID $ECSID);done
+	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID);done
 	##### input: $EIP
 	EIPID=$(getPUBLICIPSList | sed 's/   /;/g' \
           |  while IFS=";" read id eip iip status bid b type;do
