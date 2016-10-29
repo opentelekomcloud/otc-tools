@@ -111,7 +111,6 @@ fi
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
 if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
-if test -z "$MINRAM"; then MINRAM=1024; fi
 
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
@@ -196,7 +195,7 @@ curldopatch()
 	#if test -z "$4"; then OP="remove"; else OP="$3"; VAL="\"value\": \"$4\", "; fi
 	if test "$3" != "remove"; then VAL="\"value\": \"$4\", "; fi
 	if test -z "$5"; then CTYPE="application/json"; else CTYPE="$5"; fi
-	curlpatchauth "$TKN" "[{\"path\": \"$2\", $VAL\"op\": \"$OP\"}]" "$1" "$CTYPE"
+	curlpatchauth "$TKN" "[{\"path\": \"$2\", $VAL\"op\": \"$3\"}]" "$1" "$CTYPE"
 }
 
 # ARGS: TKN URL PATH VALUE [CONTENTTYPE]
@@ -478,6 +477,7 @@ printHelp() {
    echo "   --min-ram      <MB>          # optional (default 1024)"
    echo "   --os-version   <os_version>  # optional (default Other)"
    echo "   --property     <key=val>     # optional properties"
+   echo "otc images update <id>          # change properties, --image-name, min-*"
    echo "otc images delete <id>          # delete (private) image by ID"
    echo
    echo "--- Elastic Load Balancer ---"
@@ -835,6 +835,10 @@ convertSECUGROUPNameToId() {
 convertIMAGENameToId() {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$IMAGENAME"`
+	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
+	  IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
+	  echo "Warn: Multiple images found by that name; using $IMAGE_ID"
+	fi
 	export IMAGE_ID
 }
 
@@ -851,6 +855,7 @@ getIMAGEDetail() {
 createIMAGE() {
 	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
 	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
+	if test -z "$MINRAM"; then MINRAM=1024; fi
 	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
@@ -909,6 +914,16 @@ updateIMAGE()
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "${prop%%=*}" "${prop#*=}" "application/openstack-images-v2.1-json-patch"
 	done
 	IFS="$OLDIFS"
+	# NOW handle min_disk, min_ram, name (if any change)
+	if test -n "$MINDISK"; then
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_disk" "$MINDISK" "application/openstack-images-v2.1-json-patch"
+	fi
+	if test -n "$MINRAM"; then
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_ram" "$MINRAM" "application/openstack-images-v2.1-json-patch"
+	fi
+	if test -n "$IMAGENAME"; then
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
+	fi
 }
 
 getFLAVORListOld() {
@@ -1042,8 +1057,7 @@ getECSJOBList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
 
 	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
-	#TODO: JUST FOR DEBUGING TO SEE THE TASK STATUS
-	echo $ECSCREATEJOBSTATUSJSON
+	#echo $ECSCREATEJOBSTATUSJSON
 	ECSCREATEJOBSTATUS=`echo $ECSCREATEJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
 
 	export ECSCREATEJOBSTATUS
@@ -1491,14 +1505,20 @@ SECGROUPRULECreate() {
 WaitForSubTask() {
 	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1"
 	getECSJOBList $1
-	echo -n "#"
+	RESP="$ECSCREATEJOBSTATUSJSON"
+	echo "#$RESP"
 	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 	do
-		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' | sed 's/"//g')
+		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
 		[ -n "$ECSSUBTASKID" ] && break
 		sleep $2
 		getECSJOBList $1
-		echo -n "#"
+		if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
+			RESP="$ECSCREATEJOBSTATUSJSON"
+			echo -e "\n#$RESP"
+		else
+			echo -n "."
+		fi
 	done
 }
 
@@ -1506,15 +1526,22 @@ WaitForTask() {
 	if [ "$WAIT_CREATE" == "true" ];then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1"
 		getECSJOBList $1
-		echo -n "#"
+		RESP="$ECSCREATEJOBSTATUSJSON"
+		echo "#$RESP"
 		while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 		do
 			sleep $2
 			getECSJOBList $1
-			echo -n "#"
+			if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
+				RESP="$ECSCREATEJOBSTATUSJSON"
+				echo -e "\n#$RESP"
+			else
+				echo -n "."
+			fi
 		done
 	else
 		getECSJOBList $1
+		echo "#$ECSCREATEJOBSTATUSJSON"
 		echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
 	fi
 }
@@ -1814,16 +1841,24 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
    fi
 
    ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
-   echo "$ECSTASKID"
+   echo "Task ID: $ECSTASKID"
 
    if [ "$NUMCOUNT" = 1 ]; then
-      WaitForSubTask $ECSTASKID 10    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
-      ECSID=null
-      while [ "$ECSID" = null ]; do sleep 10; ECSID=$(getECSJOBList $ECSSUBTASKID | jq '.entities.server_id' | sed 's/"//g');done
-      [ -n "$EIP"     ] && BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
+      WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
+		if test -n "$EIP"; then
+	      ECSID=""
+         while [ -z "$ECSID"]; do
+				sleep 5
+				getECSJOBList $ECSSUBTASKID
+				ECSID=$(echo "$ECSCREATEJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
+			done
+			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
+		fi
    fi
 
-   WaitForTask $ECSTASKID 10
+	WaitForTask $ECSTASKID 5
+	ECSID=$(echo "$ECSCREATEJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	echo "ECS ID: $ECSID"
    echo "ECS Creation status: $ECSCREATEJOBSTATUS"
    [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
    if [ "$ECSCREATEJOBSTATUS" != "SUCCESS" ];then
@@ -1870,6 +1905,7 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
    #ECSTASKID=$1
    #echo $AUTH_URL_ECS_JOB/$1
    getECSJOBList $1
+	echo "$ECSCREATEJOBSTATUSJSON"
 
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
    DeleteTask $1
