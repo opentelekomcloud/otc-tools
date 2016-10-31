@@ -1846,8 +1846,8 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
    if [ "$NUMCOUNT" = 1 ]; then
       WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
 		if test -n "$EIP"; then
-	      ECSID=""
-         while [ -z "$ECSID"]; do
+	      ECSID=null
+         while [ null = "$ECSID" ]; do
 				sleep 5
 				getECSJOBList $ECSSUBTASKID
 				ECSID=$(echo "$ECSCREATEJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
