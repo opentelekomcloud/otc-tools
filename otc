@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.28
+VERSION=0.6.29
 
 # Get Config ####################################################################
 warn_too_open()
@@ -359,7 +359,7 @@ printHelp() {
    echo "--- Elastic Cloud Server (VM management) ---"
    echo "otc ecs list               # list ecs instances"
    echo "otc ecs list-detail        # list ecs instances in detail"
-   echo "otc ecs vm <id>            # show instance <id>"
+   echo "otc ecs show <vmid>        # show instance <vmid>"
    echo "otc ecs create -n <name>   # create ecs instance <name>"
    echo
    echo "otc ecs create             # create vm example"
@@ -425,13 +425,16 @@ printHelp() {
    echo
    echo "--- Virtual Private Network ---"
    echo "otc vpc list                    # list all vpc"
-   echo
+   echo "otc vpc show VPCID              # display VPC (Router) details"
+   echo "otc vpc delete VPCID            # delete VPC"
    echo "otc vpc create                  # create vpc"
    echo "    --vpc-name <vpcname>"
    echo "    --cidr     <cidr>"
    echo
    echo "otc subnet list                 # list all subnet"
-   echo
+   echo "otc subnet show <SID>           # show details for subnet <SID>"
+   echo "otc subnet delete <SID>         # delete subnet <SID>"
+   echo "    --vpc-name          <vpcname>"
    echo "otc subnet create               # create a subnet"
    echo "    --subnet-name       <subnetname>"
    echo "    --cidr              <cidr>"
@@ -553,10 +556,106 @@ is_uuid()
 	echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1
 }
 
+getid() {
+	head -n1 | cut -d':' -f2 | tr -d '" ,'
+}
+
+# Params: ARRNM Value [attr [id]]
+find_id()
+{
+	ANM=${3:-name}
+	IDN=${4:-id}
+	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
+}
+
+# convert functions
+convertSUBNETNameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
+	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
+   SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
+	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$1" name availability_zone`
+	if test -z "$SUBNETID"; then
+		echo "ERROR: No subnet found by name $1" 1>&2
+		exit 3
+	fi
+	export SUBNETID SUBNETAZ
+}
+
+convertVPCNameToId() {
+	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
+	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | find_id vpcs "$1"`
+	if test -z "$VPCID"; then
+		echo "ERROR: No VPC found by name $1" 1>&2
+		exit 3
+	fi
+	#echo $VPCID
+	export VPCID
+}
+
+convertSECUGROUPNameToId() {
+	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$1"`
+	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
+	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
+		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+	fi
+	if test -z "$SECUGROUP"; then
+		echo "ERROR: No security-group found by name $1" 1>&2
+		exit 3
+	fi
+	if test `echo "$SECUGROUP" | wc -w` != 1; then
+		echo "Warn: Non-unique Security Group mapping: $1 -> $SECUGROUP"
+		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
+	fi
+	export SECUGROUP
+}
+
+convertIMAGENameToId() {
+	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$1"`
+	if test -z "$IMAGE_ID"; then
+		echo "ERROR: No image found by name $1"
+		exit 3
+	fi
+	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
+	  IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
+	  echo "Warn: Multiple images found by that name; using $IMAGE_ID"
+	fi
+	export IMAGE_ID
+}
+
+convertECSNameToId() {
+	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1000" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	if test -z "$ECS_ID"; then
+		echo "ERROR: No VM found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$ECS_ID" | wc -w)" != "1"; then
+	  ECS_ID=$(echo "$ECS_ID" | head -n1)
+	  echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
+	fi
+	export ECS_ID
+}
+
+convertEVSNameToId() {
+	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLUMES?limit=1000" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	if test -z "$EVS_ID"; then
+		echo "ERROR: No volume found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$EVS_ID" | wc -w)" != "1"; then
+	  ECS_ID=$(echo "$EVS_ID" | head -n1)
+	  echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
+	fi
+	export EVS_ID
+}
 
 getECSVM() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS/$VM" | jq -r '.[]'
-	curlgetauth $TOKEN "$AUTH_URL_ECS/$VM/os-interface" | jq -r '.[]'
+	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
 }
 
 getECSList() {
@@ -575,6 +674,15 @@ getLimits()
 getVPCList() {
 	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
 #| python -m json.tool
+}
+
+getVPCDetail() {
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_VPCS/$VPCID" | jq -r '.'
+}
+
+VPCDelete() {
+	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$1"
 }
 
 getPUBLICIPSList() {
@@ -597,7 +705,8 @@ getSECGROUPRULESListOld() {
 }
 
 getSECGROUPRULESList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$1'")'
+	if ! is_uuid "$1"; then convertSECUGROUPNameToId "$1"; else SECUGROUP="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
 #| python -m json.tool
 }
 
@@ -606,12 +715,23 @@ getEVSList() {
 }
 
 getEVSDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=160" | jq '.volumes[] | select(.id == "'$1'")'
+	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=160" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 }
 
 getSUBNETList() {
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | jq '.[]'
 #| python -m json.tool
+}
+
+getSUBNETDetail() {
+	if ! is_uuid "$1"; then convertSUBNETNameToId "$1"; else SUBNETID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[]'
+}
+
+SUBNETDelete() {
+	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID/subnets/$1"
+	echo
 }
 
 getRDSInstanceList() {
@@ -791,64 +911,15 @@ deleteRecord() {
 	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
 }
 
-getid() {
-	head -n1 | cut -d':' -f2 | tr -d '" ,'
-}
-
-# Params: ARRNM Value [attr [id]]
-find_id()
-{
-	ANM=${3:-name}
-	IDN=${4:-id}
-	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
-}
-
-# convert functions
-convertSUBNETNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
-	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$SUBNETNAME'") | .id' | tr -d '" ,'`
-	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
-   SUBNETID=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME"`
-	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$SUBNETNAME" name availability_zone`
-	export SUBNETID SUBNETAZ
-}
-
-convertVPCNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
-	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$VPCNAME'") | .id' | tr -d '" ,'`
-	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | find_id vpcs "$VPCNAME"`
-	#echo $VPCID
-	export VPCID
-}
-
-convertSECUGROUPNameToId() {
-	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$SECUGROUPNAME'") | .id' | tr -d '" ,'`
-	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$SECUGROUPNAME"`
-	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$SECUGROUPNAME"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
-	if test `echo "$SECUGROUP" | wc -w` != 1; then
-		echo "WARN: Non-unique Security Group mapping: $SECUGROUPNAME -> $SECUGROUP"
-		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
-	fi
-	export SECUGROUP
-}
-
-convertIMAGENameToId() {
-	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$IMAGENAME"`
-	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
-	  IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
-	  echo "Warn: Multiple images found by that name; using $IMAGE_ID"
-	fi
-	export IMAGE_ID
-}
-
 getIMAGEList() {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 #| python -m json.tool
 }
 
 getIMAGEDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | select(.id == "'$1'")'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"| jq '.'
 #| python -m json.tool
 }
 
@@ -970,7 +1041,7 @@ createELB() {
 		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'"'
 	fi
 	if test -n "$1"; then VPCID=$1; fi
-	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId; fi
+	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC"; exit 1; fi
 	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", \"bandwidth\": $BANDWIDTH, $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
@@ -1424,7 +1495,7 @@ PUBLICIPSDelete() {
 }
 
 getPortID() {
-	(  VM=$1; getECSVM | sed -n '/^\[/,/^\]/p' \
+	(  getECSVM $1 | sed -n '/^\[/,/^\]/p' \
 	   | jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
 	   | while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
 }
@@ -1823,20 +1894,19 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
-   VM=$1
-   getECSVM
+   getECSVM $1
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
    getLimits
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
-   if [ "$VPCNAME" != "" ]; then convertVPCNameToId; fi
-   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId; fi
-   if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId; fi
+   if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME"; fi
+   if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
    SECUGROUPNAMELIST="$SECUGROUPNAME"
    if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
-      SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId; printf ",$SECUGROUP";done)
+      SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
       SECUGROUP="${SECUGROUP#,}"
    fi
 
@@ -1917,7 +1987,10 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getVPCList
-
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ];then
+   getVPCDetail $1
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ];then
+   VPCDelete $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
    VPCCreate
 
@@ -1938,31 +2011,36 @@ elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "unbind" ];then
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
    getSUBNETList
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ];then
+   getSUBNETDetail "$1"
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
+	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
+   SUBNETDelete "$1"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
    IMAGENAME=$1
-    # convertSUBNETNameToId
-    # convertSECUGROUPNameToId
-    # convertIMAGENameToId
+    # convertSUBNETNameToId "$SUBNETNAME"
+    # convertSECUGROUPNameToId "$SECUGROUPNAME"
+    # convertIMAGENameToId "$IMAGENAME"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
 
    if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId
+	convertVPCNameToId "$VPCNAME"
    fi
    SUBNETCreate
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
    VPCNAME=$1
    if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId
+	convertVPCNameToId "$VPCNAME"
    fi
 
    getSECGROUPList
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
    if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId
+	convertVPCNameToId "$VPCNAME"
    fi
 
    SECGROUPCreate
@@ -1981,11 +2059,11 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 
    if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId
+	convertVPCNameToId "$VPCNAME"
    fi
 
    if [ "$SECUGROUPNAME" != "" ];then
-	convertSECUGROUPNameToId
+	convertSECUGROUPNameToId "$SECUGROUPNAME"
    fi
 
    #AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
