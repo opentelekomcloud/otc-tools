@@ -930,7 +930,7 @@ registerIMAGE() {
 	if test -z "$2"; then echo "ERROR: Need to specify OBSBucket"; exit 2; fi
 	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
 	if test -z "$MINRAM"; then MINRAM=1024; fi
-	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##.*}"; fi
+	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
 	if test -z "$DISKFORMAT" -o "$DISKFORMAT" = "zvhd"; then DISKFORMAT="vhd"; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"os_version\": \"$OSVERSION\","; fi
