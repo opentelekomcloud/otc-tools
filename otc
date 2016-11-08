@@ -319,8 +319,8 @@ getIamToken() {
 	fi
 
 	# SET ENDPOINTS
-	export BASEURL=${IAM_AUTH_URL%%/v3*}
-	BASEURL="${BASEURL/:443\///}" # remove :443 port when present
+	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
+	BASEURL=${BASEURL%%/v3*}
 
 	# TODO: Parse catalog instead
 	SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
@@ -380,7 +380,7 @@ getIamToken() {
 
 	AUTH_URL_DNS="$DESIGNATE_URL/v2/zones"
 
-	AUTH_URL_AS="${HEAT_SERVICE/rts/as}"
+	AUTH_URL_AS="${HEAT_URL/rts/as}"
 	AUTH_URL_AS="${AUTH_URL_AS%%/v[12]*}"
 
 	AUTH_URL_CES="$CEILOMETER_URL"
