@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.30
+VERSION=0.6.31
 
 # Get Config ####################################################################
 warn_too_open()
@@ -238,6 +238,14 @@ unset SUBNETAZ
 
 #FUNCTIONS ###############################################################################
 
+# Arguments: SERVICESJSON ENDPOINTSJSON SERVICETYPE PROJECTID
+getendpoint() {
+	SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
+	if test -z "$SERVICE_ID"; then return; fi
+	SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID) | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
+	echo "$SERVICE_EP"
+}
+
 # Get a token (and the project ID)
 # TODO: Token caching ...
 
@@ -311,46 +319,71 @@ getIamToken() {
 	fi
 
 	# SET ENDPOINTS
-	# TODO: Parse catalog instead
 	export BASEURL=${IAM_AUTH_URL%%/v3*}
+	BASEURL="${BASEURL/:443\///}" # remove :443 port when present
 
-	AUTH_URL_ECS="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers"
-	AUTH_URL_AZ="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID"
-	export AUTH_URL_ECS_JOB="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/jobs"
-	export AUTH_URL_ECS_DETAIL="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers/detail"
+	# TODO: Parse catalog instead
+	SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
+	ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
+	if test "$?" == "0"; then
+		CINDER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" volumev2 $OS_PROJECT_ID)
+		NEUTRON_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" network $OS_PROJECT_ID)
+		GLANCE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" image $OS_PROJECT_ID)
+		DESIGNATE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" dns $OS_PROJECT_ID)
+		NOVA_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" compute $OS_PROJECT_ID)
+		HEAT_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" orchestration $OS_PROJECT_ID)
+		TROVE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" database $OS_PROJECT_ID)
+		KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
+		CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
+   else
+		CINDER_URL=${BASEURL/iam/evs}/v2/$OS_PROJECT_ID
+		NEUTRON_URL=${BASEURL/iam/vpc}
+		GLANCE_URL=${BASEURL/iam/ims}
+		DESIGNATE_URL=${BASEURL/iam/dns}
+		NOVA_URL=${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID
+		HEAT_URL=${BASEURL/iam/rts}/v1/$OS_PROJECT_ID
+		TROVE_URL=${BASEURL/iam/rds}
+   fi
+	if test -z "$KEYSTONE_URL"; then KEYSTONE_URL=$BASEURL/v3; fi
+	if test -z "$CEILOMETER_URL"; then CEILOMETER_URL=${BASEURL/iam/ces}; fi
 
-	AUTH_URL_ECS_CLOUD="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers"
-	AUTH_URL_ECS_CLOUD_ACTION="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/action"
-	AUTH_URL_ECS_CLOUD_DELETE="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/delete"
+	AUTH_URL_ECS="$NOVA_URL/servers"
+	export AUTH_URL_ECS_JOB="${NOVA_URL/v2/v1}/jobs"
+	export AUTH_URL_ECS_DETAIL="$NOVA_URL/servers/detail"
 
-	AUTH_URL_VPCS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/vpcs"
-	AUTH_URL_PUBLICIPS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/publicips"
-	AUTH_URL_SEC_GROUPS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-groups"
-	AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v2/$OS_PROJECT_ID/security-group-rules"
-	AUTH_URL_SUBNETS="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/subnets"
+	AUTH_URL_ECS_CLOUD="${NOVA_URL/v2/v1}/cloudservers"
+	AUTH_URL_ECS_CLOUD_ACTION="$AUTH_URL_ECS_CLOUD/action"
+	AUTH_URL_ECS_CLOUD_DELETE="$AUTH_URL_ECS_CLOUD/delete"
+	AUTH_URL_FLAVORS="$AUTH_URL_ECS_CLOUD/flavors"
+	AUTH_URL_KEYNAMES="$NOVA_URL/os-keypairs"
 
-	AUTH_URL_IMAGES="${BASEURL/iam/ims}/v2/images"
-	AUTH_URL_IMAGESV1="${BASEURL/iam/ims}/v1/cloudimages"
-	AUTH_URL_IMAGESV2="${BASEURL/iam/ims}/v2/cloudimages"
+	AUTH_URL_VPCS="$NEUTRON_URL/v1/$OS_PROJECT_ID/vpcs"
+	AUTH_URL_PUBLICIPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/publicips"
+	AUTH_URL_SEC_GROUPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/security-groups"
+	AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2/$OS_PROJECT_ID/security-group-rules"
+	AUTH_URL_SUBNETS="$NEUTRON_URL/v1/$OS_PROJECT_ID/subnets"
 
-	AUTH_URL_FLAVORS="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/cloudservers/flavors"
-	AUTH_URL_KEYNAMES="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/os-keypairs"
+	AUTH_URL_IMAGES="$GLANCE_URL/v2/images"
+	AUTH_URL_IMAGESV1="$GLANCE_URL/v1/cloudimages"
+	AUTH_URL_IMAGESV2="$GLANCE_URL/v2/cloudimages"
 
-	AUTH_URL_VOLUMES="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes"
-	AUTH_URL_VOLUMES_DETAILS="${BASEURL/iam/evs}/v2/$OS_PROJECT_ID/cloudvolumes/detail"
+	AUTH_URL_VOLUMES="$CINDER_URL/cloudvolumes"
+	AUTH_URL_VOLUMES_DETAILS="$CINDER_URL/cloudvolumes/detail"
 
-	AUTH_URL_ELB="${BASEURL/iam/elb}/v1.0/$OS_PROJECT_ID/elbaas"
+	AUTH_URL_ELB="${NEUTRON_URL/vpc/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 
-	AUTH_URL_RDS="${BASEURL/iam/rds}/rds"
-	AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
+	AUTH_URL_RDS="$TROVE_URL/rds"
+	#AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
 	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
 
-	AUTH_URL_DNS="${BASEURL/iam/dns}/v2/zones"
+	AUTH_URL_DNS="$DESIGNATE_URL/v2/zones"
 
-	AUTH_URL_AS="${BASEURL/iam/as}"
-	AUTH_URL_CES="${BASEURL/iam/ces}"
+	AUTH_URL_AS="${HEAT_SERVICE/rts/as}"
+	AUTH_URL_AS="${AUTH_URL_AS%%/v[12]*}"
+
+	AUTH_URL_CES="$CEILOMETER_URL"
 	AUTH_URL_CCE="${BASEURL/iam/cce}"
 }
 
@@ -546,6 +579,8 @@ printHelp() {
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
    echo "otc iam project         # output project_id/tenant_id"
+   echo "otc iam services        # service catalog"
+   echo "otc iam endpoints       # endpoints of the services"
    echo
    echo "--- Global flags ---"
    echo "otc debug CMD1 CMD2 PARAMS      # for debugging REST calls ..."
@@ -664,7 +699,7 @@ getECSVM() {
 }
 
 getECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
+	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=500" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
 }
 
 getECSDetail() {
@@ -677,7 +712,7 @@ getLimits()
 }
 
 getAZList() {
-	curlgetauth $TOKEN "$AUTH_URL_AZ/os-availability-zone" | jq  '.availabilityZoneInfo[] | {znm: .zoneName, avl: .zoneState.available} | .znm' | tr -d '"'
+	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone" | jq  '.availabilityZoneInfo[] | {znm: .zoneName, avl: .zoneState.available} | .znm' | tr -d '"'
 }
 
 
@@ -721,16 +756,16 @@ getSECGROUPRULESList() {
 }
 
 getEVSList() {
-	curlgetauth $TOKEN "$AUTH_URL_VOLUMES" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_VOLUMES?limit=1000" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getEVSDetail() {
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=160" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=1000" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 }
 
 getSUBNETList() {
-	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=250" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -922,13 +957,13 @@ deleteRecord() {
 }
 
 getIMAGEList() {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 #| python -m json.tool
 }
 
 getIMAGEDetail() {
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
-	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
+	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"| jq '.'
 }
 
@@ -2158,6 +2193,22 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
    curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
    curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
+# These are not (yet) supported on OTC
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
+# End of unsupported APIs
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ];then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
    echo $OS_PROJECT_ID
