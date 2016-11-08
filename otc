@@ -315,6 +315,7 @@ getIamToken() {
 	export BASEURL=${IAM_AUTH_URL%%/v3*}
 
 	AUTH_URL_ECS="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers"
+	AUTH_URL_AZ="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID"
 	export AUTH_URL_ECS_JOB="${BASEURL/iam/ecs}/v1/$OS_PROJECT_ID/jobs"
 	export AUTH_URL_ECS_DETAIL="${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID/servers/detail"
 
@@ -405,6 +406,7 @@ printHelp() {
    #echo "otc task delete <id>            # cancel job <id>"
    echo "otc ecs limits                  # display project quotas"
    echo "otc ecs update <id>             # change VM data (same parms as create)"
+   echo "otc ecs az-list                 # list availability zones"
    echo
    echo "--- SSH Keys ---"
    echo "otc keypair list                # list ssh key pairs"
@@ -673,6 +675,11 @@ getLimits()
 {
 	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq '.'
 }
+
+getAZList() {
+	curlgetauth $TOKEN "$AUTH_URL_AZ/os-availability-zone" | jq  '.availabilityZoneInfo[] | {znm: .zoneName, avl: .zoneState.available} | .znm' | tr -d '"'
+}
+
 
 getVPCList() {
 	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
@@ -2016,6 +2023,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
    ECSDelete $@
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
    ECSUpdate $1
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ]; then
+   getAZList
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getVPCList
