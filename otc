@@ -33,7 +33,7 @@ warn_too_open()
 {
 	PERM=$(stat -Lc "%a" "$1")
 	if test "${PERM:2:1}" != "0"; then
-		echo "Warning: $1 permissions too open ($PERM)"
+		echo "Warning: $1 permissions too open ($PERM)" 1>&2
 	fi
 }
 
@@ -41,7 +41,7 @@ may_read_env_files()
 {
 	for file in "$@"; do
 		if test -r "$file"; then
-			echo "Note: Reading environment from $file ..."
+			echo "Note: Reading environment from $file ..." 1>&2
 			source "$file"
 			warn_too_open "$file"
 			if test -n "$OS_PASSWORD" -a -n "$OS_USERNAME"; then break; fi
@@ -55,7 +55,7 @@ if test -r ~/.otc_env.sh; then
 	source ~/.otc_env.sh
 	warn_too_open ~/.otc_env.sh
 #else
-#	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation"
+#	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation" 1>&2
 fi
 # Parse standard OpenStack environment setting files if needed
 if test -z "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
@@ -70,12 +70,12 @@ if test -z "$OS_PROJECT_NAME"; then
 fi
 # S3 environment
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
-	echo "Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..."
+	echo "Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..." 1>&2
 	source ~/.s3rc.$OTC_TENANT
 	warn_too_open ~/.s3rc.$OTC_TENANT
 fi
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc; then
-	echo "Note: Reading S3 environment from ~/.s3rc ..."
+	echo "Note: Reading S3 environment from ~/.s3rc ..." 1>&2
 	source ~/.s3rc
 	warn_too_open ~/.s3rc
 fi
@@ -86,23 +86,23 @@ else
 	CRED=credentials.csv
 fi
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
-	echo -n "Note: Parsing S3 $CRED ... "
+	echo -n "Note: Parsing S3 $CRED ... " 1>&2
 	LN=$(tail -n1 ~/$CRED | sed 's/"//g')
 	UNM=${LN%%,*}
 	LN=${LN#*,}
 	if test "$UNM" = "$OS_USERNAME"; then
-		echo "succeeded"
+		echo "succeeded" 1>&2
 		export S3_ACCESS_KEY_ID="${LN%,*}"
 		export S3_SECRET_ACCESS_KEY="${LN#*,}"
 	else
-		echo "user mismatch \"$UNM\" != \"$OS_USERNAME\""
+		echo "user mismatch \"$UNM\" != \"$OS_USERNAME\"" 1>&2
 	fi
 	warn_too_open ~/$CRED
 fi
 
 if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
-	echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_NAME environment"
-	echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY"
+	echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_NAME environment" 1>&2
+	echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
 	exit 1
 fi
 
@@ -115,7 +115,11 @@ if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
 if test -n "$OS_AUTH_URL"; then
-	export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
+	if test "$OS_AUTH_URL" = *"/v3"; then
+		export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
+	else
+		export IAM_AUTH_URL="$OS_AUTH_URL/tokens"
+	fi
 else
 	export IAM_AUTH_URL="https://iam.eu-de.otc.t-systems.com/v3/auth/tokens"
 fi
@@ -204,10 +208,10 @@ curladdorreplace()
 	TKN="$1"; shift
 	if test -z "$4"; then CTYPE="application/json"; else CTYPE="$4"; fi
 	VAL=`curlgetauth "$TKN" "$1" | jq ".$2"`
-	echo "DEBUG: /$2: $VAL -> $3"
+	echo "DEBUG: /$2: $VAL -> $3" 1>&2
 	if test "$VAL" = "null"; then
 		if test -z "$3"; then
-			echo "WARN: Nothing to do, /$2 already non-existent"
+			echo "WARN: Nothing to do, /$2 already non-existent" 1>&2
 		else
 			curldopatch "$TKN" "$1" "/$2" "add" "$3" "$CTYPE"
 		fi
@@ -246,12 +250,32 @@ getendpoint() {
 	echo "$SERVICE_EP"
 }
 
+getv2endpoint() {
+	SERVICE_EP=$(echo "$1" | jq ".access.serviceCatalog[] | select(.type == \"$2\") | .endpoints[].publicURL" | tr -d '"')
+	if test "$SERVICE_EP" != "null"; then
+		echo "$SERVICE_EP"
+	fi
+}
+
 # Get a token (and the project ID)
 # TODO: Token caching ...
 
 getIamToken() {
+	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
+	BASEURL=${BASEURL%%/v[23]*}
+
 	if test -n "$OS_PROJECT_ID"; then
-	IAM_REQ='{
+	IAM2_REQ='{
+			"auth": {
+				"tenantId": "'"$OS_PROJECT_ID"'",
+				"passwordCredentials": {
+					"username": "'"$OS_USERNAME"'",
+					"password": "'"$OS_PASSWORD"'"
+				}
+			}
+		}
+	'
+	IAM3_REQ='{
 			"auth": {
 			"identity": {
 				"methods": [ "password" ],
@@ -270,7 +294,17 @@ getIamToken() {
 	}
 	'
 	else
-	IAM_REQ='
+	IAM2_REQ='{
+			"auth": {
+				"tenantName": "'"$OS_PROJECT_NAME"'",
+				"passwordCredentials": {
+					"username": "'"$OS_USERNAME"'",
+					"password": "'"$OS_PASSWORD"'"
+				}
+			}
+		}
+	'
+	IAM3_REQ='
 	{
 		"auth": {
 			"identity": {
@@ -290,42 +324,34 @@ getIamToken() {
 	}
 	'
 	fi
-	export IAM_REQ
+	export IAM2_REQ IAM3_REQ
 	#if test -n "$DEBUG"; then
-	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g'
+	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 	#fi
-	IAMRESP=`curlpost "$IAM_REQ" "$IAM_AUTH_URL"`
-
-	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
-
-	#if test -n "$DEBUG"; then
-	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/'
-	#fi
-	TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
-	#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
-	if test -z "$OS_PROJECT_ID"; then
-		OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
-	fi
-	if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
-		echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME"
-		exit 2
-	fi
-	if test -z "$OS_USER_DOMAIN_ID"; then
-		OS_USER_DOMAIN_ID=`echo "$IAMRESP" | getUserDomainIdFromIamResponse `
-	fi
-	if test -z "$OS_USER_DOMAIN_ID"; then
-		echo "ERROR: Failed to determine user domain id from $IAM_AUTH_URL for user $OS_USERNAME"
-		exit 2
-	fi
-
-	# SET ENDPOINTS
-	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
-	BASEURL=${BASEURL%%/v3*}
-
-	# TODO: Parse catalog instead
-	SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
-	ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
-	if test "$?" == "0"; then
+	if test "$IAM_AUTH_URL" = *"v3/auth"; then
+		IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
+		TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
+		#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
+		if test -z "$OS_PROJECT_ID"; then
+			OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
+		fi
+		if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
+			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
+			exit 2
+		fi
+		if test -z "$OS_USER_DOMAIN_ID"; then
+			OS_USER_DOMAIN_ID=`echo "$IAMRESP" | getUserDomainIdFromIamResponse `
+		fi
+		if test -z "$OS_USER_DOMAIN_ID"; then
+			echo "ERROR: Failed to determine user domain id from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
+			exit 2
+		fi
+		SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
+		ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
+		#if test "$?" != "0"; then
+		#	echo "ERROR: No keystone v3 service catalog" 1>&2
+		#	exit 2
+		#fi
 		CINDER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" volumev2 $OS_PROJECT_ID)
 		NEUTRON_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" network $OS_PROJECT_ID)
 		GLANCE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" image $OS_PROJECT_ID)
@@ -335,7 +361,30 @@ getIamToken() {
 		TROVE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" database $OS_PROJECT_ID)
 		KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
 		CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
-   else
+	else
+		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
+		IAMJSON=`echo "$IAMRESP" | tail -n1`
+		TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`
+		if test -z "$OS_PROJECT_ID"; then
+			OS_PROJECT_ID=`echo "$IAMJSON" | tail -n1 | jq -r '.access.token.tenant.id'`
+		fi
+		if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
+			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
+			exit 2
+		fi
+		CINDER_URL=$(getv2endpoint "$IAMJSON" volumev2 $OS_PROJECT_ID)
+		NEUTRON_URL=$(getv2endpoint "$IAMJSON" network $OS_PROJECT_ID)
+		GLANCE_URL=$(getv2endpoint "$IAMJSON" image $OS_PROJECT_ID)
+		DESIGNATE_URL=$(getv2endpoint "$IAMJSON" dns $OS_PROJECT_ID)
+		NOVA_URL=$(getv2endpoint "$IAMJSON" compute $OS_PROJECT_ID)
+		HEAT_URL=$(getv2endpoint "$IAMJSON" orchestration $OS_PROJECT_ID)
+		TROVE_URL=$(getv2endpoint "$IAMJSON" database $OS_PROJECT_ID)
+		KEYSTONE_URL=$(getv2endpoint "$IAMJSON" identity $OS_PROJECT_ID)
+		CEILOMETER_URL=$(getv2endpoint "$IAMJSON" metering $OS_PROJECT_ID)
+	fi
+	# FIXME: Delete this
+	# For now fall back to hardcoded URLs
+	if test -z "$NOVA_UTL"; then
 		CINDER_URL=${BASEURL/iam/evs}/v2/$OS_PROJECT_ID
 		NEUTRON_URL=${BASEURL/iam/vpc}
 		GLANCE_URL=${BASEURL/iam/ims}
@@ -343,7 +392,13 @@ getIamToken() {
 		NOVA_URL=${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID
 		HEAT_URL=${BASEURL/iam/rts}/v1/$OS_PROJECT_ID
 		TROVE_URL=${BASEURL/iam/rds}
-   fi
+	fi
+
+	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
+
+	#if test -n "$DEBUG"; then
+	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+	#fi
 	if test -z "$KEYSTONE_URL"; then KEYSTONE_URL=$BASEURL/v3; fi
 	if test -z "$CEILOMETER_URL"; then CEILOMETER_URL=${BASEURL/iam/ces}; fi
 
@@ -560,22 +615,21 @@ printHelp() {
    echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
    echo
    echo "--- DNS ---"
-	echo "otc domain list         # show all zones/domains"
-	echo "otc domain show zid     # show details of zone/domain <zid>"
-	echo "otc domain delete zid   # deleted zone/domain <zid>"
-	echo "otc domain create domain [desc [type [mail [ttl]]]]"
-	echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
-	echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
-	echo "otc domain addrecord	zid name. type ttl val [desc]"
-	echo "                        # add record to zone <zid> for <name> with <type>, <ttl>"
-	echo "                        # type could be A, AAAA, MX, CNAME, PTR, TXT, NS"
-	echo "                        # val is a comma sep list of record values, e.g."
-	echo "                        # IPADDR, NR NAME, NAME, NAME, STRING, NAME."
-	echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
-	echo "otc domain listrecords [zid]      # list records for zone <zid>"
-	echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
-
-	echo
+   echo "otc domain list         # show all zones/domains"
+   echo "otc domain show zid     # show details of zone/domain <zid>"
+   echo "otc domain delete zid   # deleted zone/domain <zid>"
+   echo "otc domain create domain [desc [type [mail [ttl]]]]"
+   echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
+   echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
+   echo "otc domain addrecord	zid name. type ttl val [desc]"
+   echo "                        # add record to zone <zid> for <name> with <type>, <ttl>"
+   echo "                        # type could be A, AAAA, MX, CNAME, PTR, TXT, NS"
+   echo "                        # val is a comma sep list of record values, e.g."
+   echo "                        # IPADDR, NR NAME, NAME, NAME, STRING, NAME."
+   echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
+   echo "otc domain listrecords [zid]      # list records for zone <zid>"
+   echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
+   echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
    echo "otc iam project         # output project_id/tenant_id"
@@ -613,7 +667,7 @@ convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
-   SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
+	SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$1" name availability_zone`
 	if test -z "$SUBNETID"; then
 		echo "ERROR: No subnet found by name $1" 1>&2
@@ -646,7 +700,7 @@ convertSECUGROUPNameToId() {
 		exit 3
 	fi
 	if test `echo "$SECUGROUP" | wc -w` != 1; then
-		echo "Warn: Non-unique Security Group mapping: $1 -> $SECUGROUP"
+		echo "Warn: Non-unique Security Group mapping: $1 -> $SECUGROUP" 1>&2
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
@@ -656,12 +710,12 @@ convertIMAGENameToId() {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$1"`
 	if test -z "$IMAGE_ID"; then
-		echo "ERROR: No image found by name $1"
+		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
 	fi
 	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
 	  IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
-	  echo "Warn: Multiple images found by that name; using $IMAGE_ID"
+	  echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
 	export IMAGE_ID
 }
@@ -728,6 +782,7 @@ getVPCDetail() {
 
 VPCDelete() {
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$1"
+	echo
 }
 
 getPUBLICIPSList() {
@@ -873,7 +928,7 @@ deleteRDSInstanceImpl() {
 	local numberOfManualBackupsToKeep=$2
 	local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
 	#local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
-	echo "Try deleting instance $instanceid"
+	echo "Note: Try deleting instance $instanceid" 1>&2
 	#echo "URI: $URI"
 	#echo "TOKEN: $TOKEN"
 	curldeleteauthwithjsonparameter \
@@ -884,7 +939,7 @@ deleteRDSInstanceImpl() {
 
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep"
+	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
 }
 
 listDomains() {
@@ -894,7 +949,7 @@ listDomains() {
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
 createDomain() {
 	if test "${1: -1:1}" != "."; then
-		echo "WARN: Name shoud end in '.'"
+		echo "WARN: Name shoud end in '.'" 1>&2
 	fi
    REQ="{ \"name\": \"$1\""
 	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
@@ -916,18 +971,18 @@ deleteDomain() {
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
 addRecord() {
 	if test -z "$5"; then
-		echo "ERROR: Need to provide more params"
+		echo "ERROR: Need to provide more params" 1>&2
 		exit 1
 	fi
 	case "$3" in
 		A|AAAA|MX|PTR|CNAME|NS|TXT)
 			;;
 		*)
-			echo "WARN: Unknown record type \"$3\""
+			echo "WARN: Unknown record type \"$3\"" 1>&2
 			;;
 	esac
 	if test "${2: -1:1}" != "."; then
-		echo "WARN: Name shoud end in '.'"
+		echo "WARN: Name shoud end in '.'" 1>&2
 	fi
 	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
 	if test -n "$6"; then REQ="$REQ, \"description\": \"$6\""; fi
@@ -968,9 +1023,9 @@ getIMAGEDetail() {
 }
 
 registerIMAGE() {
-	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
-	if test -z "$2"; then echo "ERROR: Need to specify OBSBucket"; exit 2; fi
-	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
+	if test -z "$1"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
+	if test -z "$2"; then echo "ERROR: Need to specify OBSBucket" 1>&2; exit 2; fi
+	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk" 1>&2; exit 2; fi
 	if test -z "$MINRAM"; then MINRAM=1024; fi
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
 	if test -z "$DISKFORMAT" -o "$DISKFORMAT" = "zvhd"; then DISKFORMAT="vhd"; fi
@@ -999,9 +1054,9 @@ registerIMAGE() {
 
 createIMAGE() {
 	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
-	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk"; exit 2; fi
+	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk" 1>&2; exit 2; fi
 	if test -z "$MINRAM"; then MINRAM=1024; fi
-	if test -z "$1"; then echo "ERROR: Need to specify NAME"; exit 2; fi
+	if test -z "$1"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
@@ -1047,7 +1102,7 @@ uploadIMAGEobj()
 uploadIMAGEfile()
 {
 	sz=$(stat -c "%s" "$2")
-	echo "INFO: Uploading $sz bytes from $2 to image $1 ..."
+	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
 }
 
@@ -1116,7 +1171,7 @@ createELB() {
 	fi
 	if test -n "$1"; then VPCID=$1; fi
 	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC"; exit 1; fi
+	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", \"bandwidth\": $BANDWIDTH, $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
 
@@ -1196,7 +1251,7 @@ deleteMember() {
 
 getECSJOBList() {
 	if test -z "$1"; then echo
-		echo "ERROR: Need to pass job ID to getECSJOBList"
+		echo "ERROR: Need to pass job ID to getECSJOBList" 1>&2
 		exit 1
 	fi
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
@@ -1260,7 +1315,7 @@ ECSAttachVolumeName() {
 	local server_name="$1" dev_vol="$2" ecsid volid
 	ecsid=$(getECSList |  while read id name  ; do [ "$name" = "$server_name"  -o "$id" = "$server_name"  ] && echo $id && break; done)
 	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" -o "$id" = "${dev_vol#*:}" ] && echo $id && break; done)
-	[ -z "$volid" ] && echo "$ERROR: volume '${dev_vol#*:}' doesn't exist" >&2 && return 1
+	[ -z "$volid" ] && echo "$ERROR: volume '${dev_vol#*:}' doesn't exist" 1>&2 && return 1
 	ECSAttachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
 }
 
@@ -1270,7 +1325,7 @@ ECSAttachVolumeId() {
 	local server_id="$1" dev_vol="$2" dev vol req
 	IFS=: read dev vol <<< "$dev_vol"
 	if test -z "$vol"; then
-		echo "ERROR: wrong usage of ECSAttachVolumeId(): '$dev_vol' should be 'device:VolumeID'"
+		echo "ERROR: wrong usage of ECSAttachVolumeId(): '$dev_vol' should be 'device:VolumeID'" 1>&2
 		exit 2
 	fi
 	dev="/dev/${dev#/dev/}"
@@ -1295,7 +1350,7 @@ ECSDetachVolumeName() {
 	ecsid=$(getECSList |  while read id name; do [ "$name" = "$server_name"  ] && echo $id && break; done)
 	volid=$(getEVSList |  while read id name; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
 	if test -z "$volid"; then
-		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique"
+		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique" 1>&2
 		exit 2
 	fi
 	ECSDetachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
@@ -1305,7 +1360,7 @@ ECSDetachVolumeId() {
 	local server_id="$1" dev_vol="$2" volume         ##### dev_vol could be of the form <device>:<volumeid> or just <volumeid>
 	volume="${dev_vol#*:}"
 	if test -z "$volume"; then
-		echo "ERROR: wrong usage of volume detach function: volume is not set"
+		echo "ERROR: wrong usage of volume detach function: volume is not set" 1>&2
 		exit 2
 	fi
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_CLOUD/$server_id/detachvolume/$volume" | jq '.[]'
@@ -1313,7 +1368,7 @@ ECSDetachVolumeId() {
 
 ECSCreate() {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
-		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -"
+		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -" 1>&2
 		exit 2
 	fi
 
@@ -1328,12 +1383,12 @@ ECSCreate() {
 		if test -n "$SUBNETAZ"; then
 			AZ="$SUBNETAZ"
 		else
-			echo "ERROR: Need to specify AZ (or derive from subnet)"
+			echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
 			exit 2
 		fi
 	fi
 	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
-		echo "ERROR: AZ ($AZ) must match subnets AZ ($SUBNETAZ)"
+		echo "ERROR: AZ ($AZ) must match subnets AZ ($SUBNETAZ)" 1>&2
 		exit 2
 	fi
 
@@ -1377,12 +1432,12 @@ ECSCreate() {
 	# TODO: Support both/multiple user data pieces
 	USERDATAJSON=""
 	if test -n "$USERDATA"; then
-		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config"; fi
+		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
 	fi
 	if test -n "$USERDATAFILE"; then
-		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string"; fi
-		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config"; fi
+		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
+		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
@@ -1408,28 +1463,28 @@ ECSCreate() {
 	echo "$REQ_CREATE_VM"
 
 	if [ "$IMAGE_ID" == "" ]; then
-		echo "Image definition not Correct ! Check avaliable images with following command:"
-		echo 'otc images list'
+		echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
+		echo 'otc images list' 1>&2
 		exit 1
 	fi
 	if [ "$INSTANCE_TYPE" == "" ]; then
-		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:"
-		echo 'otc ecs flavor-list'
+		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 1>&2
+		echo 'otc ecs flavor-list' 1>&2
 		exit 1
 	fi
 	if [ "$VPCID" == "" ]; then
-		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:"
-		echo 'otc vpc list'
+		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 1>&2
+		echo 'otc vpc list' 1>&2
 		exit 1
 	fi
 	if [ "$SECUGROUP" == "" ]; then
-		echo "Security Group definition not Correct ! Please check avaliable security group with following command:"
-		echo 'otc security-group list'
+		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 1>&2
+		echo 'otc security-group list' 1>&2
 		exit 1
 	fi
 	if [ "$SUBNETID" == "" ]; then
-		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:"
-		echo 'otc subnet list'
+		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 1>&2
+		echo 'otc subnet list' 1>&2
 		exit 1
 	fi
 
@@ -1509,8 +1564,8 @@ ECSDelete() {
 	if test -n "$ECSTASKID"; then
 		echo "Delete task ID: $ECSTASKID"
 	else
-		echo "ERROR:"
-		echo "$ECSRESP" | jq '.[]'
+		echo "ERROR:" 1>&2
+		echo "$ECSRESP" | jq '.[]' 1>&2
 		return 1
 	fi
 }
@@ -1582,7 +1637,7 @@ BindPublicIpToCreatingVM() {
           |  while IFS=";" read id eip iip status bid b type;do
 	                [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
 	                [ "$status" = "DOWN" ] && echo "$id"   && break
-	                echo "ERROR: requested external IP is of wrong status: $status" >&2
+	                echo "ERROR: requested external IP is of wrong status: $status" 1>&2
                 done)
 	[ -n "$EIPID" ] && PUBLICIPSBind "$EIPID" "$PRTID" \
 	|| return 1
@@ -1591,7 +1646,7 @@ BindPublicIpToCreatingVM() {
 PUBLICIPSBind() {
 	ID=$1
 	PORT_ID=$2
-	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to."; exit 1; fi
+	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to." 1>&2; exit 1; fi
 	REQ_BIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": "'"$PORT_ID"'"
@@ -1648,10 +1703,10 @@ SECGROUPRULECreate() {
 }
 
 WaitForSubTask() {
-	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1"
+	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 	getECSJOBList $1
 	RESP="$ECSCREATEJOBSTATUSJSON"
-	echo "#$RESP"
+	echo "#$RESP" 1>&2
 	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 	do
 		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
@@ -1660,28 +1715,28 @@ WaitForSubTask() {
 		getECSJOBList $1
 		if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
 			RESP="$ECSCREATEJOBSTATUSJSON"
-			echo -e "\n#$RESP"
+			echo -e "\n#$RESP" 1>&2
 		else
-			echo -n "."
+			echo -n "." 1>&2
 		fi
 	done
 }
 
 WaitForTask() {
 	if [ "$WAIT_CREATE" == "true" ];then
-		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1"
+		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
 		RESP="$ECSCREATEJOBSTATUSJSON"
-		echo "#$RESP"
+		echo "#$RESP" 1>&2
 		while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 		do
 			sleep $2
 			getECSJOBList $1
 			if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
 				RESP="$ECSCREATEJOBSTATUSJSON"
-				echo -e "\n#$RESP"
+				echo -e "\n#$RESP" 1>&2
 			else
-				echo -n "."
+				echo -n "." 1>&2
 			fi
 		done
 	else
@@ -1839,7 +1894,7 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" ]
 			-p|--public)   case "$2" in
 			                     true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
 			                     [0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
-			                     *)           echo "ERROR: unsupported value for public IPs"; exit 2;;
+			                     *)           echo "ERROR: unsupported value for public IPs" 1>&2; exit 2;;
 			                  esac
 			               shift;;     # past argument
 			--volumes)     DEV_VOL="$2"
@@ -1933,7 +1988,7 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" ]
 			;;
 			-*)
 			# unknown option
-			echo "ERROR: unknown option \"$1\""
+			echo "ERROR: unknown option \"$1\"" 1>&2
 			exit 1
 			;;
 			*)
@@ -2014,7 +2069,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
    export ECSACTIONSERVERID=$1
 
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "ERROR: Must be specify the Instance ID!"
+	echo "ERROR: Must be specify the Instance ID!" 1>&2
 	printHelp
 	exit 1
    fi
@@ -2025,7 +2080,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
    ECSACTION="os-start"
    ECSACTIONSERVERID=$1
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "ERROR:: Must be specify the Instance ID!"
+	echo "ERROR:: Must be specify the Instance ID!" 1>&2
 	printHelp
 	exit 1
    fi
@@ -2037,7 +2092,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
    ECSACTIONSERVERID=$1
 
    if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "ERROR: Must be specify the Instance ID!"
+	echo "ERROR: Must be specify the Instance ID!" 1>&2
 	printHelp
 	exit 1
    fi
@@ -2125,7 +2180,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
    SECUGROUP=$1
 
    if [ "$SECUGROUP" == "" ];then
-	echo "ERROR: Must be specify the Security Group ID!"
+	echo "ERROR: Must be specify the Security Group ID!" 1>&2
 	printHelp
 	exit 1
    fi
