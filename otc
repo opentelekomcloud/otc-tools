@@ -115,7 +115,7 @@ if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
 if test -n "$OS_AUTH_URL"; then
-	if test "$OS_AUTH_URL" = *"/v3"; then
+	if [[ "$OS_AUTH_URL" == *'/v3' ]]; then
 		export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
 	else
 		export IAM_AUTH_URL="$OS_AUTH_URL/tokens"
@@ -328,7 +328,7 @@ getIamToken() {
 	#if test -n "$DEBUG"; then
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 	#fi
-	if test "$IAM_AUTH_URL" = *"v3/auth"; then
+	if [[ "$IAM_AUTH_URL" == *'v3/auth/tokens' ]]; then
 		IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
 		TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 		#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
