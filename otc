@@ -635,10 +635,11 @@ printHelp() {
    echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
    echo
    echo "--- Cloud Container Engine (CCE) ---"
-   echo "otc container listcluster         # list container clusters"
-   echo "otc container showcluster <cid>   # show container cluster details"
-   echo "otc container listhost <cid>      # list container hosts"
-   echo "otc container showhost <cid> <hid># show host details"
+   echo "otc cluster list                  # list container clusters (short)"
+   echo "otc cluster list-detail           # list container clusters (detailed)"
+   echo "otc cluster show <cid>            # show container cluster details of cid"
+   echo "otc host list <cid>               # list container hosts of cluster cid"
+   echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
    echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
@@ -1770,6 +1771,10 @@ getUserDomainIdFromIamResponse() {
 	tail -n1 | jq -r .token.user.domain.id
 }
 
+shortlistClusters() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | {id: .metadata.uuid, name: .metadata.name} | .id +"  " +.name'
+}
+
 listClusters() {
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq '.'
 }
@@ -2404,13 +2409,15 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
    addRecord "$@"
 
-elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "listcluster" ]; then
-   listClusters "$@"
-elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "showcluster" ]; then
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list" ]; then
+   shortlistClusters
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ]; then
+   listClusters
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "show" ]; then
    showCluster "$@"
-elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "listhost" ]; then
+elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
    listClusterHosts "$@"
-elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "showhost" ]; then
+elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
    showClusterHost "$@"
 
 else
