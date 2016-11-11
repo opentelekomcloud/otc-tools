@@ -1403,10 +1403,6 @@ ECSCreate() {
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
-		echo "ERROR: AZ ($AZ) must match subnets AZ ($SUBNETAZ)" 1>&2
-		exit 2
-	fi
 
 	OPTIONAL=""
 	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
