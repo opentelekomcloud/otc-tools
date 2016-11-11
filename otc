@@ -634,6 +634,12 @@ printHelp() {
    echo "otc domain listrecords [zid]      # list records for zone <zid>"
    echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
    echo
+   echo "--- Cloud Container Engine (CCE) ---"
+   echo "otc container listcluster         # list container clusters"
+   echo "otc container showcluster <cid>   # show container cluster details"
+   echo "otc container listhost <cid>      # list container hosts"
+   echo "otc container showhost <cid> <hid># show host details"
+   echo
    echo "--- Access Control ---"
    echo "otc iam token           # generate a new iam token"
    echo "otc iam project         # output project_id/tenant_id"
@@ -641,8 +647,8 @@ printHelp() {
    echo "otc iam endpoints       # endpoints of the services"
    echo
    echo "--- Global flags ---"
-   echo "otc debug CMD1 CMD2 PARAMS      # for debugging REST calls ..."
-   echo "otc --insecure CMD1 CMD2 PARAMS # for ignoring SSL security ..."
+   echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
+   echo "otc --insecure CMD1 CMD2 PARAMS   # for ignoring SSL security ..."
 }
 
 
@@ -1764,6 +1770,23 @@ getUserDomainIdFromIamResponse() {
 	tail -n1 | jq -r .token.user.domain.id
 }
 
+listClusters() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq '.'
+}
+
+showCluster() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1" | jq '.'
+}
+
+listClusterHosts() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq '.'
+}
+
+showClusterHost() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts/$2" | jq '.'
+}
+
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -2381,6 +2404,14 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
    addRecord "$@"
 
+elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "listcluster" ]; then
+   listClusters "$@"
+elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "showcluster" ]; then
+   showCluster "$@"
+elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "listhost" ]; then
+   listClusterHosts "$@"
+elif [ "$MAINCOM" == "container" -a "$SUBCOM" == "showhost" ]; then
+   showClusterHost "$@"
 
 else
    printHelp
