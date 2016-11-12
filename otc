@@ -1404,8 +1404,7 @@ ECSCreate() {
 		fi
 	fi
 	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
-		echo "ERROR: AZ ($AZ) must match subnets AZ ($SUBNETAZ)" 1>&2
-		exit 2
+		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
 	OPTIONAL=""
