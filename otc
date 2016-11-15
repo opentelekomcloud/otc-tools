@@ -510,6 +510,12 @@ printHelp() {
    echo "--- Elastic Volumes ---"
    echo "otc evs list                    # list all volumes"
    echo "otc evs show <id>               # show details of volume <id>"
+   echo "otc evs create                  # create a volume"
+   echo "    --volume-name         <NAME>"
+   echo "    --disksize            <DISKGB>"
+   echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+   echo "    --az                  <AZ>"
+   echo "otc evs delete                  # delete volume"
    echo
    echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
    echo "otc evs attach --name ecsname  device:volume      # use names instead of ids"
@@ -1585,6 +1591,69 @@ ECSDelete() {
 	fi
 }
 
+EVSCreate() {
+	if test -n "$(echo "$VOLUME_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
+		echo "ERROR: VOLUME_NAME may only contain letters, digits, _ and -" 1>&2
+		exit 2
+	fi
+
+	if test -z "$AZ"; then
+		if test -n "$SUBNETAZ"; then
+			AZ="$SUBNETAZ"
+		else
+			echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
+			exit 2
+		fi
+	fi
+	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
+	fi
+
+	OPTIONAL=""
+	if test -n "$SHAREABLE"; then
+		OPTIONAL="$OPTIONAL
+			\"shareable\": \"$SHAREABLE\","
+	fi
+	if test -n "$IMAGEREFID"; then
+		OPTIONAL="$OPTIONAL
+			\"imageRef\": \"$IMAGEREFID\","
+	fi
+	if test -n "$BACKUPID"; then
+		OPTIONAL="$OPTIONAL
+			\"backup_id\": \"$BACKUPID\","
+	fi
+	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
+	if test -z "$VOLUME_DESC"; then VOLUME_DESC=$VOLUME_NAME; fi
+
+	REQ_CREATE_EVS='{
+		"volume": {
+			"count": '$NUMCOUNT',
+			"availability_zone": "'$AZ'",
+			"description": "'$VOLUME_DESC'",
+			"size": "'$ROOTDISKSIZE'",
+			"name": "'$VOLUME_NAME'",
+			'"$OPTIONAL"'
+			"volume_type": "'$VOLUMETYPE'"
+		}
+	}'
+
+	echo "$REQ_CREATE_EVS"
+
+	if [ "$ROOTDISKSIZE" == "" ]; then
+		echo "EVS volume size is not defined! Please define a size with --disk-size" 1>&2
+		exit 1
+	fi
+
+	EVSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_EVS" "$AUTH_URL_VOLUMES" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	# this lines for DEBUG
+	export EVSTASKID
+}
+
+EVSDelete() {
+	EVSTASKID=`curldeleteauth "$TOKEN" "$AUTH_URL_VOLUMES/$@" | jq '.[]' | tr -d '" '`
+	export EVSTASKID
+}
+
 VPCCreate() {
 	REQ_CREATE_VPC='{
 		"vpc": {
@@ -1845,6 +1914,14 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" ]
 			;;
 			-n|--instance-name)
 			INSTANCE_NAME="$2"
+			shift # past argument
+			;;
+			--volume-name)
+			VOLUME_NAME="$2"
+			shift # past argument
+			;;
+			--volume-description)
+			VOLUME_DESC="$2"
 			shift # past argument
 			;;
 			--file1)
@@ -2315,6 +2392,14 @@ elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
 	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
    getEVSDetail $1
 
+elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
+	EVSCreate
+   echo "Task ID: $EVSTASKID"
+   WaitForTask $EVSTASKID 5
+elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "delete" ];then
+   EVSDelete "$@"
+   echo "Task ID: $EVSTASKID"
+   WaitForTask $EVSTASKID 5
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
    if [ "$1" = -n ] || [ "$1" = --name ]
       then
