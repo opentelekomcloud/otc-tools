@@ -1327,7 +1327,7 @@ ECSAttachVolumeListName() {
             if [ $AZ == ${volume_az//\"/} ]; then
                   ECSAttachVolumeName "$ecs" $dev_vol
             else
-                  echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
+                  echo "WARN: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
             fi
       done
 }
