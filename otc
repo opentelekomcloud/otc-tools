@@ -592,8 +592,9 @@ printHelp() {
    echo "otc elb show <id>       # show elb details"
    echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
    echo "     --vpc-name <vpcname>"
-   echo "     --bandwidth <bandwidth>    # in Mbps"
-   echo "     --subnet-name/id <subnet>  # creates internal ELB listening on subnet"
+   echo "     --bandwidth <bandwidth>             # in Mbps"
+   echo "     --subnet-name/id <subnet>           # creates internal ELB listening on subnet"
+   echo "     --security-group-name/id <secgroup> # for internal ELBs"
    echo "otc elb delete <eid>            # Delete ELB with <eid>"
 
    echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
@@ -1188,26 +1189,38 @@ deleteKEYPAIR() {
 	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
 }
 
-
 createELB() {
-	if test -n "$3"; then BANDWIDTH=$3; fi
-	if test -n "$2"; then NAME="$2"; fi
-	if test -z "$NAME"; then
-		if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
-	fi
-	ELBTYPE='"type": "External"'
-	if test -n "$SUBNETID"; then
-		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'"'
-	elif test -n "$SUBNETNAME"; then
-		convertSUBNETNameToId
-		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'"'
-	fi
-	if test -n "$1"; then VPCID=$1; fi
-	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
-	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", \"bandwidth\": $BANDWIDTH, $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-	export ELBJOBID
-
+   if test -n "$3"; then BANDWIDTH=$3; fi
+   if test -n "$2"; then NAME="$2"; fi
+   if test -z "$NAME"; then
+      if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
+   fi
+   ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
+   if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
+      if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
+         convertSUBNETNameToId $SUBNETNAME
+      fi
+      if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
+         convertSECUGROUPNameToId "$SECUGROUPNAME"
+      fi
+      if test -z "$AZ"; then
+         if test -n "$SUBNETAZ"; then
+            AZ="$SUBNETAZ"
+         else
+            echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
+            exit 2
+         fi
+      fi
+      if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+         echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
+      fi
+      ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "availability_zone": "'$AZ'", "security_group": "'$SECUGROUP'"'
+   fi
+   if test -n "$1"; then VPCID=$1; fi
+   if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+   if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
+   ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+   export ELBJOBID
 }
 
 getELBList() {
