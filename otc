@@ -1126,6 +1126,7 @@ uploadIMAGEfile()
 downloadIMAGE()
 {
 	curlpostauth $TOKEN "{ \"bucket_url\": \"$2\" }" "$AUTH_URL_IMAGESV1/$1/file"
+	echo
 }
 
 updateIMAGE()
