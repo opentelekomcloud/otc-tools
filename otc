@@ -1379,8 +1379,12 @@ ECSAttachVolumeId() {
 ECSDetachVolumeListName() {
 	local dev_vol ecs="$1" DEV_VOL="$2"
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
-			ECSDetachVolumeName "$ecs" $dev_vol
-		done
+		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
+		if [ $AZ != ${volume_az//\"/} ]; then
+			echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING" 1>&2
+		fi
+		ECSAttachVolumeName "$ecs" $dev_vol
+	done
 }
 
 ECSDetachVolumeName() {
@@ -2188,9 +2192,9 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 		fi
    fi
 
-	WaitForTask $ECSTASKID 5
-	ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
-	echo "ECS ID: $ECSID"
+   WaitForTask $ECSTASKID 5
+   ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+   echo "ECS ID: $ECSID"
    echo "ECS Creation status: $ECSJOBSTATUS"
    [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
    if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
