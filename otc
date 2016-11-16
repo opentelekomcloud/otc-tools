@@ -1123,11 +1123,13 @@ uploadIMAGEfile()
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
 }
 
+IMGJOBID=""
 downloadIMAGE()
 {
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
-	curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"
-	echo
+	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
+   echo "$IMSANS"
+   IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 }
 
 updateIMAGE()
@@ -1726,6 +1728,8 @@ SECGROUPRULECreate() {
 }
 
 WaitForSubTask() {
+	SEC=$2
+	if test -z "$SEC"; then SEC=2; fi
 	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 	getECSJOBList $1
 	RESP="$ECSCREATEJOBSTATUSJSON"
@@ -1734,7 +1738,7 @@ WaitForSubTask() {
 	do
 		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
 		[ -n "$ECSSUBTASKID" ] && break
-		sleep $2
+		sleep $SEC
 		getECSJOBList $1
 		if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
 			RESP="$ECSCREATEJOBSTATUSJSON"
@@ -1746,6 +1750,8 @@ WaitForSubTask() {
 }
 
 WaitForTask() {
+	SEC=$2
+	if test -z "$SEC"; then SEC=2; fi
 	if [ "$WAIT_CREATE" == "true" ];then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
@@ -1753,7 +1759,7 @@ WaitForTask() {
 		echo "#$RESP" 1>&2
 		while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
 		do
-			sleep $2
+			sleep $SEC
 			getECSJOBList $1
 			if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
 				RESP="$ECSCREATEJOBSTATUSJSON"
@@ -2267,6 +2273,7 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 	updateIMAGE "$1"
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
+   WaitForTask $IMGJOBID 5
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
