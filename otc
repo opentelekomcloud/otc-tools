@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.33
+VERSION=0.6.34
 
 # Get Config ####################################################################
 warn_too_open()
@@ -567,8 +567,9 @@ printHelp() {
    echo "--- Image Service ---"
    echo "otc images list         # list all images"
    echo "otc images show <id>    # show image details"
-   echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
    echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
+   echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
+   echo "otc images download <id> bucket:objname   # export priv image into s3 object"
    echo "otc images create NAME          # create (private) image with name"
    echo "   --disk-format  <disk-format>"
    echo "   --min-disk     <GB>"
@@ -1120,6 +1121,11 @@ uploadIMAGEfile()
 	sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
+}
+
+downloadIMAGE()
+{
+	curlpostauth $TOKEN "{ \"bucket_url\": \"$2\" }" "$AUTH_URL_IMAGESV1/$1/file"
 }
 
 updateIMAGE()
@@ -2257,6 +2263,8 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
 	for img in "$@"; do deleteIMAGE $img; done
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 	updateIMAGE "$1"
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
+	downloadIMAGE "$@"
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
    getFLAVORList
