@@ -701,6 +701,7 @@ convertVPCNameToId() {
 }
 
 convertSECUGROUPNameToId() {
+	unset IFS
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$1"`
 	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
@@ -1282,11 +1283,11 @@ getECSJOBList() {
 	fi
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
 
-	ECSCREATEJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
-	#echo $ECSCREATEJOBSTATUSJSON
-	ECSCREATEJOBSTATUS=`echo $ECSCREATEJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
+	ECSJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
+	#echo $ECSJOBSTATUSJSON
+	ECSJOBSTATUS=`echo $ECSJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
 
-	export ECSCREATEJOBSTATUS
+	export ECSJOBSTATUS
 }
 
 getFileContentJSON() {
@@ -1732,16 +1733,16 @@ WaitForSubTask() {
 	if test -z "$SEC"; then SEC=2; fi
 	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 	getECSJOBList $1
-	RESP="$ECSCREATEJOBSTATUSJSON"
+	RESP="$ECSJOBSTATUSJSON"
 	echo "#$RESP" 1>&2
-	while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
+	while [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]
 	do
-		ECSSUBTASKID=$(echo $ECSCREATEJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
+		ECSSUBTASKID=$(echo $ECSJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
 		[ -n "$ECSSUBTASKID" ] && break
 		sleep $SEC
 		getECSJOBList $1
-		if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
-			RESP="$ECSCREATEJOBSTATUSJSON"
+		if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
+			RESP="$ECSJOBSTATUSJSON"
 			echo -e "\n#$RESP" 1>&2
 		else
 			echo -n "." 1>&2
@@ -1752,17 +1753,17 @@ WaitForSubTask() {
 WaitForTask() {
 	SEC=$2
 	if test -z "$SEC"; then SEC=2; fi
-	if [ "$WAIT_CREATE" == "true" ];then
+	if [ "$WAIT_FOR_JOB" == "true" ];then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
-		RESP="$ECSCREATEJOBSTATUSJSON"
+		RESP="$ECSJOBSTATUSJSON"
 		echo "#$RESP" 1>&2
-		while [ "$ECSCREATEJOBSTATUS" == "RUNNING" ] || [ "$ECSCREATEJOBSTATUS" == "INIT" ]
+		while [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]
 		do
 			sleep $SEC
 			getECSJOBList $1
-			if [ "$RESP" != "$ECSCREATEJOBSTATUSJSON" ]; then
-				RESP="$ECSCREATEJOBSTATUSJSON"
+			if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
+				RESP="$ECSJOBSTATUSJSON"
 				echo -e "\n#$RESP" 1>&2
 			else
 				echo -n "." 1>&2
@@ -1770,7 +1771,7 @@ WaitForTask() {
 		done
 	else
 		getECSJOBList $1
-		echo "#$ECSCREATEJOBSTATUSJSON"
+		echo "#$ECSJOBSTATUSJSON"
 		echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
 	fi
 }
@@ -1990,10 +1991,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			shift # past argument
 			;;
 			--wait)
-			WAIT_CREATE="true"
+			WAIT_FOR_JOB="true"
 			;;
 			--nowait)
-			WAIT_CREATE="false"
+			WAIT_FOR_JOB="false"
 			;;
 			--hard)
 			ECSACTIONTYPE="HARD"
@@ -2099,18 +2100,18 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
          while [ null = "$ECSID" ]; do
 				sleep 5
 				getECSJOBList $ECSSUBTASKID
-				ECSID=$(echo "$ECSCREATEJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
+				ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
 			done
 			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
 		fi
    fi
 
 	WaitForTask $ECSTASKID 5
-	ECSID=$(echo "$ECSCREATEJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
 	echo "ECS ID: $ECSID"
-   echo "ECS Creation status: $ECSCREATEJOBSTATUS"
+   echo "ECS Creation status: $ECSJOBSTATUS"
    [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
-   if [ "$ECSCREATEJOBSTATUS" != "SUCCESS" ];then
+   if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
 	exit 1
    fi
 
@@ -2154,13 +2155,14 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
    #ECSTASKID=$1
    #echo $AUTH_URL_ECS_JOB/$1
    getECSJOBList $1
-	echo "$ECSCREATEJOBSTATUSJSON"
+	echo "$ECSJOBSTATUSJSON"
 
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
    DeleteTask $1
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
    ECSDelete $@
+	WaitForTask $ECSTASKID 5
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
    ECSUpdate $1
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ]; then
