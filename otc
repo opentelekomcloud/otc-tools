@@ -1125,7 +1125,8 @@ uploadIMAGEfile()
 
 downloadIMAGE()
 {
-	curlpostauth $TOKEN "{ \"bucket_url\": \"$2\" }" "$AUTH_URL_IMAGESV1/$1/file"
+	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
+	curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"
 	echo
 }
 
@@ -1840,7 +1841,7 @@ MAINCOM=$1; shift
 SUBCOM=$1; shift
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
-if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" ]; then
+if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ]; then
 	while [[ $# > 0 ]]
 	do
 		key="$1"
