@@ -975,7 +975,7 @@ listDomains() {
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
 createDomain() {
 	if test "${1: -1:1}" != "."; then
-		echo "WARN: Name shoud end in '.'" 1>&2
+		echo "WARN: Name should end in '.'" 1>&2
 	fi
    REQ="{ \"name\": \"$1\""
 	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
@@ -1008,7 +1008,7 @@ addRecord() {
 			;;
 	esac
 	if test "${2: -1:1}" != "."; then
-		echo "WARN: Name shoud end in '.'" 1>&2
+		echo "WARN: Name should end in '.'" 1>&2
 	fi
 	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
 	if test -n "$6"; then REQ="$REQ, \"description\": \"$6\""; fi
