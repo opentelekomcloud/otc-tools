@@ -1215,7 +1215,13 @@ createELB() {
       if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
          echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
       fi
-      ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "availability_zone": "'$AZ'", "security_group": "'$SECUGROUP'"'
+		# FIXME: need to get these IDs through the API
+		if [[ $AZ == 'eu-de-01' ]];then
+			AZ='bf84aba586ce4e948da0b97d9a7d62fb'
+		elif [[ $AZ == 'eu-de-02' ]];then
+			AZ='bf84aba586ce4e948da0b97d9a7d62fc'
+		fi
+      ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZ'", "security_group_id": "'$SECUGROUP'"'
    fi
    if test -n "$1"; then VPCID=$1; fi
    if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
