@@ -577,12 +577,10 @@ printHelp() {
    echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
    echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
    echo "otc images download <id> bucket:objname   # export priv image into s3 object"
-   echo "otc images create NAME          # create (private) image with name"
-   echo "   --disk-format  <disk-format>"
-   echo "   --min-disk     <GB>"
-   echo "   --min-ram      <MB>          # optional (default 1024)"
-   echo "   --os-version   <os_version>  # optional (default Other)"
-   echo "   --property     <key=val>     # optional properties (multiple times possible)"
+   echo "otc images create                         # create image from instance"
+   echo "   --image-name   <image name>"
+   echo "   --instance-id  <instance id>"
+   echo "   --description  <description>           # optional"
    echo "otc images register NAME FILE   # create (private) image with name and s3 file"
    echo "   --property, --min-disk, --os-version and --wait supported"
    echo "otc images update <id>          # change properties, --image-name, min-*"
@@ -1079,10 +1077,8 @@ registerIMAGE() {
 }
 
 createIMAGE() {
-	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
-	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk" 1>&2; exit 2; fi
-	if test -z "$MINRAM"; then MINRAM=1024; fi
-	if test -z "$1"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
+	if test -z "$IMAGENAME"; then echo "ERROR: Need to specify --image_name" 1>&2; exit 2; fi
+	if test -z "$INSTANCEID"; then echo "ERROR: Need to specify --instance_id" 1>&2; exit 2; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
@@ -1099,11 +1095,13 @@ createIMAGE() {
 		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
-	REQ="{ $OSVJSON  \"container_format\": \"bare\",
-		\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
-		\"min_ram\": $MINRAM, \"name\": \"$1\",
-		\"visibility\": \"private\", \"protected\": false }"
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
+	REQ="{ 
+        \"name\": \"$IMAGENAME\",
+        \"description\": \"$IMAGEDESCR\",
+        \"instance_id\": \"$INSTANCEID\"
+       }"
+   echo $REQ
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.' #'.[]'
 }
 
 deleteIMAGE() {
@@ -1561,6 +1559,12 @@ ECSAction() {
 	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
 }
 
+ECSStop() {
+   REQ="{\"os-stop\":{}}"
+   ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
+   echo $ECS_ACTION_STOP
+	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
+}
 
 appparm()
 {
@@ -1988,8 +1992,16 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			INSTANCE_TYPE="$2"
 			shift # past argument
 			;;
+			-t|--instance-id)
+			INSTANCEID="$2"
+			shift # past argument
+			;;
 			-i|--image-name)
 			IMAGENAME="$2"
+			shift # past argument
+			;;
+			-i|--image-description)
+			IMAGEDESCR="$2"
 			shift # past argument
 			;;
 			--image-id)
@@ -2250,7 +2262,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
 	exit 1
    fi
 
-   ECSAction
+   ECSStop
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
      [ "$MAINCOM" == "task" -a "$SUBCOM" == "show" ]; then
