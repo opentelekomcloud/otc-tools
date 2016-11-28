@@ -572,7 +572,7 @@ printHelp() {
    echo "    --portmax             <port range upper end>"
    echo
    echo "--- Image Service ---"
-   echo "otc images list         # list all images"
+   echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
    echo "otc images show <id>    # show image details"
    echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
    echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
@@ -1037,9 +1037,21 @@ deleteRecord() {
 	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
 }
 
+# concatenate array using $1 as concatenation token
+concatarr() {
+   ans=""
+   delim="$1"
+   shift
+   for str in "$@"; do
+		ans="$ans$delim$str"
+   done
+   echo "$ans"
+}
+
 getIMAGEList() {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
-#| python -m json.tool
+   IMAGE_FILTER=$(concatarr "&" "$@")
+   IMAGE_FILTER="${IMAGE_FILTER// /%20}"
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 }
 
 getIMAGEDetail() {
@@ -2361,7 +2373,7 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
    SECGROUPRULECreate
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
-   getIMAGEList
+   getIMAGEList "$@"
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
    getIMAGEDetail $1
