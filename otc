@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.34
+VERSION=0.6.35
 
 # Get Config ####################################################################
 warn_too_open()
@@ -506,7 +506,6 @@ printHelp() {
    echo "otc keypair show <KPNAME>       # show ssh key pair"
    echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
    echo "otc keypair delete <KPNAME>     # delete ssh key pair"
-   #TODO keypair creation, deletion, ...
    echo
    echo "--- Elastic Volumes ---"
    echo "otc evs list                    # list all volumes"
@@ -523,7 +522,7 @@ printHelp() {
    echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
    echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
    echo
-   #TODO volume create, change, delete ...
+   #TODO volume change ...
    echo
    echo "--- Virtual Private Network ---"
    echo "otc vpc list                    # list all vpc"
@@ -1227,7 +1226,7 @@ createELB() {
       if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
          echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
       fi
-		# FIXME: need to get these IDs through the API
+		# TODO: FIXME: need to get these IDs through the API
 		if [[ $AZ == 'eu-de-01' ]];then
 			AZ='bf84aba586ce4e948da0b97d9a7d62fb'
 		elif [[ $AZ == 'eu-de-02' ]];then
