@@ -4,7 +4,7 @@ This is the otc tool for using the Open Telekom Cloud APIs.  It is a simple
 demonstrator using shell/curl/jq to use the OpenTelekomCloud's OpenStack and
 OTC specific REST interfaces.  It is used for testing by the OTC engineering
 team and can be used as a blueprint for own tooling. Unlike the more
-extensive tool, this one does not pull in a load of dependencies.
+extensive tools, this one does not pull in a load of dependencies.
 
 For production use, we recommend using the native OpenStack python client tools
 (python-novaclient etc or the newer python-openstackclient), complemented by
