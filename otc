@@ -876,8 +876,21 @@ createBackup() {
    if test -z "$NAME"; then NAME="Backup-$1"; fi
    REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
    if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
-   curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS" | jq '.'
-   #echo
+   BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
+   TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
+   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi 
+   echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
+   declare -i wt=0
+   while test $wt -le 20; do
+		sleep 2;
+      BACKUPID=$(curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$TASKID" | jq '.entities.backup_id' | cut -d':' -f 2 | tr -d '" ')
+      if test -n "$BACKUPID" -a "$BACKUPID" != "null"; then
+			echo "$BACKUPID"
+			break
+		fi
+		let wt+=1
+	done
+   # TODO: Implement --wait (to wait for backup to be completed)
 }
 
 restoreBackup() {
