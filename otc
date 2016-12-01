@@ -789,6 +789,10 @@ getAZList() {
 	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone" | jq  '.availabilityZoneInfo[] | {znm: .zoneName, avl: .zoneState.available} | .znm' | tr -d '"'
 }
 
+getAZDetail() {
+	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone/$1" | jq  '.'
+}
+
 
 getVPCList() {
 	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
@@ -1566,6 +1570,7 @@ ECSCreate() {
 }
 
 ECSAction() {
+   if test -z "$ECSACTIONTYPE"; then ECSACTIONTYPE="SOFT"; fi
 	REQ_ECS_ACTION_VM='
 	{
 		"'"$ECSACTION"'": {
@@ -1578,6 +1583,13 @@ ECSAction() {
 	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
 }
 
+# OpenStack API (unused)
+ECSStop() {
+   REQ="{\"os-stop\":{}}"
+   ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
+   echo $ECS_ACTION_STOP
+	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
+}
 
 appparm()
 {
@@ -1959,7 +1971,7 @@ MAINCOM=$1; shift
 SUBCOM=$1; shift
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
-if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ]; then
+if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "snapshot" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]
 	do
 		key="$1"
@@ -2286,6 +2298,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
    ECSUpdate $1
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ]; then
    getAZList
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ]; then
+   getAZDetail "$1"
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
    getVPCList
