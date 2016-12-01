@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.35
+VERSION=0.6.36
 
 # Get Config ####################################################################
 warn_too_open()
@@ -425,9 +425,11 @@ getIamToken() {
 	AUTH_URL_IMAGESV1="$GLANCE_URL/v1/cloudimages"
 	AUTH_URL_IMAGESV2="$GLANCE_URL/v2/cloudimages"
 
-	AUTH_URL_VOLUMES="$CINDER_URL/cloudvolumes"
-	AUTH_URL_VOLUMES_DETAILS="$CINDER_URL/cloudvolumes/detail"
+	AUTH_URL_CVOLUMES="$CINDER_URL/cloudvolumes"
+	AUTH_URL_CVOLUMES_DETAILS="$CINDER_URL/cloudvolumes/detail"
 	AUTH_URL_VOLS="$CINDER_URL/volumes"
+	AUTH_URL_CBACKUPS="$CINDER_URL/cloudbackups"
+	AUTH_URL_BACKS="$CINDER_URL/backups"
 
 	AUTH_URL_ELB="${NEUTRON_URL/vpc/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
@@ -522,6 +524,12 @@ printHelp() {
    echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
    echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
    #TODO volume change ...
+	echo "--- Elastic Volume Backups ---"
+   echo "otc backup list"
+   echo "otc backup show backupid"
+   echo "otc backup create --name NAME volumeid # Create backup from volume"
+   echo "otc backup restore backupid volumeid   # restore backup to volume"
+   echo "otc backup delete backupid"
    echo
    echo "--- Virtual Private Network ---"
    echo "otc vpc list                    # list all vpc"
@@ -837,7 +845,7 @@ getSECGROUPRULESList() {
 }
 
 getEVSListOTC() {
-	curlgetauth $TOKEN "$AUTH_URL_VOLUMES?limit=1000" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1000" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getEVSList() {
@@ -846,8 +854,37 @@ getEVSList() {
 
 getEVSDetail() {
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
-	#curlgetauth $TOKEN "$AUTH_URL_VOLUMES_DETAILS?limit=1000" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1000" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
+}
+
+getBackupList() {
+   curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1000" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+}
+
+getBackupDetail() {
+   curlgetauth $TOKEN "$AUTH_URL_BACKS/$1?limit=1000" | jq '.backup'
+}
+
+deleteBackup() {
+   curldeleteauth $TOKEN "$AUTH_URL_BACKS/$1" | jq '.'
+}
+
+createBackup() {
+   if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
+   if test -z "$1"; then echo "ERROR: Need to specify volumedi to be backed up" 1>&2; exit 2; fi
+   if test -z "$NAME"; then NAME="Backup-$1"; fi
+   REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
+   if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
+   curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS" | jq '.'
+   #echo
+}
+
+restoreBackup() {
+	if test -z "$2"; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
+	REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
+   curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
+   #echo
 }
 
 getSUBNETList() {
@@ -1719,13 +1756,13 @@ EVSCreate() {
 		exit 1
 	fi
 
-	EVSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_EVS" "$AUTH_URL_VOLUMES" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	EVSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_EVS" "$AUTH_URL_CVOLUMES" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	# this lines for DEBUG
 	export EVSTASKID
 }
 
 EVSDelete() {
-	EVSTASKID=`curldeleteauth "$TOKEN" "$AUTH_URL_VOLUMES/$@" | jq '.[]' | tr -d '" '`
+	EVSTASKID=`curldeleteauth "$TOKEN" "$AUTH_URL_CVOLUMES/$@" | jq '.[]' | tr -d '" '`
 	export EVSTASKID
 }
 
@@ -2186,6 +2223,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			DESCRIPTION="$2"
 			shift
 			;;
+			--name)
+			NAME="$2"
+			shift
+			;;
 			-*)
 			# unknown option
 			echo "ERROR: unknown option \"$1\"" 1>&2
@@ -2509,17 +2550,26 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
          ECSDetachVolumeId   "$1" "$2"
       fi
 
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
+	getBackupList
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
+	getBackupDetail "$1"
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete" ]; then
+	deleteBackup "$1"
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "create" ] ||
+	  [ "$MAINCOM" == "backup" -a "$SUBCOM" == "backup" ] ; then
+	createBackup "$@"
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "restore" ]; then
+	restoreBackup "$@"
+
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
    getELBList
-
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "show" ]; then
    getELBDetail $1
-
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delete" ]; then
    deleteELB $1
    echo "$ELBJOBID"
    WaitForTask $ELBJOBID 2
-
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
    createELB "$@"
    echo "$ELBJOBID"
