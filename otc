@@ -1077,31 +1077,74 @@ registerIMAGE() {
 }
 
 createIMAGE() {
-	if test -z "$IMAGENAME"; then echo "ERROR: Need to specify --image_name" 1>&2; exit 2; fi
-	if test -z "$INSTANCEID"; then echo "ERROR: Need to specify --instance_id" 1>&2; exit 2; fi
-	unset OSVJSON
-	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
-	OLDIFS="$IFS"; IFS=","
-	for prop in $PROPS; do
-		val="${prop##*=}"
-		case $val in
-			[0-9]*|false|False|true|True)
-				pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
-				;;
-			*)
-				pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": "\2"/'`
-				;;
-		esac
-		OSVJSON="$OSVJSON $pstr,"
-	done < <( echo "$PROPS")
-	IFS="$OLDIFS"
-	REQ="{ 
-        \"name\": \"$IMAGENAME\",
-        \"description\": \"$IMAGEDESCR\",
-        \"instance_id\": \"$INSTANCEID\"
-       }"
-   echo $REQ
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.' #'.[]'
+   if [ "$SOURCE" != "ecs" ] && [ "$SOURCE" != "imagefile" ]; then
+      echo "ERROR: Need to specify --source. Allowed values: ecs, imagefile." 1>&2; exit 2;
+   fi
+
+   case $SOURCE in
+   "imagefile")
+      if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
+      if test -z "$MINDISK" -a -z "$INSTANCE_ID"; then echo "ERROR: Need to specify --min-disk OR --instance-id" 1>&2; exit 2; fi
+      if test -z "$MINRAM"; then MINRAM=1024; fi
+      if test -n "$1"; then IMAGENAME="$1"; fi
+      if test -z "$IMAGENAME"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
+      unset OSVJSON
+      if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
+      OLDIFS="$IFS"; IFS=","
+      for prop in $PROPS; do
+         val="${prop##*=}"
+         case $val in
+            [0-9]*|false|False|true|True)
+               pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
+               ;;
+            *)
+               pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": "\2"/'`
+               ;;
+         esac
+         OSVJSON="$OSVJSON $pstr,"
+      done < <( echo "$PROPS")
+      IFS="$OLDIFS"
+      if test -z "$INSTANCE_ID"; then
+         # Create fresh image
+         REQ="{ $OSVJSON  \"container_format\": \"bare\",
+            \"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
+            \"min_ram\": $MINRAM, \"name\": \"$IMAGENAME\",
+            \"visibility\": \"private\", \"protected\": false }"
+      else
+         # Create VM snapshot image
+         REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
+      fi
+      if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+      curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
+   ;;
+   "ecs")
+      if test -z "$IMAGENAME"; then echo "ERROR: Need to specify --image_name" 1>&2; exit 2; fi
+      if test -z "$INSTANCEID"; then echo "ERROR: Need to specify --instance_id" 1>&2; exit 2; fi
+      unset OSVJSON
+      if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
+      OLDIFS="$IFS"; IFS=","
+      for prop in $PROPS; do
+         val="${prop##*=}"
+         case $val in
+            [0-9]*|false|False|true|True)
+            pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
+         ;;
+         *)
+            pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": "\2"/'`
+         ;;
+         esac
+         OSVJSON="$OSVJSON $pstr,"
+      done < <( echo "$PROPS")
+      IFS="$OLDIFS"
+      REQ="{ 
+         \"name\": \"$IMAGENAME\",
+         \"description\": \"$IMAGEDESCR\",
+         \"instance_id\": \"$INSTANCEID\"
+      }"
+      #echo $REQ
+   ;;
+   esac
+   curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.' #'.[]'
 }
 
 deleteIMAGE() {
@@ -1562,7 +1605,7 @@ ECSAction() {
 ECSStop() {
    REQ="{\"os-stop\":{}}"
    ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
-   echo $ECS_ACTION_STOP
+   #echo $ECS_ACTION_STOP
 	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
 }
 
@@ -1986,6 +2029,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			;;
 			--file5)
 			FILE5="$2"
+			shift # past argument
+			;;
+         --source)
+         SOURCE="$2"
 			shift # past argument
 			;;
 			-t|--instance-type)
