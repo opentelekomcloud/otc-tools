@@ -1150,7 +1150,7 @@ createIMAGE() {
 	if test -z "$MINDISK" -a -z "$INSTANCE_ID"; then echo "ERROR: Need to specify --min-disk OR --instance-id" 1>&2; exit 2; fi
 	if test -z "$MINRAM"; then MINRAM=1024; fi
 	if test -n "$1"; then IMAGENAME="$1"; fi
-	if test -z "IMAGENAME"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
+	if test -z "$IMAGENAME"; then echo "ERROR: Need to specify NAME with --image-name" 1>&2; exit 2; fi
 	unset OSVJSON
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
@@ -1178,6 +1178,8 @@ createIMAGE() {
 		REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
 	fi
    if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+   echo $IMAGENAME
+   exit
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 }
 
