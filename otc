@@ -434,6 +434,7 @@ getIamToken() {
 	AUTH_URL_ELB="${NEUTRON_URL/vpc/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 
+	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds};fi
 	AUTH_URL_RDS="$TROVE_URL/rds"
 	#AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
@@ -627,10 +628,10 @@ printHelp() {
    echo "otc rds apis"
    echo "otc rds listapis                  # list API ids"
    echo "otc rds showapi <id> ...          # show API detail information"
-   echo "otc rds showdatastore <name> ..."
+   echo "otc rds showdatastore <name> ...  # Example: MySQL as <name>"
    echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
-   echo "otc rds listflavors"
-   echo "otc rds flavors                   # list RDS flavors"
+   echo "otc rds listflavors <datastore_id>"
+   echo "otc rds flavors <datastore_id>    # list RDS flavors, use 'otc rds datastore <name>' to get datastore_id"
    echo "otc rds showflavor <id> ...       # RDS flavor details"
    echo "otc rds create [<configfile>]     # create RDS instance, read from"
    echo "                                  # stdin when no config file is given"
@@ -965,7 +966,7 @@ getRDSFlavorList() {
 	local dbid=$1;   shift
 	local region=$1; shift
 	[ -z "$region" ] && region=$OS_PROJECT_NAME # default to env
-	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbid=${dbid}&region=${region}"
+	local URI="${AUTH_URL_RDS_DOMAIN}/flavors?dbId=${dbid}&region=${region}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
