@@ -695,7 +695,7 @@ find_id()
 convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"`
+	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=500"`
 	SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$1" name availability_zone`
 	if test -z "$SUBNETID"; then
@@ -708,7 +708,7 @@ convertSUBNETNameToId() {
 convertVPCNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
 	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | find_id vpcs "$1"`
+	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | find_id vpcs "$1"`
 	if test -z "$VPCID"; then
 		echo "ERROR: No VPC found by name $1" 1>&2
 		exit 3
@@ -721,9 +721,9 @@ convertSECUGROUPNameToId() {
 	unset IFS
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$1"`
-	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
+	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
-		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	fi
 	if test -z "$SECUGROUP"; then
 		echo "ERROR: No security-group found by name $1" 1>&2
@@ -738,7 +738,7 @@ convertSECUGROUPNameToId() {
 
 convertIMAGENameToId() {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=160" | find_id images "$1"`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=500" | find_id images "$1"`
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
@@ -805,7 +805,7 @@ getAZDetail() {
 
 
 getVPCList() {
-	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
+	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
 #| python -m json.tool
 }
 
@@ -820,7 +820,7 @@ VPCDelete() {
 }
 
 getPUBLICIPSList() {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=42" | jq '.publicips[]  | {id: .id, pubip: .public_ip_address, privip: .private_ip_address, status: .status, bid: .bandwidth_id, bandwidth: .bandwidth_size|tostring , bandwidth_share_type: .bandwidth_share_type} | .id +"   " +.pubip +"   " +.privip +"   " +.status +"   " +.bid +"   " +.bandwidth +"   " +.bandwidth_share_type ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.publicips[]  | {id: .id, pubip: .public_ip_address, privip: .private_ip_address, status: .status, bid: .bandwidth_id, bandwidth: .bandwidth_size|tostring , bandwidth_share_type: .bandwidth_share_type} | .id +"   " +.pubip +"   " +.privip +"   " +.status +"   " +.bid +"   " +.bandwidth +"   " +.bandwidth_share_type ' | tr -d '"'
 }
 
 getSECGROUPListDetail() {
@@ -829,7 +829,7 @@ getSECGROUPListDetail() {
 }
 
 getSECGROUPList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=160" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -901,7 +901,7 @@ restoreBackup() {
 }
 
 getSUBNETList() {
-	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=250" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=500" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -1106,7 +1106,7 @@ concatarr() {
 getIMAGEList() {
    IMAGE_FILTER=$(concatarr "&" "$@")
    IMAGE_FILTER="${IMAGE_FILTER// /%20}"
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=500$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 }
 
 getIMAGEDetail() {
@@ -1237,17 +1237,17 @@ updateIMAGE()
 }
 
 getFLAVORListOld() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500"| jq '.[]'
 #| python -m json.tool
 }
 
 getFLAVORList() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=80"| jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500"| jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
 #| python -m json.tool
 }
 
 getKEYPAIRList() {
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=160" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=500" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -1306,7 +1306,7 @@ createELB() {
 }
 
 getELBList() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=100" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.[]'
 }
 
 getELBDetail() {
