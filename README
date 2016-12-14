@@ -21,10 +21,27 @@ Optionally, you can also set some additional defaults on otc_env.sh by editing
 it and copying it into your home as ~/.otc_env.sh.
 
 When managing multipe OTC domains, you may create ~/.ostackrc.SUFFIX and
-~/.s3rc.SUFFIX and set OTC_DOMAIN=SUFFIX to make otc use these files.
+~/.s3rc.SUFFIX and set OTC_DOMAIN=SUFFIX to make otc read these files.
 
 Please have a look the otc_env.sh file and look at the output from otc help --
 this provides sufficient information to get doing.
+
+Limitations
+-----------
+This tool does not try to cover all functionality of ITC. Rather it tries to 
+be a demo and test tool for many functions; it however does fill in some gaps
+where the OTC API is extended or different from the standard OpenStack API,
+so feel free to use it here and contribute to fill gaps you care about. There
+is a small, but active community on github.com/OpenTelekomCloud/.
+
+The OpenStack REST API has a paginated interfaces to allow the consumer to
+control how large a response may get. otc-tools currently just always tries
+to get everything in one go; it increases the default limits to at least
+500 (higher, up to 1200 in some categories). These limits should be more than
+large enough to avoid you running into them if you move within the default
+quotas. However, if you have very large environments, keep in mind that
+otc-tools might not show you the whole truth any more. Please talk to us
+or submit a PR if you need further increases in the limits.
 
 Packages
 --------
@@ -34,3 +51,6 @@ https://build.opensuse.org/package/show/home:garloff:OTC/otc-tools
 A docker container image 
 [tsiotc/otc-client](https://hub.docker.com/r/tsiotc/otc-client)
 is available on dockerhub.
+
+You can of course also just grab this script from github; please install
+curl and jq to make it work; optionally also s3 (libs3/libs3-2).

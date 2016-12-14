@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.36
+VERSION=0.6.37
 
 # Get Config ####################################################################
 warn_too_open()
@@ -696,9 +696,9 @@ find_id()
 
 # convert functions
 convertSUBNETNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=160"
+	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=500"`
+	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"`
 	SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$1" name availability_zone`
 	if test -z "$SUBNETID"; then
@@ -709,8 +709,8 @@ convertSUBNETNameToId() {
 }
 
 convertVPCNameToId() {
-	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42"
-	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=42" | jq '.vpcs[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500"
+	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | jq '.vpcs[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | find_id vpcs "$1"`
 	if test -z "$VPCID"; then
 		echo "ERROR: No VPC found by name $1" 1>&2
@@ -741,7 +741,7 @@ convertSECUGROUPNameToId() {
 
 convertIMAGENameToId() {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=500" | find_id images "$1"`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800" | find_id images "$1"`
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
@@ -754,7 +754,7 @@ convertIMAGENameToId() {
 }
 
 convertECSNameToId() {
-	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1000" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
 		exit 3
@@ -767,7 +767,7 @@ convertECSNameToId() {
 }
 
 convertEVSNameToId() {
-	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1000" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1200" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
 		exit 3
@@ -786,7 +786,7 @@ getECSVM() {
 }
 
 getECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=500" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
+	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
 }
 
 getECSDetail() {
@@ -843,30 +843,30 @@ getSECGROUPRULESListOld() {
 
 getSECGROUPRULESList() {
 	if ! is_uuid "$1"; then convertSECUGROUPNameToId "$1"; else SECUGROUP="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=800" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
 #| python -m json.tool
 }
 
 getEVSListOTC() {
-	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1000" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getEVSList() {
-	curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1000" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getEVSDetail() {
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
-	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1000" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1200" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
 }
 
 getBackupList() {
-   curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1000" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+   curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getBackupDetail() {
-   curlgetauth $TOKEN "$AUTH_URL_BACKS/$1?limit=1000" | jq '.backup'
+   curlgetauth $TOKEN "$AUTH_URL_BACKS/$1?limit=1200" | jq '.backup'
 }
 
 deleteBackup() {
@@ -904,7 +904,7 @@ restoreBackup() {
 }
 
 getSUBNETList() {
-	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=500" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800" | jq '.[]'
 #| python -m json.tool
 }
 
@@ -1109,12 +1109,12 @@ concatarr() {
 getIMAGEList() {
    IMAGE_FILTER=$(concatarr "&" "$@")
    IMAGE_FILTER="${IMAGE_FILTER// /%20}"
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=500$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 }
 
 getIMAGEDetail() {
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
-	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=250"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
+	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"| jq '.'
 }
 
@@ -1240,17 +1240,17 @@ updateIMAGE()
 }
 
 getFLAVORListOld() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500"| jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.[]'
 #| python -m json.tool
 }
 
 getFLAVORList() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500"| jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
 #| python -m json.tool
 }
 
 getKEYPAIRList() {
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=500" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.[]'
 #| python -m json.tool
 }
 
