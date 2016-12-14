@@ -260,6 +260,7 @@ getv2endpoint() {
 # Get a token (and the project ID)
 # TODO: Token caching ...
 
+TROVE_OVERRIDE=0
 IS_OTC=1
 getIamToken() {
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
@@ -434,7 +435,7 @@ getIamToken() {
 	AUTH_URL_ELB="${NEUTRON_URL/vpc/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 
-	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds};fi
+	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds}; TROVE_OVERRIDE=1; fi
 	AUTH_URL_RDS="$TROVE_URL/rds"
 	#AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
@@ -2269,6 +2270,10 @@ fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" ]; then
     getIamToken
+fi
+
+if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
+	echo "WARN: Using anually set database endpoint, not adv in svc catalog" 1>&2
 fi
 
 if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
