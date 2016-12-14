@@ -6,6 +6,8 @@ OTC specific REST interfaces.  It is used for testing by the OTC engineering
 team and can be used as a blueprint for own tooling. Unlike the more
 extensive tools, this one does not pull in a load of dependencies.
 
+Prefix any command by debug to observe the REST calls being made.
+
 For production use, we recommend using the native OpenStack python client tools
 (python-novaclient etc or the newer python-openstackclient), complemented by
 the python-otcctools for specific OTC functions.  Or of course higher level

@@ -499,12 +499,15 @@ printHelp() {
    echo "    --delVolume                 # default: delete only system volume, not any volume attached"
    echo "    <ecs> <ecs> ...             # you could give IDs or names"
    echo "otc ecs job <id>                # show status of job <id>"
-   #echo "otc task show <id>              # show status of job <id>"
-   #echo "otc task delete <id>            # cancel job <id>"
    echo "otc ecs limits                  # display project quotas"
    echo "otc ecs update <id>             # change VM data (same parms as create)"
    echo "otc ecs az-list                 # list availability zones"
    echo
+   echo "--- Task/Job management ---"
+	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
+	echo "otc task delete <id>            # cancel job <id> (not yet supported)"
+	echo "otc task wait <id> [sec]        # wait for job <id>, poll every sec sec (def: 2)"
+	echo
    echo "--- SSH Keys ---"
    echo "otc keypair list                # list ssh key pairs"
    echo "otc keypair show <KPNAME>       # show ssh key pair"
@@ -875,7 +878,7 @@ deleteBackup() {
 
 createBackup() {
    if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
-   if test -z "$1"; then echo "ERROR: Need to specify volumedi to be backed up" 1>&2; exit 2; fi
+   if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
    if test -z "$NAME"; then NAME="Backup-$1"; fi
    REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
    if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
@@ -1944,8 +1947,10 @@ WaitForTask() {
 		getECSJOBList $1
 		RESP="$ECSJOBSTATUSJSON"
 		echo "#$RESP" 1>&2
-		while [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]
-		do
+		# Timeout after 2hrs
+		TOUT=$((1+7200/$SEC))
+		declare -i ctr=0
+		while [ $ctr -le $TOUT ] && [ "$ECSJOBSTATUS" == "RUNNING" -o "$ECSJOBSTATUS" == "INIT" ]; do
 			sleep $SEC
 			getECSJOBList $1
 			if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
@@ -1954,7 +1959,9 @@ WaitForTask() {
 			else
 				echo -n "." 1>&2
 			fi
+			let ctr+=1
 		done
+		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2; fi
 	else
 		getECSJOBList $1
 		echo "#$ECSJOBSTATUSJSON"
@@ -2276,7 +2283,10 @@ if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
 	echo "WARN: Using anually set database endpoint, not adv in svc catalog" 1>&2
 fi
 
-if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
+if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
+	printHelp
+
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
    getECSList
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
@@ -2369,6 +2379,9 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
 
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
    DeleteTask $1
+elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "wait" ]; then
+	WAIT_FOR_JOB=true
+	WaitForTask "$@"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
    ECSDelete $@
