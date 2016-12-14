@@ -2280,7 +2280,7 @@ if [ -n "$MAINCOM" -a "$MAINCOM" != "help" ]; then
 fi
 
 if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
-	echo "WARN: Using anually set database endpoint, not adv in svc catalog" 1>&2
+	echo "WARN: Using manually set database endpoint, not adv in svc catalog" 1>&2
 fi
 
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
