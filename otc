@@ -465,7 +465,8 @@ printHelp() {
    echo "Usage:"
    echo "--- Elastic Cloud Server (VM management) ---"
    echo "otc ecs list               # list ecs instances"
-   echo "otc ecs list-detail        # list ecs instances in detail"
+   echo "otc ecs list-detail [ECS]  # list ecs instances in detail"
+   echo "otc ecs details [ECS]      # list ecs instances in detail"
    echo "otc ecs show <vmid>        # show instance <vmid>"
    echo "otc ecs create -n <name>   # create ecs instance <name>"
    echo
@@ -801,8 +802,30 @@ getECSList() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
 }
 
-getECSDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | {VM:  .name, ID: .id, Detail: .}'
+getECSDetails() {
+   if test -n "$1"; then
+		if is_uuid "$1"; then
+			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.id == "'$1'")'
+		else
+			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.name == "'$1'")'
+		fi
+	else
+		curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[]'
+	fi
+}
+
+getECSDetail()
+{
+	getECSDetails "$1" | jq '{VM: .name, ID: .id, Detail: .}'
+}
+
+getECSDetailsNew() {
+	RESP=$(getECSDetails "$1")
+	echo "# VMID                               |       name        | status |    AZ    | SSHKeyName |  Flavor  |   Image   | Volumes | Nets | SGs"
+	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|tostring; def vol(v): [v[]|{volid:.id}]|tostring; def sg(s): [s[]|{sgid:.name}]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + " | " + .name + " | " + .status + " | " + .az + " | " + .sshkey + " | " + .flavor + " | " + .image + " | " + vol(.volume) + " | " + adr(.addr) + " | " + sg(.sg)'
+	# TODO: Translate back Flavor, Volume IDs into names, shorten addr
+   # Work around SG bug (osTicket 117508)
+   # Add FloatingIP info
 }
 
 getLimits()
@@ -2300,7 +2323,9 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
    getECSList
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
-   getECSDetail
+   getECSDetail "$1"
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "details" ]; then
+   getECSDetailsNew "$1"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
