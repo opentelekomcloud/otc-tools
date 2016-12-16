@@ -131,7 +131,15 @@ docurl()
 {
 	if test -n "$DEBUG"; then
 		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
-		ANS=`curl $INS "$@"`
+		if test "$DEBUG" = "2"; then
+			TMPHDR=`mktemp /tmp/curlhdr.$$.XXXXXXXXXX`
+			ANS=`curl $INS -D $TMPHDR "$@"`
+			echo -n "DEBUG: Header" 1>&2
+			cat $TMPHDR  | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+			rm $TMPHDR
+		else
+			ANS=`curl $INS "$@"`
+		fi
 		echo "DEBUG: $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 		echo "$ANS"
 	else
@@ -172,7 +180,8 @@ curlputauthbinfile()
 curlgetauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
 curldeleteauth()
@@ -2034,6 +2043,7 @@ esac
 
 # Debugging
 if test "$1" = "debug"; then DEBUG=1; shift; fi
+if test "$1" = "debug"; then DEBUG=2; shift; fi
 
 # fetch main command
 MAINCOM=$1; shift
