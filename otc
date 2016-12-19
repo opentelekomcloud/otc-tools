@@ -465,8 +465,8 @@ printHelp() {
    echo "Usage:"
    echo "--- Elastic Cloud Server (VM management) ---"
    echo "otc ecs list               # list ecs instances"
-   echo "otc ecs list-detail [ECS]  # list ecs instances in detail"
-   echo "otc ecs details [ECS]      # list ecs instances in detail"
+   echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (ECS: opt search string)"
+   echo "otc ecs details [ECS]      # list ecs instances in some detail (dito)"
    echo "otc ecs show <vmid>        # show instance <vmid>"
    echo "otc ecs create -n <name>   # create ecs instance <name>"
    echo
