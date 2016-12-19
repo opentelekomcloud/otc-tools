@@ -807,7 +807,7 @@ getECSDetails() {
 		if is_uuid "$1"; then
 			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.id == "'$1'")'
 		else
-			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.name == "'$1'")'
+			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.name|test("'$1'"))'
 		fi
 	else
 		curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[]'
