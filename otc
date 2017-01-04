@@ -1142,8 +1142,8 @@ concatarr() {
 }
 
 getIMAGEList() {
-   IMAGE_FILTER=$(concatarr "&" "$@")
-   IMAGE_FILTER="${IMAGE_FILTER// /%20}"
+	IMAGE_FILTER=$(concatarr "&" "$@")
+	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
 }
 
@@ -1179,8 +1179,7 @@ registerIMAGE() {
 	REQ="{ $OSVJSON  \"min_disk\": $MINDISK, \"min_ram\": $MINRAM,
 		\"disk_format\": \"$DISKFORMAT\", \"name\": \"$1\", \"image_url\": \"$2\" }"
 	IMGTASKID=`curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-   WaitForTask $IMGTASKID 5
-   
+	WaitForTask $IMGTASKID 5
 }
 
 createIMAGE() {
@@ -1205,18 +1204,20 @@ createIMAGE() {
 		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
-   if test -z "$INSTANCE_ID"; then
+	if test -z "$INSTANCE_ID"; then
 		# Create fresh image
 		REQ="{ $OSVJSON  \"container_format\": \"bare\",
 			\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 			\"min_ram\": $MINRAM, \"name\": \"$IMAGENAME\",
 			\"visibility\": \"private\", \"protected\": false }"
+		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 	else
 		# Create VM snapshot image
 		REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
+		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.' #'.[]'
 	fi
-   if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 }
 
 deleteIMAGE() {
@@ -1250,8 +1251,8 @@ downloadIMAGE()
 {
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
 	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
-   echo "$IMSANS"
-   IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	echo "$IMSANS"
+	IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 }
 
 updateIMAGE()
