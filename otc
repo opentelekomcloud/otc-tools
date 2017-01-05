@@ -918,17 +918,7 @@ createBackup() {
    TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
    if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi 
    echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
-   declare -i wt=0
-   while test $wt -le 20; do
-		sleep 2;
-      BACKUPID=$(curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$TASKID" | jq '.entities.backup_id' | cut -d':' -f 2 | tr -d '" ')
-      if test -n "$BACKUPID" -a "$BACKUPID" != "null"; then
-			echo "$BACKUPID"
-			break
-		fi
-		let wt+=1
-	done
-   # TODO: Implement --wait (to wait for backup to be completed)
+   WaitForTaskFieldOpt $TASKID '.entities.backup_id'
 }
 
 restoreBackup() {
@@ -1179,7 +1169,7 @@ registerIMAGE() {
 	REQ="{ $OSVJSON  \"min_disk\": $MINDISK, \"min_ram\": $MINRAM,
 		\"disk_format\": \"$DISKFORMAT\", \"name\": \"$1\", \"image_url\": \"$2\" }"
 	IMGTASKID=`curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-	WaitForTask $IMGTASKID 5
+	WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 150
 }
 
 createIMAGE() {
@@ -1216,12 +1206,17 @@ createIMAGE() {
 		# Create VM snapshot image
 		REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
-		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.' #'.[]'
+		RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.')
+		echo "$RESP"
+		IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+		IMGID=`WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 120 | tail -n1`
+		if is_uuid "$IMGID"; then getIMAGEDetail $IMGID; fi
 	fi
 }
 
 deleteIMAGE() {
-	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1"
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"
 }
 
 uploadIMAGEobj()
@@ -1950,42 +1945,64 @@ SECGROUPRULECreate() {
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 }
 
-WaitForSubTask() {
-	SEC=$2
-	if test -z "$SEC"; then SEC=2; fi
-	echo "Waiting for sub job:   $AUTH_URL_ECS_JOB/$1" 1>&2
+# $1 = TASKID
+# $2 = Field to wait for
+# $3 = PollFreq (s), default 2
+# $4 = MaxWait (multiples of PollFreq), default 21
+WaitForTaskField() {
+	if test -z "$1" -o "$1" = "null"; then echo "ERROR" 1>&2; return 1; fi
+	SEC=${3:-2}
+	MAXW=${4:-21}
+	echo "Waiting for field $2 in job: $AUTH_URL_ECS_JOB/$1" 1>&2
 	getECSJOBList $1
 	RESP="$ECSJOBSTATUSJSON"
 	echo "#$RESP" 1>&2
-	while [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]
-	do
-		ECSSUBTASKID=$(echo $ECSJOBSTATUSJSON| jq '.entities.sub_jobs[].job_id' 2>/dev/null | sed 's/"//g')
-		[ -n "$ECSSUBTASKID" ] && break
+	FIELD=$(echo $ECSJOBSTATUSJSON| jq "$2" 2>/dev/null | tr -d '"')
+	declare -i ctr=0
+	while [ $ctr -le $MAXW ] && [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]; do
+		[ -n "$FIELD" -a "$FIELD" != "null" ] && break
 		sleep $SEC
 		getECSJOBList $1
+		FIELD=$(echo $ECSJOBSTATUSJSON| jq "$2" 2>/dev/null | tr -d '"')
 		if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
 			RESP="$ECSJOBSTATUSJSON"
 			echo -e "\n#$RESP" 1>&2
 		else
 			echo -n "." 1>&2
 		fi
+      let ctr+=1
 	done
+   echo $FIELD
+   test -n "$FIELD" -a "$FIELD" != "null"
 }
 
+WaitForSubTask() {
+   ECSSUBTASKID=$(WaitForTaskField $1 ".entities.sub_jobs[].job_id" $2)
+}
+
+# Wait for task to completely finish (if WAIT_FOR_JOB==true),
+# optionally output field ($4), otherwise don't wait
+# $1 = TASKID
+# $2 = PollFreq (s), default 2s
+# $3 = MaxWait (in multiples of 2xPollFreq), default 2hrs
+# $4 = Field to output (optional)
 WaitForTask() {
-	SEC=$2
-	if test -z "$SEC"; then SEC=2; fi
+	SEC=${2:-2}
+	# Timeout after 2hrs
+	DEFTOUT=$((1+3600/$SEC))
+	TOUT=$((2*${3:-$DEFTOUT}))
+	unset FIELD
 	if [ "$WAIT_FOR_JOB" == "true" ];then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
 		RESP="$ECSJOBSTATUSJSON"
+		if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 		echo "#$RESP" 1>&2
-		# Timeout after 2hrs
-		TOUT=$((1+7200/$SEC))
 		declare -i ctr=0
 		while [ $ctr -le $TOUT ] && [ "$ECSJOBSTATUS" == "RUNNING" -o "$ECSJOBSTATUS" == "INIT" ]; do
 			sleep $SEC
 			getECSJOBList $1
+			if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 			if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
 				RESP="$ECSJOBSTATUSJSON"
 				echo -e "\n#$RESP" 1>&2
@@ -1994,11 +2011,26 @@ WaitForTask() {
 			fi
 			let ctr+=1
 		done
-		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2; fi
+		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2; 
+		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
 	else
 		getECSJOBList $1
-		echo "#$ECSJOBSTATUSJSON"
-		echo "Note: Not waiting for completion, use otc ecs job $1 to monitor"
+		echo "#$ECSJOBSTATUSJSON" 1>&2
+		echo "Note: Not waiting for completion, use otc task show $1 to monitor and otc task wait to wait)"
+	fi
+}
+
+# Wait for full completion if WAIT_FOR_JOB is "true", not at all if set to something else,
+# wait for subtask if unset
+# $1 = TASKID
+# $2 = Field to wait for
+# $3 = PollFreq (s), optional
+# $4 = MAXWAIT (multiples of POLLFREQ), optional
+WaitForTaskFieldOpt() {
+	if test -n "$WAIT_FOR_JOB"; then
+		WaitForTask $1 $3 $4 "$2"
+	else
+		WaitForTaskField $1 "$2" $3 $4
 	fi
 }
 
@@ -2351,15 +2383,15 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
    if [ "$NUMCOUNT" = 1 ]; then
       WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
-		if test -n "$EIP"; then
-	      ECSID=null
+         if test -n "$EIP"; then
+         ECSID=null
          while [ null = "$ECSID" ]; do
-				sleep 5
-				getECSJOBList $ECSSUBTASKID
-				ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
-			done
-			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
-		fi
+            sleep 5
+            getECSJOBList $ECSSUBTASKID
+            ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
+         done
+         BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
+      fi
    fi
 
    WaitForTask $ECSTASKID 5
@@ -2368,7 +2400,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
    echo "ECS Creation status: $ECSJOBSTATUS"
    [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
    if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
-	exit 1
+      exit 1
    fi
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
