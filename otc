@@ -916,7 +916,7 @@ createBackup() {
    if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
    BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
    TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi 
+   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
    echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
    WaitForTaskFieldOpt $TASKID '.entities.backup_id'
 }
@@ -1238,7 +1238,7 @@ uploadIMAGEfile()
 {
 	sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
-	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
+	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file"
 }
 
 IMGJOBID=""
@@ -2011,7 +2011,7 @@ WaitForTask() {
 			fi
 			let ctr+=1
 		done
-		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2; 
+		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2;
 		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
 	else
 		getECSJOBList $1
