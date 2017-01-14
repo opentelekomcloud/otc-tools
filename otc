@@ -636,21 +636,22 @@ printHelp() {
    echo
    echo "--- Relational Database Service (RDS) ---"
    echo "otc rds list"
-   echo "otc rds listinstances                              # list database instances"
+   echo "otc rds listinstances                                # list database instances"
    echo "otc rds show [<id> ...]"
-   echo "otc rds showinstances  [<id> ...]                  # show database instances details"
+   echo "otc rds showinstances  [<id> ...]                    # show database instances details"
    echo "otc rds apis"
-   echo "otc rds listapis                                   # list API ids"
-   echo "otc rds showapi <id> ...                           # show API detail information"
-   echo "otc rds showdatastore MySQL|PostgreSQL ...         # show datastore ids and metadata"
-   echo "otc rds datastore ...                              # alias for 'showdatastore'"
-   echo "otc rds showdatastoreparameters <datastore_id> ... # show configuration parameters"
+   echo "otc rds listapis                                     # list API ids"
+   echo "otc rds showapi <id> ...                             # show API detail information"
+   echo "otc rds showdatastore MySQL|PostgreSQL ...           # show datastore ids and metadata"
+   echo "otc rds datastore ...                                # alias for 'showdatastore'"
+   echo "otc rds showdatastoreparameters <datastore_id> ...   # show all configuration parameters"
+   echo "otc rds showdatastoreparameter <datastore_id> <name> # show a configuration parameter"
    echo "otc rds listflavors <datastore_id>"
-   echo "otc rds flavors <datastore_id>                     # list RDS flavors"
-   echo "otc rds showflavor <id> ...                        # RDS flavor details"
-   echo "otc rds create [<configfile>]                      # create RDS instance, read from"
-   echo "                                                   # stdin when no config file is given"
-   echo "otc rds delete <id> <backups>                      # remove RDS instances and backups"
+   echo "otc rds flavors <datastore_id>                       # list RDS flavors"
+   echo "otc rds showflavor <id> ...                          # RDS flavor details"
+   echo "otc rds create [<configfile>]                        # create RDS instance, read from"
+   echo "                                                     # stdin when no config file is given"
+   echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
    echo
    echo "--- DNS ---"
    echo "otc domain list         # show all zones/domains"
@@ -980,11 +981,23 @@ getRDSDatastoreParameters() {
 	local datastore_version_id
 	for datastore_version_id in $*
 	do
-		#local URI="${AUTH_URL_RDS_DOMAIN}/datastores/versions/${datastore_version_id}/parameters"
 		local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
+}
+
+getRDSDatastoreParameterImpl() {
+	local datastore_version_id=$1
+	local parameter_name=$2
+	local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters/${parameter_name}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.'
+}
+
+getRDSDatastoreParameter() {
+	[ $# -eq 2 ] && getRDSDatastoreParameterImpl "$@"
+	[ $# -eq 0 ] && echo "ERROR: Please specify the RDS datastore id and parameter name" 1>&2
 }
 
 getRDSAPIVersionList() {
@@ -2723,6 +2736,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
 	getRDSDatastoreDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameters" ]; then
 	getRDSDatastoreParameters "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameter" ]; then
+	getRDSDatastoreParameter "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
