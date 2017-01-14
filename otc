@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.39
+VERSION=0.6.39-rds
 
 # Get Config ####################################################################
 warn_too_open()
@@ -446,7 +446,6 @@ getIamToken() {
 
 	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds}; TROVE_OVERRIDE=1; fi
 	AUTH_URL_RDS="$TROVE_URL/rds"
-	#AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
 	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
 
@@ -637,20 +636,21 @@ printHelp() {
    echo
    echo "--- Relational Database Service (RDS) ---"
    echo "otc rds list"
-   echo "otc rds listinstances             # list database instances"
+   echo "otc rds listinstances                              # list database instances"
    echo "otc rds show [<id> ...]"
-   echo "otc rds showinstances  [<id> ...] # show database instances details"
+   echo "otc rds showinstances  [<id> ...]                  # show database instances details"
    echo "otc rds apis"
-   echo "otc rds listapis                  # list API ids"
-   echo "otc rds showapi <id> ...          # show API detail information"
-   echo "otc rds showdatastore <name> ...  # Example: MySQL as <name>"
-   echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
+   echo "otc rds listapis                                   # list API ids"
+   echo "otc rds showapi <id> ...                           # show API detail information"
+   echo "otc rds showdatastore MySQL|PostgreSQL ...         # show datastore ids and metadata"
+   echo "otc rds datastore ...                              # alias for 'showdatastore'"
+   echo "otc rds showdatastoreparameters <datastore_id> ... # show configuration parameters"
    echo "otc rds listflavors <datastore_id>"
-   echo "otc rds flavors <datastore_id>    # list RDS flavors, use 'otc rds datastore <name>' to get datastore_id"
-   echo "otc rds showflavor <id> ...       # RDS flavor details"
-   echo "otc rds create [<configfile>]     # create RDS instance, read from"
-   echo "                                  # stdin when no config file is given"
-   echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
+   echo "otc rds flavors <datastore_id>                     # list RDS flavors"
+   echo "otc rds showflavor <id> ...                        # RDS flavor details"
+   echo "otc rds create [<configfile>]                      # create RDS instance, read from"
+   echo "                                                   # stdin when no config file is given"
+   echo "otc rds delete <id> <backups>                      # remove RDS instances and backups"
    echo
    echo "--- DNS ---"
    echo "otc domain list         # show all zones/domains"
@@ -973,6 +973,17 @@ getRDSDatastoreDetails() {
 		local URI="${AUTH_URL_RDS_DOMAIN}/datastores/${datastore_name}/versions"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.dataStores[]'
+	done
+}
+
+getRDSDatastoreParameters() {
+	local datastore_version_id
+	for datastore_version_id in $*
+	do
+		#local URI="${AUTH_URL_RDS_DOMAIN}/datastores/versions/${datastore_version_id}/parameters"
+		local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
 }
 
@@ -2710,6 +2721,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameters" ]; then
+	getRDSDatastoreParameters "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
