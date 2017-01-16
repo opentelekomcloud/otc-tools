@@ -652,6 +652,7 @@ printHelp() {
    echo "otc rds create [<configfile>]                        # create RDS instance, read from"
    echo "                                                     # stdin when no config file is given"
    echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
+   echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
    echo
    echo "--- DNS ---"
    echo "otc domain list         # show all zones/domains"
@@ -1073,6 +1074,17 @@ deleteRDSInstanceImpl() {
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
 	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
+}
+
+getRDSInstanceBackupPolicy() {
+	local instanceid
+	for instanceid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}/backups/policy"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.[]'
+	done
+
 }
 
 listDomains() {
@@ -2747,6 +2759,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
 	createRDSInstance "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
 	deleteRDSInstance "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
+	getRDSInstanceBackupPolicy "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
    listDomains
