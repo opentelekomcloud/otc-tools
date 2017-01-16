@@ -653,6 +653,8 @@ printHelp() {
    echo "                                                     # stdin when no config file is given"
    echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
    echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
+   echo "otc rds listsnapshots                                # list all backups"
+   echo "otc rds listbackups                                  # alias for 'listsnapshots'"
    echo
    echo "--- DNS ---"
    echo "otc domain list         # show all zones/domains"
@@ -1085,6 +1087,12 @@ getRDSInstanceBackupPolicy() {
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
 
+}
+
+getRDSSnapshots() {
+	local URI="${AUTH_URL_RDS_PROJECT}/backups"
+	echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.'
 }
 
 listDomains() {
@@ -2761,6 +2769,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
 	deleteRDSInstance "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
 	getRDSInstanceBackupPolicy "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listbackups" ]; then
+	getRDSSnapshots
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
    listDomains
