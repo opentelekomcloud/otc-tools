@@ -462,7 +462,7 @@ getIamToken() {
 # Usage
 printHelp() {
    echo "otc-tools version $VERSION: OTC API tool"
-   echo "Usage:"
+   echo "Usage: otc.sh service action [options]"
    echo "--- Elastic Cloud Server (VM management) ---"
    echo "otc ecs list               # list ecs instances"
    echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (ECS: opt search string)"
