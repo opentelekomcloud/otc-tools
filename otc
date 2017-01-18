@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.39
+VERSION=0.6.39-rds
 
 # Get Config ####################################################################
 warn_too_open()
@@ -446,7 +446,6 @@ getIamToken() {
 
 	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds}; TROVE_OVERRIDE=1; fi
 	AUTH_URL_RDS="$TROVE_URL/rds"
-	#AUTH_URL_RDS="${AUTH_URL_RDS/:443\///}" # remove :443 port when present
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
 	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
 
@@ -637,20 +636,25 @@ printHelp() {
    echo
    echo "--- Relational Database Service (RDS) ---"
    echo "otc rds list"
-   echo "otc rds listinstances             # list database instances"
+   echo "otc rds listinstances                                # list database instances"
    echo "otc rds show [<id> ...]"
-   echo "otc rds showinstances  [<id> ...] # show database instances details"
+   echo "otc rds showinstances  [<id> ...]                    # show database instances details"
    echo "otc rds apis"
-   echo "otc rds listapis                  # list API ids"
-   echo "otc rds showapi <id> ...          # show API detail information"
-   echo "otc rds showdatastore <name> ...  # Example: MySQL as <name>"
-   echo "otc rds datastore <name> ...      # show datastore details (like MySQL)"
+   echo "otc rds listapis                                     # list API ids"
+   echo "otc rds showapi <id> ...                             # show API detail information"
+   echo "otc rds showdatastore MySQL|PostgreSQL ...           # show datastore ids and metadata"
+   echo "otc rds datastore ...                                # alias for 'showdatastore'"
+   echo "otc rds showdatastoreparameters <datastore_id> ...   # show all configuration parameters"
+   echo "otc rds showdatastoreparameter <datastore_id> <name> # show a configuration parameter"
    echo "otc rds listflavors <datastore_id>"
-   echo "otc rds flavors <datastore_id>    # list RDS flavors, use 'otc rds datastore <name>' to get datastore_id"
-   echo "otc rds showflavor <id> ...       # RDS flavor details"
-   echo "otc rds create [<configfile>]     # create RDS instance, read from"
-   echo "                                  # stdin when no config file is given"
-   echo "otc rds delete <id> <backups>     # remove RDS instances and backups"
+   echo "otc rds flavors <datastore_id>                       # list RDS flavors"
+   echo "otc rds showflavor <id> ...                          # RDS flavor details"
+   echo "otc rds create [<configfile>]                        # create RDS instance, read from"
+   echo "                                                     # stdin when no config file is given"
+   echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
+   echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
+   echo "otc rds listsnapshots                                # list all backups"
+   echo "otc rds listbackups                                  # alias for 'listsnapshots'"
    echo
    echo "--- DNS ---"
    echo "otc domain list         # show all zones/domains"
@@ -916,7 +920,7 @@ createBackup() {
    if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
    BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
    TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi 
+   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
    echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
    WaitForTaskFieldOpt $TASKID '.entities.backup_id'
 }
@@ -974,6 +978,29 @@ getRDSDatastoreDetails() {
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.dataStores[]'
 	done
+}
+
+getRDSDatastoreParameters() {
+	local datastore_version_id
+	for datastore_version_id in $*
+	do
+		local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.[]'
+	done
+}
+
+getRDSDatastoreParameterImpl() {
+	local datastore_version_id=$1
+	local parameter_name=$2
+	local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters/${parameter_name}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.'
+}
+
+getRDSDatastoreParameter() {
+	[ $# -eq 2 ] && getRDSDatastoreParameterImpl "$@"
+	[ $# -eq 0 ] && echo "ERROR: Please specify the RDS datastore id and parameter name" 1>&2
 }
 
 getRDSAPIVersionList() {
@@ -1049,6 +1076,23 @@ deleteRDSInstanceImpl() {
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
 	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
+}
+
+getRDSInstanceBackupPolicy() {
+	local instanceid
+	for instanceid in $*
+	do
+		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}/backups/policy"
+		#echo "URI: $URI"
+		curlgetauth $TOKEN "$URI" | jq -r '.[]'
+	done
+
+}
+
+getRDSSnapshots() {
+	local URI="${AUTH_URL_RDS_PROJECT}/backups"
+	echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.'
 }
 
 listDomains() {
@@ -1238,7 +1282,7 @@ uploadIMAGEfile()
 {
 	sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
-	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file" 	
+	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file"
 }
 
 IMGJOBID=""
@@ -2011,7 +2055,7 @@ WaitForTask() {
 			fi
 			let ctr+=1
 		done
-		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2; 
+		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2;
 		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
 	else
 		getECSJOBList $1
@@ -2710,6 +2754,10 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameters" ]; then
+	getRDSDatastoreParameters "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameter" ]; then
+	getRDSDatastoreParameter "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
 	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
@@ -2719,6 +2767,11 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
 	createRDSInstance "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
 	deleteRDSInstance "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
+	getRDSInstanceBackupPolicy "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listbackups" ]; then
+	getRDSSnapshots
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
    listDomains
