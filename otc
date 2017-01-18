@@ -792,6 +792,19 @@ convertEVSNameToId() {
 	export EVS_ID
 }
 
+convertBackupNameToId() {
+	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	if test -z "$BACK_ID"; then
+		echo "ERROR: No backup found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$BACK_ID" | wc -w)" != "1"; then
+	  ECS_ID=$(echo "$BACK_ID" | head -n1)
+	  echo "Warn: Multiple volumes found by that name; using $BACK_ID" 1>&2
+	fi
+	export BACK_ID
+}
+
 getECSVM() {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'
@@ -901,11 +914,16 @@ getBackupList() {
 }
 
 getBackupDetail() {
-   curlgetauth $TOKEN "$AUTH_URL_BACKS/$1?limit=1200" | jq '.backup'
+	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
+   curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup'
 }
 
 deleteBackup() {
-   curldeleteauth $TOKEN "$AUTH_URL_BACKS/$1" | jq '.'
+	# TODO: Should we delete an associated snapshot as well that might have been
+	# created via the cloudbackups OTC service API along with the backup?
+	# Note: The documented cloudbackups service API to delete seems to not work
+	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
+   curldeleteauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.'
 }
 
 createBackup() {
