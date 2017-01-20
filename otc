@@ -665,7 +665,9 @@ printHelp() {
 	echo "                        <id>                         # id of db instance"
 	echo "                        select|insert|update|delete  # one of the statement type"
 	echo "                        <entries>                    # top longest stmts to show (1-50)"
-	echo "otc rds showslowqueries ...                          # alias for showslowstatements"
+	echo "otc rds showslowqueries ...                          # alias for 'showslowstatements'"
+	echo "otc rds createsnapshot <id> <name> <description>     # create a snapshot of an instance"
+	echo "otc rds createbackup ...                             # alias for 'createsnapshot'"
 	echo
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
@@ -1218,6 +1220,29 @@ getRDSSlowStatementLogsImpl() {
 getRDSSlowStatementLogs() {
 	[ $# -eq 3 ] && getRDSSlowStatementLogsImpl "$@"
 	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, statement type and number of logs to show" 1>&2
+}
+
+createRDSSnapshotImpl() {
+	local instanceId=$1
+	local name=$2
+	local description=$3
+	local URI="${AUTH_URL_RDS_PROJECT}/backups"
+	local REQ=""
+	REQ+="{"
+	REQ+='	"backup": {'
+	REQ+='		"name":        "'${name}'",'
+	REQ+='		"instance":    "'${instanceId}'",'
+	REQ+='		"description": "'${description}'"'
+	REQ+="	}"
+	REQ+="}"
+	#echo "URI: $URI"
+	#echo "REQ: $REQ"
+	curlpostauth $TOKEN "$REQ" "$URI" | jq -r '.'
+}
+
+createRDSSnapshot() {
+	[ $# -eq 3 ] && createRDSSnapshotImpl "$@"
+	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, name and a description of the snapshot" 1>&2
 }
 
 listDomains() {
@@ -2908,6 +2933,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showerrors" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowstatements" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowqueries" ]; then
 	getRDSSlowStatementLogs "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createsnapshot" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createbackup" ]; then
+	createRDSSnapshot "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
