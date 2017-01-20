@@ -461,237 +461,237 @@ getIamToken() {
 
 # Usage
 printHelp() {
-   echo "otc-tools version $VERSION: OTC API tool"
-   echo "Usage: otc.sh service action [options]"
-   echo "--- Elastic Cloud Server (VM management) ---"
-   echo "otc ecs list               # list ecs instances"
-   echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (ECS: opt search string)"
-   echo "otc ecs details [ECS]      # list ecs instances in some detail (dito)"
-   echo "otc ecs show <vmid>        # show instance <vmid>"
-   echo "otc ecs create -n <name>   # create ecs instance <name>"
-   echo
-   echo "otc ecs create             # create vm example"
-   echo "    --count 1              # one instance (default)"
-   echo "    --public true          # with public ip"
-   echo "    --file1 /tmp/a=/otc/a  # attach local file /tmp/a to /otc/a in VM"
-   echo "    --file2 ...            # Up to 5 files can be injected this way"
-   echo
-   echo "otc ecs create             # create vm (addtl. options)"
-   echo "    --instance-type       <FLAVOR>"
-   echo "    --instance-name       <NAME>"
-   echo "    --image-name          <IMAGE>"
-   echo "    --subnet-name         <SUBNET>"
-   echo "    --fixed-ip            <IP>"
-   echo "    --vpc-name            <VPC>"
-   echo "    --security-group-name <SGNAME>"
-   echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
-   echo "    --admin-pass          <PASSWD>"
-   echo "    --key-name            <SSHKEYNAME>"
-   echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
-   echo "    --user-data-file      <USERDFILEG>    # don't forget #cloud-config header"
-   echo "    --public              <true/false/IP>"
-   echo "    --volumes             <device:volume>[<device,volume>[,..]]    # attach volumes as named devices"
-   echo "    --bandwidth           <BW>		# defaults to 25"
-   echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
-   echo "    --disksize            <DISKGB>"
-   echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-   echo "    --az                  <AZ>		# determined from subnet by default"
-   echo "    --[no]wait"
-   echo
-   echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
-   echo "                                # optionally --soft/--hard"
-   echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
-   echo "otc ecs start-instances <id>    # start ecs instance <id>"
-   echo "otc ecs delete                  # delete VM"
-   #echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
-   echo "    --[no]wait                  # wait for completion (default: no)"
-   echo "    --keepEIP                   # default: delete EIP too"
-   echo "    --delVolume                 # default: delete only system volume, not any volume attached"
-   echo "    <ecs> <ecs> ...             # you could give IDs or names"
-   echo "otc ecs job <id>                # show status of job <id>"
-   echo "otc ecs limits                  # display project quotas"
-   echo "otc ecs update <id>             # change VM data (same parms as create)"
-   echo "otc ecs az-list                 # list availability zones"
-   echo
-   echo "--- Task/Job management ---"
+	echo "otc-tools version $VERSION: OTC API tool"
+	echo "Usage: otc.sh service action [options]"
+	echo "--- Elastic Cloud Server (VM management) ---"
+	echo "otc ecs list               # list ecs instances"
+	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (ECS: opt search string)"
+	echo "otc ecs details [ECS]      # list ecs instances in some detail (dito)"
+	echo "otc ecs show <vmid>        # show instance <vmid>"
+	echo "otc ecs create -n <name>   # create ecs instance <name>"
+	echo
+	echo "otc ecs create             # create vm example"
+	echo "    --count 1              # one instance (default)"
+	echo "    --public true          # with public ip"
+	echo "    --file1 /tmp/a=/otc/a  # attach local file /tmp/a to /otc/a in VM"
+	echo "    --file2 ...            # Up to 5 files can be injected this way"
+	echo
+	echo "otc ecs create             # create vm (addtl. options)"
+	echo "    --instance-type       <FLAVOR>"
+	echo "    --instance-name       <NAME>"
+	echo "    --image-name          <IMAGE>"
+	echo "    --subnet-name         <SUBNET>"
+	echo "    --fixed-ip            <IP>"
+	echo "    --vpc-name            <VPC>"
+	echo "    --security-group-name <SGNAME>"
+	echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
+	echo "    --admin-pass          <PASSWD>"
+	echo "    --key-name            <SSHKEYNAME>"
+	echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
+	echo "    --user-data-file      <USERDFILEG>    # don't forget #cloud-config header"
+	echo "    --public              <true/false/IP>"
+	echo "    --volumes             <device:volume>[<device,volume>[,..]]    # attach volumes as named devices"
+	echo "    --bandwidth           <BW>		# defaults to 25"
+	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
+	echo "    --disksize            <DISKGB>"
+	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+	echo "    --az                  <AZ>		# determined from subnet by default"
+	echo "    --[no]wait"
+	echo
+	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
+	echo "                                # optionally --soft/--hard"
+	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
+	echo "otc ecs start-instances <id>    # start ecs instance <id>"
+	echo "otc ecs delete                  # delete VM"
+	#echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
+	echo "    --[no]wait                  # wait for completion (default: no)"
+	echo "    --keepEIP                   # default: delete EIP too"
+	echo "    --delVolume                 # default: delete only system volume, not any volume attached"
+	echo "    <ecs> <ecs> ...             # you could give IDs or names"
+	echo "otc ecs job <id>                # show status of job <id>"
+	echo "otc ecs limits                  # display project quotas"
+	echo "otc ecs update <id>             # change VM data (same parms as create)"
+	echo "otc ecs az-list                 # list availability zones"
+	echo
+	echo "--- Task/Job management ---"
 	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
 	echo "otc task delete <id>            # cancel job <id> (not yet supported)"
 	echo "otc task wait <id> [sec]        # wait for job <id>, poll every sec sec (def: 2)"
 	echo
-   echo "--- SSH Keys ---"
-   echo "otc keypair list                # list ssh key pairs"
-   echo "otc keypair show <KPNAME>       # show ssh key pair"
-   echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
-   echo "otc keypair delete <KPNAME>     # delete ssh key pair"
-   echo
-   echo "--- Elastic Volumes ---"
-   echo "otc evs list                    # list all volumes"
-   echo "otc evs show <id>               # show details of volume <id>"
-   echo "otc evs create                  # create a volume"
-   echo "    --volume-name         <NAME>"
-   echo "    --disksize            <DISKGB>"
-   echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-   echo "    --az                  <AZ>"
-   echo "otc evs delete                  # delete volume"
-   echo
-   echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
-   echo "otc evs attach --name ecsname  device:volume      # use names instead of ids"
-   echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
-   echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
-   #TODO volume change ...
+	echo "--- SSH Keys ---"
+	echo "otc keypair list                # list ssh key pairs"
+	echo "otc keypair show <KPNAME>       # show ssh key pair"
+	echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
+	echo "otc keypair delete <KPNAME>     # delete ssh key pair"
+	echo
+	echo "--- Elastic Volumes ---"
+	echo "otc evs list                    # list all volumes"
+	echo "otc evs show <id>               # show details of volume <id>"
+	echo "otc evs create                  # create a volume"
+	echo "    --volume-name         <NAME>"
+	echo "    --disksize            <DISKGB>"
+	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+	echo "    --az                  <AZ>"
+	echo "otc evs delete                  # delete volume"
+	echo
+	echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
+	echo "otc evs attach --name ecsname  device:volume      # use names instead of ids"
+	echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
+	echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
+	#TODO volume change ...
 	echo "--- Elastic Volume Backups ---"
-   echo "otc backup list"
-   echo "otc backup show backupid"
-   echo "otc backup create --name NAME volumeid # Create backup from volume"
-   echo "otc backup restore backupid volumeid   # restore backup to volume"
-   echo "otc backup delete backupid"
-   echo "otc snapshot list                      # list snapshots"
-   echo "otc snapshot show snapid               # details of snapshot snapid"
-   echo "otc snapshot delete snapid             # delete snapshot snapid"
-   echo
-   echo "--- Virtual Private Network ---"
-   echo "otc vpc list                    # list all vpc"
-   echo "otc vpc show VPCID              # display VPC (Router) details"
-   echo "otc vpc delete VPCID            # delete VPC"
-   echo "otc vpc create                  # create vpc"
-   echo "    --vpc-name <vpcname>"
-   echo "    --cidr     <cidr>"
-   echo
-   echo "otc subnet list                 # list all subnet"
-   echo "otc subnet show <SID>           # show details for subnet <SID>"
-   echo "otc subnet delete <SID>         # delete subnet <SID>"
-   echo "    --vpc-name          <vpcname>"
-   echo "otc subnet create               # create a subnet"
-   echo "    --subnet-name       <subnetname>"
-   echo "    --cidr              <cidr>"
-   echo "    --gateway-ip        <gateway>"
-   echo "    --primary-dns       <primary-dns>"
-   echo "    --secondary-dns     <sec-dns>"
-   echo "    --availability-zone <avalibility zone>"
-   echo "    --vpc-name          <vpcname>"
-   echo
-   echo "otc publicip list               # list all publicips"
-   echo
-   echo "otc publicip create             # create a publicip"
-   echo "    --bandwidth-name    <bandwidthame>"
-   echo "    --bandwidth         <bandwidth>"
-   echo
-   echo "otc publicip delete <id>        # delete a publicip (EIP)"
-   echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
-   echo "otc publicip unbind <publicip-id>         # unbind a publicip"
-   echo
-   echo "otc security-group list                   # list all sec. group"
-   echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
-   echo
-   echo "otc security-group create                 # create security group"
-   echo "    -g <groupname>"
-   echo "    --vpc-name <vpc name>"
-   echo
-   echo "otc security-group-rules create           # create sec. group rule"
-   echo "    --security-group-name <secgroupname>"
-   echo "    --direction           <direction>"
-   echo "    --protocol            <protocol: tcp, udp, icmp>"
-   echo "    --ethertype           <ethtype: IPv4,IPv6>"
-   echo "    --portmin             <port range lower end>"
-   echo "    --portmax             <port range upper end>"
-   echo
-   echo "--- Image Service ---"
-   echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
-   echo "otc images show <id>    # show image details"
-   echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
-   echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
-   echo "otc images download <id> bucket:objname   # export priv image into s3 object"
-   echo "otc images create NAME          # create (private) image with name"
-   echo "   --disk-format  <disk-format>"
-   echo "   --min-disk     <GB>"
-   echo "   --min-ram      <MB>          # optional (default 1024)"
-   echo "   --os-version   <os_version>  # optional (default Other)"
-   echo "   --property     <key=val>     # optional properties (multiple times possible)"
-   echo "otc images create NAME          # create image from ECS instance (snapshot)"
-   echo "   --image-name   <image name>"
-   echo "   --instance-id  <instance id>"
-   echo "   --description  <description> # optional"
-   echo "otc images register NAME FILE   # create (private) image with name and s3 file"
-   echo "   --property, --min-disk, --os-version and --wait supported"
-   echo "otc images update <id>          # change properties, --image-name, min-*"
-   echo "otc images delete <id>          # delete (private) image by ID"
-   echo
-   echo "--- Elastic Load Balancer ---"
-   echo "otc elb list            # list all load balancer"
-   echo "otc elb show <id>       # show elb details"
-   echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
-   echo "     --vpc-name <vpcname>"
-   echo "     --bandwidth <bandwidth>             # in Mbps"
-   echo "     --subnet-name/id <subnet>           # creates internal ELB listening on subnet"
-   echo "     --security-group-name/id <secgroup> # for internal ELBs"
-   echo "otc elb delete <eid>            # Delete ELB with <eid>"
+	echo "otc backup list"
+	echo "otc backup show backupid"
+	echo "otc backup create --name NAME volumeid # Create backup from volume"
+	echo "otc backup restore backupid volumeid   # restore backup to volume"
+	echo "otc backup delete backupid"
+	echo "otc snapshot list                      # list snapshots"
+	echo "otc snapshot show snapid               # details of snapshot snapid"
+	echo "otc snapshot delete snapid             # delete snapshot snapid"
+	echo
+	echo "--- Virtual Private Network ---"
+	echo "otc vpc list                    # list all vpc"
+	echo "otc vpc show VPCID              # display VPC (Router) details"
+	echo "otc vpc delete VPCID            # delete VPC"
+	echo "otc vpc create                  # create vpc"
+	echo "    --vpc-name <vpcname>"
+	echo "    --cidr     <cidr>"
+	echo
+	echo "otc subnet list                 # list all subnet"
+	echo "otc subnet show <SID>           # show details for subnet <SID>"
+	echo "otc subnet delete <SID>         # delete subnet <SID>"
+	echo "    --vpc-name          <vpcname>"
+	echo "otc subnet create               # create a subnet"
+	echo "    --subnet-name       <subnetname>"
+	echo "    --cidr              <cidr>"
+	echo "    --gateway-ip        <gateway>"
+	echo "    --primary-dns       <primary-dns>"
+	echo "    --secondary-dns     <sec-dns>"
+	echo "    --availability-zone <avalibility zone>"
+	echo "    --vpc-name          <vpcname>"
+	echo
+	echo "otc publicip list               # list all publicips"
+	echo
+	echo "otc publicip create             # create a publicip"
+	echo "    --bandwidth-name    <bandwidthame>"
+	echo "    --bandwidth         <bandwidth>"
+	echo
+	echo "otc publicip delete <id>        # delete a publicip (EIP)"
+	echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
+	echo "otc publicip unbind <publicip-id>         # unbind a publicip"
+	echo
+	echo "otc security-group list                   # list all sec. group"
+	echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
+	echo
+	echo "otc security-group create                 # create security group"
+	echo "    -g <groupname>"
+	echo "    --vpc-name <vpc name>"
+	echo
+	echo "otc security-group-rules create           # create sec. group rule"
+	echo "    --security-group-name <secgroupname>"
+	echo "    --direction           <direction>"
+	echo "    --protocol            <protocol: tcp, udp, icmp>"
+	echo "    --ethertype           <ethtype: IPv4,IPv6>"
+	echo "    --portmin             <port range lower end>"
+	echo "    --portmax             <port range upper end>"
+	echo
+	echo "--- Image Service ---"
+	echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
+	echo "otc images show <id>    # show image details"
+	echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
+	echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
+	echo "otc images download <id> bucket:objname   # export priv image into s3 object"
+	echo "otc images create NAME          # create (private) image with name"
+	echo "   --disk-format  <disk-format>"
+	echo "   --min-disk     <GB>"
+	echo "   --min-ram      <MB>          # optional (default 1024)"
+	echo "   --os-version   <os_version>  # optional (default Other)"
+	echo "   --property     <key=val>     # optional properties (multiple times possible)"
+	echo "otc images create NAME          # create image from ECS instance (snapshot)"
+	echo "   --image-name   <image name>"
+	echo "   --instance-id  <instance id>"
+	echo "   --description  <description> # optional"
+	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
+	echo "   --property, --min-disk, --os-version and --wait supported"
+	echo "otc images update <id>          # change properties, --image-name, min-*"
+	echo "otc images delete <id>          # delete (private) image by ID"
+	echo
+	echo "--- Elastic Load Balancer ---"
+	echo "otc elb list            # list all load balancer"
+	echo "otc elb show <id>       # show elb details"
+	echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
+	echo "     --vpc-name <vpcname>"
+	echo "     --bandwidth <bandwidth>             # in Mbps"
+	echo "     --subnet-name/id <subnet>           # creates internal ELB listening on subnet"
+	echo "     --security-group-name/id <secgroup> # for internal ELBs"
+	echo "otc elb delete <eid>            # Delete ELB with <eid>"
 
-   echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
-   echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
-   #not implemented: modifylistener
-   echo "otc elb dellistener <lid>"
-   echo "otc elb listmember <lid>"
-   echo "otc elb addmember <lid> <vmid> <vmip>"
-   echo "otc elb delmember <lid> <mid> <vmip>"
-   #elb listcheck <lid> is missing (!)
-   echo "otc elb showcheck <cid>"
-   echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
-   echo "otc elb delcheck <cid>"
-   echo
-   echo "--- Relational Database Service (RDS) ---"
-   echo "otc rds list"
-   echo "otc rds listinstances                                # list database instances"
-   echo "otc rds show [<id> ...]"
-   echo "otc rds showinstances  [<id> ...]                    # show database instances details"
-   echo "otc rds apis"
-   echo "otc rds listapis                                     # list API ids"
-   echo "otc rds showapi <id> ...                             # show API detail information"
-   echo "otc rds showdatastore MySQL|PostgreSQL ...           # show datastore ids and metadata"
-   echo "otc rds datastore ...                                # alias for 'showdatastore'"
-   echo "otc rds showdatastoreparameters <datastore_id> ...   # show all configuration parameters"
-   echo "otc rds showdatastoreparameter <datastore_id> <name> # show a configuration parameter"
-   echo "otc rds listflavors <datastore_id>"
-   echo "otc rds flavors <datastore_id>                       # list RDS flavors"
-   echo "otc rds showflavor <id> ...                          # RDS flavor details"
-   echo "otc rds create [<configfile>]                        # create RDS instance, read from"
-   echo "                                                     # stdin when no config file is given"
-   echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
-   echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
-   echo "otc rds listsnapshots                                # list all backups"
-   echo "otc rds listbackups                                  # alias for 'listsnapshots'"
-   echo
-   echo "--- DNS ---"
-   echo "otc domain list         # show all zones/domains"
-   echo "otc domain show zid     # show details of zone/domain <zid>"
-   echo "otc domain delete zid   # deleted zone/domain <zid>"
-   echo "otc domain create domain [desc [type [mail [ttl]]]]"
-   echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
-   echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
-   echo "otc domain addrecord	zid name. type ttl val [desc]"
-   echo "                        # add record to zone <zid> for <name> with <type>, <ttl>"
-   echo "                        # type could be A, AAAA, MX, CNAME, PTR, TXT, NS"
-   echo "                        # val is a comma sep list of record values, e.g."
-   echo "                        # IPADDR, NR NAME, NAME, NAME, STRING, NAME."
-   echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
-   echo "otc domain listrecords [zid]      # list records for zone <zid>"
-   echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
-   echo
-   echo "--- Cloud Container Engine (CCE) ---"
-   echo "otc cluster list                  # list container clusters (short)"
-   echo "otc cluster list-detail           # list container clusters (detailed)"
-   echo "otc cluster show <cid>            # show container cluster details of cid"
-   echo "otc host list <cid>               # list container hosts of cluster cid"
-   echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
-   echo
-   echo "--- Access Control ---"
-   echo "otc iam token           # generate a new iam token"
-   echo "otc iam project         # output project_id/tenant_id"
-   echo "otc iam services        # service catalog"
-   echo "otc iam endpoints       # endpoints of the services"
-   echo
-   echo "--- Global flags ---"
-   echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
-   echo "otc --insecure CMD1 CMD2 PARAMS   # for ignoring SSL security ..."
+	echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
+	echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+	#not implemented: modifylistener
+	echo "otc elb dellistener <lid>"
+	echo "otc elb listmember <lid>"
+	echo "otc elb addmember <lid> <vmid> <vmip>"
+	echo "otc elb delmember <lid> <mid> <vmip>"
+	#elb listcheck <lid> is missing (!)
+	echo "otc elb showcheck <cid>"
+	echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
+	echo "otc elb delcheck <cid>"
+	echo
+	echo "--- Relational Database Service (RDS) ---"
+	echo "otc rds list"
+	echo "otc rds listinstances                                # list database instances"
+	echo "otc rds show [<id> ...]"
+	echo "otc rds showinstances  [<id> ...]                    # show database instances details"
+	echo "otc rds apis"
+	echo "otc rds listapis                                     # list API ids"
+	echo "otc rds showapi <id> ...                             # show API detail information"
+	echo "otc rds showdatastore MySQL|PostgreSQL ...           # show datastore ids and metadata"
+	echo "otc rds datastore ...                                # alias for 'showdatastore'"
+	echo "otc rds showdatastoreparameters <datastore_id> ...   # show all configuration parameters"
+	echo "otc rds showdatastoreparameter <datastore_id> <name> # show a configuration parameter"
+	echo "otc rds listflavors <datastore_id>"
+	echo "otc rds flavors <datastore_id>                       # list RDS flavors"
+	echo "otc rds showflavor <id> ...                          # RDS flavor details"
+	echo "otc rds create [<configfile>]                        # create RDS instance, read from"
+	echo "                                                     # stdin when no config file is given"
+	echo "otc rds delete <id> <backups>                        # remove RDS instances and backups"
+	echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
+	echo "otc rds listsnapshots                                # list all backups"
+	echo "otc rds listbackups                                  # alias for 'listsnapshots'"
+	echo
+	echo "--- DNS ---"
+	echo "otc domain list         # show all zones/domains"
+	echo "otc domain show zid     # show details of zone/domain <zid>"
+	echo "otc domain delete zid   # deleted zone/domain <zid>"
+	echo "otc domain create domain [desc [type [mail [ttl]]]]"
+	echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
+	echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
+	echo "otc domain addrecord	zid name. type ttl val [desc]"
+	echo "                        # add record to zone <zid> for <name> with <type>, <ttl>"
+	echo "                        # type could be A, AAAA, MX, CNAME, PTR, TXT, NS"
+	echo "                        # val is a comma sep list of record values, e.g."
+	echo "                        # IPADDR, NR NAME, NAME, NAME, STRING, NAME."
+	echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
+	echo "otc domain listrecords [zid]      # list records for zone <zid>"
+	echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
+	echo
+	echo "--- Cloud Container Engine (CCE) ---"
+	echo "otc cluster list                  # list container clusters (short)"
+	echo "otc cluster list-detail           # list container clusters (detailed)"
+	echo "otc cluster show <cid>            # show container cluster details of cid"
+	echo "otc host list <cid>               # list container hosts of cluster cid"
+	echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
+	echo
+	echo "--- Access Control ---"
+	echo "otc iam token           # generate a new iam token"
+	echo "otc iam project         # output project_id/tenant_id"
+	echo "otc iam services        # service catalog"
+	echo "otc iam endpoints       # endpoints of the services"
+	echo
+	echo "--- Global flags ---"
+	echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
+	echo "otc --insecure CMD1 CMD2 PARAMS   # for ignoring SSL security ..."
 }
 
 
@@ -768,8 +768,8 @@ convertIMAGENameToId() {
 		exit 3
 	fi
 	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
-	  IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
-	  echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
+		IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
+		echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
 	export IMAGE_ID
 }
@@ -781,8 +781,8 @@ convertECSNameToId() {
 		exit 3
 	fi
 	if test "$(echo "$ECS_ID" | wc -w)" != "1"; then
-	  ECS_ID=$(echo "$ECS_ID" | head -n1)
-	  echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
+		ECS_ID=$(echo "$ECS_ID" | head -n1)
+		echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
 	fi
 	export ECS_ID
 }
@@ -794,8 +794,8 @@ convertEVSNameToId() {
 		exit 3
 	fi
 	if test "$(echo "$EVS_ID" | wc -w)" != "1"; then
-	  EVS_ID=$(echo "$EVS_ID" | head -n1)
-	  echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
+		EVS_ID=$(echo "$EVS_ID" | head -n1)
+		echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
 	fi
 	export EVS_ID
 }
@@ -807,8 +807,8 @@ convertBackupNameToId() {
 		exit 3
 	fi
 	if test "$(echo "$BACK_ID" | wc -w)" != "1"; then
-	  BACK_ID=$(echo "$BACK_ID" | head -n1)
-	  echo "Warn: Multiple backups found by that name; using $BACK_ID" 1>&2
+		BACK_ID=$(echo "$BACK_ID" | head -n1)
+		echo "Warn: Multiple backups found by that name; using $BACK_ID" 1>&2
 	fi
 	export BACK_ID
 }
@@ -820,8 +820,8 @@ convertSnapshotNameToId() {
 		exit 3
 	fi
 	if test "$(echo "$SNAP_ID" | wc -w)" != "1"; then
-	  SNAP_ID=$(echo "$SNAP_ID" | head -n1)
-	  echo "Warn: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
+		SNAP_ID=$(echo "$SNAP_ID" | head -n1)
+		echo "Warn: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
 	fi
 	export SNAP_ID
 }
@@ -837,7 +837,7 @@ getECSList() {
 }
 
 getECSDetails() {
-   if test -n "$1"; then
+	if test -n "$1"; then
 		if is_uuid "$1"; then
 			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.id == "'$1'")'
 		else
@@ -858,8 +858,8 @@ getECSDetailsNew() {
 	echo "# VMID                               |       name        | status |    AZ    | SSHKeyName |  Flavor  |   Image   | Volumes | Nets | SGs"
 	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|tostring; def vol(v): [v[]|{volid:.id}]|tostring; def sg(s): [s[]|{sgid:.name}]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + " | " + .name + " | " + .status + " | " + .az + " | " + .sshkey + " | " + .flavor + " | " + .image + " | " + vol(.volume) + " | " + adr(.addr) + " | " + sg(.sg)'
 	# TODO: Translate back Flavor, Volume IDs into names, shorten addr
-   # Work around SG bug (osTicket 117508)
-   # Add FloatingIP info
+	# Work around SG bug (osTicket 117508)
+	# Add FloatingIP info
 }
 
 getLimits()
@@ -931,26 +931,26 @@ getEVSDetail() {
 }
 
 getSnapshotList() {
-   curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getSnapshotDetail() {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
-   curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID?limit=1200" | jq '.snapshot'
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID?limit=1200" | jq '.snapshot'
 }
 
 deleteSnapshot() {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
-   curldeleteauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.'
+	curldeleteauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.'
 }
 
 getBackupList() {
-   curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 }
 
 getBackupDetail() {
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-   curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup'
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup'
 }
 
 deleteBackup() {
@@ -970,27 +970,27 @@ deleteBackup() {
 			fi
 		fi
 	fi
-   curldeleteauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.'
+	curldeleteauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.'
 }
 
 createBackup() {
-   if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
-   if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
-   if test -z "$NAME"; then NAME="Backup-$1"; fi
-   REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
-   if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
-   BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
-   TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-   if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
-   echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
-   WaitForTaskFieldOpt $TASKID '.entities.backup_id'
+	if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
+	if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
+	if test -z "$NAME"; then NAME="Backup-$1"; fi
+	REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
+	if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
+	BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
+	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
+	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
+	echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
+	WaitForTaskFieldOpt $TASKID '.entities.backup_id'
 }
 
 restoreBackup() {
 	if test -z "$2"; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
 	REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
-   curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
-   #echo
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
+	#echo
 }
 
 getSUBNETList() {
@@ -1157,7 +1157,7 @@ getRDSSnapshots() {
 }
 
 listDomains() {
-   curlgetauth $TOKEN $AUTH_URL_DNS | jq .
+	curlgetauth $TOKEN $AUTH_URL_DNS | jq .
 }
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
@@ -1165,7 +1165,7 @@ createDomain() {
 	if test "${1: -1:1}" != "."; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
-   REQ="{ \"name\": \"$1\""
+	REQ="{ \"name\": \"$1\""
 	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
 	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
 	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
@@ -1227,13 +1227,13 @@ deleteRecord() {
 
 # concatenate array using $1 as concatenation token
 concatarr() {
-   ans=""
-   delim="$1"
-   shift
-   for str in "$@"; do
+	ans=""
+	delim="$1"
+	shift
+	for str in "$@"; do
 		ans="$ans$delim$str"
-   done
-   echo "$ans"
+	done
+	echo "$ans"
 }
 
 getIMAGEList() {
@@ -1326,17 +1326,17 @@ deleteIMAGE() {
 
 uploadIMAGEobj()
 {
-   # The image upload via s3 bucket has been moved to v1 endpoint
-   ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
-   # Fall back to intermediate solution which abused the v2 OpenStack API
-   case "$ANS" in
+	# The image upload via s3 bucket has been moved to v1 endpoint
+	ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
+	# Fall back to intermediate solution which abused the v2 OpenStack API
+	case "$ANS" in
 	*"Api does not exist"*)
 		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
 		;;
 	*)
 		echo "$ANS"
 		;;
-   esac
+	esac
 }
 
 uploadIMAGEfile()
@@ -1405,43 +1405,43 @@ deleteKEYPAIR() {
 }
 
 createELB() {
-   if test -n "$3"; then BANDWIDTH=$3; fi
-   if test -n "$2"; then NAME="$2"; fi
-   if test -z "$NAME"; then
-      if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
-   fi
-   ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
-   if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
-      if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
-         convertSUBNETNameToId $SUBNETNAME
-      fi
-      if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
-         convertSECUGROUPNameToId "$SECUGROUPNAME"
-      fi
-      if test -z "$AZ"; then
-         if test -n "$SUBNETAZ"; then
-            AZ="$SUBNETAZ"
-         else
-            echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
-            exit 2
-         fi
-      fi
-      if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
-         echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
-      fi
+	if test -n "$3"; then BANDWIDTH=$3; fi
+	if test -n "$2"; then NAME="$2"; fi
+	if test -z "$NAME"; then
+	if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
+	fi
+	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
+	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
+		if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
+			convertSUBNETNameToId $SUBNETNAME
+		fi
+		if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
+			convertSECUGROUPNameToId "$SECUGROUPNAME"
+		fi
+		if test -z "$AZ"; then
+			if test -n "$SUBNETAZ"; then
+				AZ="$SUBNETAZ"
+			else
+				echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
+				exit 2
+			fi
+		fi
+		if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+			echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
+		fi
 		# TODO: FIXME: need to get these IDs through the API
 		if [[ $AZ == 'eu-de-01' ]];then
 			AZ='bf84aba586ce4e948da0b97d9a7d62fb'
 		elif [[ $AZ == 'eu-de-02' ]];then
 			AZ='bf84aba586ce4e948da0b97d9a7d62fc'
 		fi
-      ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZ'", "security_group_id": "'$SECUGROUP'"'
-   fi
-   if test -n "$1"; then VPCID=$1; fi
-   if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
-   if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
-   ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-   export ELBJOBID
+			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZ'", "security_group_id": "'$SECUGROUP'"'
+	fi
+	if test -n "$1"; then VPCID=$1; fi
+	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
+	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	export ELBJOBID
 }
 
 getELBList() {
@@ -1572,15 +1572,15 @@ getPersonalizationJSON() {
 }
 
 ECSAttachVolumeListName() {
-      local dev_vol ecs="$1" DEV_VOL="$2"
-      for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
-            volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
-            if [ $AZ == ${volume_az//\"/} ]; then
-                  ECSAttachVolumeName "$ecs" $dev_vol
-            else
-                  echo "WARN: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
-            fi
-      done
+	local dev_vol ecs="$1" DEV_VOL="$2"
+	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
+		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
+		if [ $AZ == ${volume_az//\"/} ]; then
+			ECSAttachVolumeName "$ecs" $dev_vol
+		else
+			echo "WARN: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
+		fi
+	done
 }
 
 ECSAttachVolumeName() {
@@ -1769,7 +1769,7 @@ ECSCreate() {
 }
 
 ECSAction() {
-   if test -z "$ECSACTIONTYPE"; then ECSACTIONTYPE="SOFT"; fi
+	if test -z "$ECSACTIONTYPE"; then ECSACTIONTYPE="SOFT"; fi
 	REQ_ECS_ACTION_VM='
 	{
 		"'"$ECSACTION"'": {
@@ -1784,9 +1784,9 @@ ECSAction() {
 
 # OpenStack API (unused)
 ECSStop() {
-   REQ="{\"os-stop\":{}}"
-   ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
-   echo $ECS_ACTION_STOP
+	REQ="{\"os-stop\":{}}"
+	ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
+	echo $ECS_ACTION_STOP
 	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
 }
 
@@ -1973,8 +1973,8 @@ PUBLICIPSDelete() {
 
 getPortID() {
 	(  getECSVM $1 | sed -n '/^\[/,/^\]/p' \
-	   | jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
-	   | while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
+		| jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
+		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
 }
 
 BindPublicIpToCreatingVM() {
@@ -1983,9 +1983,9 @@ BindPublicIpToCreatingVM() {
 	##### input: $EIP
 	EIPID=$(getPUBLICIPSList | sed 's/   /;/g' \
           |  while IFS=";" read id eip iip status bid b type;do
-	                [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
-	                [ "$status" = "DOWN" ] && echo "$id"   && break
-	                echo "ERROR: requested external IP is of wrong status: $status" 1>&2
+                   [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
+                   [ "$status" = "DOWN" ] && echo "$id"   && break
+                   echo "ERROR: requested external IP is of wrong status: $status" 1>&2
                 done)
 	[ -n "$EIPID" ] && PUBLICIPSBind "$EIPID" "$PRTID" \
 	|| return 1
@@ -2075,14 +2075,14 @@ WaitForTaskField() {
 		else
 			echo -n "." 1>&2
 		fi
-      let ctr+=1
+		let ctr+=1
 	done
-   echo $FIELD
-   test -n "$FIELD" -a "$FIELD" != "null"
+	echo $FIELD
+	test -n "$FIELD" -a "$FIELD" != "null"
 }
 
 WaitForSubTask() {
-   ECSSUBTASKID=$(WaitForTaskField $1 ".entities.sub_jobs[].job_id" $2)
+	ECSSUBTASKID=$(WaitForTaskField $1 ".entities.sub_jobs[].job_id" $2)
 }
 
 # Wait for task to completely finish (if WAIT_FOR_JOB==true),
@@ -2319,13 +2319,13 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			shift # past argument
 			;;
 			-p|--public)   case "$2" in
-			                     true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
-			                     [0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
-			                     *)           echo "ERROR: unsupported value for public IPs" 1>&2; exit 2;;
-			                  esac
-			               shift;;     # past argument
+										true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
+										[0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
+										*)           echo "ERROR: unsupported value for public IPs" 1>&2; exit 2;;
+								esac
+								shift;;     # past argument
 			--volumes)     DEV_VOL="$2"
-                        shift;;     # past argument
+								shift;;     # past argument
 			--disktype|--disk-type)
 			VOLUMETYPE="$2"
 			shift # past argument
@@ -2442,12 +2442,12 @@ fi
 #echo "Execute $MAINCOM $SUBCOM"
 
 if [ "$MAINCOM" == "s3" ]; then
-   s3 $SUBCOM "$@"
-   exit $?
+	s3 $SUBCOM "$@"
+	exit $?
 fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" ]; then
-    getIamToken
+	getIamToken
 fi
 
 if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
@@ -2458,203 +2458,203 @@ if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; the
 	printHelp
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
-   getECSList
+	getECSList
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
-   getECSDetail "$1"
+	getECSDetail "$1"
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "details" ]; then
-   getECSDetailsNew "$1"
+	getECSDetailsNew "$1"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
-   getECSVM $1
+	getECSVM $1
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
-   getLimits
+	getLimits
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
-   if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-   if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME"; fi
-   if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
-   SECUGROUPNAMELIST="$SECUGROUPNAME"
-   if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
-      SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
-      SECUGROUP="${SECUGROUP#,}"
-   fi
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME"; fi
+	if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
+	SECUGROUPNAMELIST="$SECUGROUPNAME"
+	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
+		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
+		SECUGROUP="${SECUGROUP#,}"
+	fi
 
-   ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
-   echo "Task ID: $ECSTASKID"
+	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
+	echo "Task ID: $ECSTASKID"
 
-   if [ "$NUMCOUNT" = 1 ]; then
-      WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
-         if test -n "$EIP"; then
-         ECSID=null
-         while [ null = "$ECSID" ]; do
-            sleep 5
-            getECSJOBList $ECSSUBTASKID
-            ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
-         done
-         BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
-      fi
-   fi
+	if [ "$NUMCOUNT" = 1 ]; then
+		WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
+		if test -n "$EIP"; then
+			ECSID=null
+			while [ null = "$ECSID" ]; do
+				sleep 5
+				getECSJOBList $ECSSUBTASKID
+				ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
+			done
+			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
+		fi
+	fi
 
-   WaitForTask $ECSTASKID 5
-   ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
-   echo "ECS ID: $ECSID"
-   echo "ECS Creation status: $ECSJOBSTATUS"
-   [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
-   if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
-      exit 1
-   fi
+	WaitForTask $ECSTASKID 5
+	ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	echo "ECS ID: $ECSID"
+	echo "ECS Creation status: $ECSJOBSTATUS"
+	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
+	if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
+		exit 1
+	fi
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
-   export ECSACTION="reboot"
-   export ECSACTIONSERVERID=$1
+	export ECSACTION="reboot"
+	export ECSACTIONSERVERID=$1
 
-   if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "ERROR: Must be specify the Instance ID!" 1>&2
-	printHelp
-	exit 1
-   fi
+	if [ "$ECSACTIONSERVERID" == "" ];then
+		echo "ERROR: Must be specify the Instance ID!" 1>&2
+		printHelp
+		exit 1
+	fi
 
-   ECSAction
+	ECSAction
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
-   ECSACTION="os-start"
-   ECSACTIONSERVERID=$1
-   if [ "$ECSACTIONSERVERID" == "" ];then
-	echo "ERROR:: Must be specify the Instance ID!" 1>&2
-	printHelp
-	exit 1
-   fi
+	ECSACTION="os-start"
+	ECSACTIONSERVERID=$1
+	if [ "$ECSACTIONSERVERID" == "" ];then
+		echo "ERROR:: Must be specify the Instance ID!" 1>&2
+		printHelp
+		exit 1
+	fi
 
-   ECSAction
+	ECSAction
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
-   ECSACTION="os-stop"
-   ECSACTIONSERVERID=$1
+	ECSACTION="os-stop"
+	ECSACTIONSERVERID=$1
 
-   if [ "$ECSACTIONSERVERID" == "" ];then
+	if [ "$ECSACTIONSERVERID" == "" ];then
 	echo "ERROR: Must be specify the Instance ID!" 1>&2
-	printHelp
-	exit 1
-   fi
+		printHelp
+		exit 1
+	fi
 
-   ECSAction
+	ECSAction
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
      [ "$MAINCOM" == "task" -a "$SUBCOM" == "show" ]; then
-   #ECSTASKID=$1
-   #echo $AUTH_URL_ECS_JOB/$1
-   getECSJOBList $1
+	#ECSTASKID=$1
+	#echo $AUTH_URL_ECS_JOB/$1
+	getECSJOBList $1
 	echo "$ECSJOBSTATUSJSON"
 
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
-   DeleteTask $1
+	DeleteTask $1
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "wait" ]; then
 	WAIT_FOR_JOB=true
 	WaitForTask "$@"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
-   ECSDelete $@
+	ECSDelete $@
 	WaitForTask $ECSTASKID 5
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
-   ECSUpdate $1
+	ECSUpdate $1
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ]; then
-   getAZList
+	getAZList
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ]; then
-   getAZDetail "$1"
+	getAZDetail "$1"
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
-   getVPCList
+	getVPCList
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ];then
-   getVPCDetail $1
+	getVPCDetail $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ];then
-   VPCDelete $1
+	VPCDelete $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
-   VPCCreate
+	VPCCreate
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
-   getPUBLICIPSList
+	getPUBLICIPSList
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ];then
-   PUBLICIPSCreate
+	PUBLICIPSCreate
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ];then
-   PUBLICIPSDelete $@
+	PUBLICIPSDelete $@
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "bind" ];then
-   PUBLICIPSBind $@
+	PUBLICIPSBind $@
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "unbind" ];then
-   PUBLICIPSUnbind $@
+	PUBLICIPSUnbind $@
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
-   getSUBNETList
+	getSUBNETList
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ];then
-   getSUBNETDetail "$1"
+	getSUBNETDetail "$1"
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
 	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
-   SUBNETDelete "$1"
+	SUBNETDelete "$1"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
-   IMAGENAME=$1
-    # convertSUBNETNameToId "$SUBNETNAME"
-    # convertSECUGROUPNameToId "$SECUGROUPNAME"
-    # convertIMAGENameToId "$IMAGENAME"
+	IMAGENAME=$1
+	# convertSUBNETNameToId "$SUBNETNAME"
+	# convertSECUGROUPNameToId "$SECUGROUPNAME"
+	# convertIMAGENameToId "$IMAGENAME"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
 
-   if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId "$VPCNAME"
-   fi
-   SUBNETCreate
+	if [ "$VPCNAME" != "" ];then
+		convertVPCNameToId "$VPCNAME"
+	fi
+	SUBNETCreate
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
-   VPCNAME=$1
-   if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId "$VPCNAME"
-   fi
+	VPCNAME=$1
+	if [ "$VPCNAME" != "" ];then
+		convertVPCNameToId "$VPCNAME"
+	fi
 
-   getSECGROUPList
+	getSECGROUPList
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
-   if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId "$VPCNAME"
-   fi
+	if [ "$VPCNAME" != "" ];then
+		convertVPCNameToId "$VPCNAME"
+	fi
 
-   SECGROUPCreate
+	SECGROUPCreate
 
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
-   SECUGROUP=$1
+	SECUGROUP=$1
 
-   if [ "$SECUGROUP" == "" ];then
-	echo "ERROR: Must be specify the Security Group ID!" 1>&2
-	printHelp
-	exit 1
-   fi
-   #AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
-   getSECGROUPRULESList $SECUGROUP
+	if [ "$SECUGROUP" == "" ];then
+		echo "ERROR: Must be specify the Security Group ID!" 1>&2
+		printHelp
+		exit 1
+	fi
+	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
+	getSECGROUPRULESList $SECUGROUP
 
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 
-   if [ "$VPCNAME" != "" ];then
-	convertVPCNameToId "$VPCNAME"
-   fi
+	if [ "$VPCNAME" != "" ];then
+		convertVPCNameToId "$VPCNAME"
+	fi
 
-   if [ "$SECUGROUPNAME" != "" ];then
-	convertSECUGROUPNameToId "$SECUGROUPNAME"
-   fi
+	if [ "$SECUGROUPNAME" != "" ];then
+		convertSECUGROUPNameToId "$SECUGROUPNAME"
+	fi
 
-   #AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
-   SECGROUPRULECreate
+	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
+	SECGROUPRULECreate
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
-   getIMAGEList "$@"
+	getIMAGEList "$@"
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
-   getIMAGEDetail $1
+	getIMAGEDetail $1
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
 	if test -r "$2"; then
@@ -2664,97 +2664,97 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
 	fi
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
-   createIMAGE "$1"
+	createIMAGE "$1"
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "register" ]; then
-   registerIMAGE "$1" "$2"
+	registerIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
 	for img in "$@"; do deleteIMAGE $img; done
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 	updateIMAGE "$1"
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
-   WaitForTask $IMGJOBID 5
+	WaitForTask $IMGJOBID 5
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
-   getFLAVORList
+	getFLAVORList
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
-   getKEYPAIRList
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
+	getKEYPAIRList
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "show" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ];then
-   getKEYPAIR "$@"
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ];then
+	getKEYPAIR "$@"
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "create" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ];then
-   createKEYPAIR "$@"
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ];then
+	createKEYPAIR "$@"
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ];then
-   deleteKEYPAIR "$@"
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ];then
+	deleteKEYPAIR "$@"
 
 
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
-   echo $TOKEN
+	echo $TOKEN
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
 # These are not (yet) supported on OTC
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
 # End of unsupported APIs
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ];then
-   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
-   echo $OS_PROJECT_ID
+	echo $OS_PROJECT_ID
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
-	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
-   getEVSList
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
+     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
+	getEVSList
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
-	[ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
-	[ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
-   getEVSDetail $1
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
+     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
+	getEVSDetail $1
 
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
-   echo "Task ID: $EVSTASKID"
-   WaitForTask $EVSTASKID 5
+	echo "Task ID: $EVSTASKID"
+	WaitForTask $EVSTASKID 5
 elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "delete" ];then
-   EVSDelete "$@"
-   echo "Task ID: $EVSTASKID"
-   WaitForTask $EVSTASKID 5
+	EVSDelete "$@"
+	echo "Task ID: $EVSTASKID"
+	WaitForTask $EVSTASKID 5
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
-   if [ "$1" = -n ] || [ "$1" = --name ]
-      then
-         ECSAttachVolumeName "$2" "$3"
-      else
-         ECSAttachVolumeId   "$1" "$2"
-      fi
+	if [ "$1" = -n ] || [ "$1" = --name ]
+	then
+		ECSAttachVolumeName "$2" "$3"
+	else
+		ECSAttachVolumeId   "$1" "$2"
+	fi
 
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
-   if [ "$1" = -n ] || [ "$1" = --name ]
-      then
-         ECSDetachVolumeName "$2" "$3"
-      else
-         ECSDetachVolumeId   "$1" "$2"
-      fi
+	if [ "$1" = -n ] || [ "$1" = --name ]
+	then
+		ECSDetachVolumeName "$2" "$3"
+	else
+		ECSDetachVolumeId   "$1" "$2"
+	fi
 
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
 	getBackupList
@@ -2763,7 +2763,7 @@ elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete" ]; then
 	deleteBackup "$1"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "create" ] ||
-	  [ "$MAINCOM" == "backup" -a "$SUBCOM" == "backup" ] ; then
+     [ "$MAINCOM" == "backup" -a "$SUBCOM" == "backup" ] ; then
 	createBackup "$@"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "restore" ]; then
 	restoreBackup "$@"
@@ -2775,17 +2775,17 @@ elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
-   getELBList
+	getELBList
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "show" ]; then
-   getELBDetail $1
+	getELBDetail $1
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delete" ]; then
-   deleteELB $1
-   echo "$ELBJOBID"
-   WaitForTask $ELBJOBID 2
+	deleteELB $1
+	echo "$ELBJOBID"
+	WaitForTask $ELBJOBID 2
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
-   createELB "$@"
-   echo "$ELBJOBID"
-   WaitForTask $ELBJOBID 2
+	createELB "$@"
+	echo "$ELBJOBID"
+	WaitForTask $ELBJOBID 2
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
 	getListenerList "$@"
@@ -2808,25 +2808,25 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
-   getRDSInstanceList
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
+	getRDSInstanceList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
-   getRDSInstanceDetails "$@"
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
+	getRDSInstanceDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
 	getRDSAPIDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameters" ]; then
 	getRDSDatastoreParameters "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameter" ]; then
 	getRDSDatastoreParameter "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
-	  [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
 	getRDSFlavorDetails "$@"
@@ -2841,33 +2841,33 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
 	getRDSSnapshots
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
-   listDomains
+	listDomains
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "create" ]; then
-   createDomain "$@"
+	createDomain "$@"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "show" ]; then
-   showDomain "$1"
+	showDomain "$1"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delete" ]; then
-   deleteDomain "$1"
+	deleteDomain "$1"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "listrecords" ]; then
-   listRecords "$1"
+	listRecords "$1"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "showrecord" ]; then
-   showRecord "$@"
+	showRecord "$@"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
-   deleteRecord "$@"
+	deleteRecord "$@"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
-   addRecord "$@"
+	addRecord "$@"
 
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list" ]; then
-   shortlistClusters
+	shortlistClusters
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ]; then
-   listClusters
+	listClusters
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "show" ]; then
-   showCluster "$@"
+	showCluster "$@"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
-   listClusterHosts "$@"
+	listClusterHosts "$@"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
-   showClusterHost "$@"
+	showClusterHost "$@"
 
 else
-   printHelp
+	printHelp
 fi
