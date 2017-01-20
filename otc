@@ -659,6 +659,8 @@ printHelp() {
 	echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
 	echo "otc rds listsnapshots                                # list all backups"
 	echo "otc rds listbackups                                  # alias for 'listsnapshots'"
+	echo "otc rds showerrors <id> <startDate> <endDate>        # shows db instance errors currently"
+	echo "                        <page> <entries>             # limited to last month and MySQL"
 	echo
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
@@ -1147,13 +1149,54 @@ getRDSInstanceBackupPolicy() {
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
-
 }
 
 getRDSSnapshots() {
 	local URI="${AUTH_URL_RDS_PROJECT}/backups"
 	echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
+}
+
+printHelpQueryRDSErrorLogs() {
+	echo 1>&2 "Parameters are: instanceId, startDate, endDate, page, entries"
+	echo 1>&2 "Where:"
+	echo 1>&2 "'instanceId' are the id of the database instance"
+	echo 1>&2 "'startDate' and 'endDate' are of format like: 2016-08-29+06:35"
+	echo 1>&2 "'page' is the page number, starting from 1"
+	echo 1>&2 "'entries' the number of log lines per page, valid numbers are 1 to 100"
+}
+
+getRDSErrorLogsPrepareRequestParameters() {
+	if [ $# -eq 5 ]; then
+		local startDate=${2/:/%3A} # : => %3A
+		local endDate=${3/:/%3A} # : => %3A
+		echo "$1 $startDate $endDate $4 $5"
+		return 0
+	fi
+	echo "ERROR: 5 parameters are expected" 1>&2
+	printHelpQueryRDSErrorLogs
+	echo ""
+	return 1
+}
+
+getRDSErrorLogsImpl() {
+	local instanceId=$1
+	local startDate=$2
+	local endDate=$3
+	local curPage=$4
+	local perPage=$5
+	local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceId}/errorlog"
+	URI+="?startDate=${startDate}"
+	URI+="&endDate=${endDate}"
+	URI+="&curPage=${curPage}"
+	URI+="&perPage=${perPage}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.errorLogList[]| "\(.datetime) \(.content)"'
+}
+
+getRDSErrorLogs() {
+	local parameters=$(getRDSErrorLogsPrepareRequestParameters $*)
+	[ -n "$parameters" ] && getRDSErrorLogsImpl $parameters
 }
 
 listDomains() {
@@ -2839,6 +2882,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listbackups" ]; then
 	getRDSSnapshots
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showerrors" ]; then
+	getRDSErrorLogs "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
