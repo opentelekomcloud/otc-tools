@@ -1138,7 +1138,7 @@ deleteRDSInstanceImpl() {
 
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
+	[ $# -ne 2 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
 }
 
 getRDSInstanceBackupPolicy() {
