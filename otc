@@ -661,6 +661,11 @@ printHelp() {
 	echo "otc rds listbackups                                  # alias for 'listsnapshots'"
 	echo "otc rds showerrors <id> <startDate> <endDate>        # shows db instance errors currently"
 	echo "                        <page> <entries>             # limited to last month and MySQL"
+	echo "otc rds showslowstatements                           # shows db instance errors currently"
+	echo "                        <id>                         # id of db instance"
+	echo "                        select|insert|update|delete  # one of the statement type"
+	echo "                        <entries>                    # top longest stmts to show (1-50)"
+	echo "otc rds showslowqueries ...                          # alias for showslowstatements"
 	echo
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
@@ -1197,6 +1202,22 @@ getRDSErrorLogsImpl() {
 getRDSErrorLogs() {
 	local parameters=$(getRDSErrorLogsPrepareRequestParameters $*)
 	[ -n "$parameters" ] && getRDSErrorLogsImpl $parameters
+}
+
+getRDSSlowStatementLogsImpl() {
+	local instanceId=$1
+	local sftype=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+	local top=$3
+	local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceId}/slowlog"
+	URI+="?sftype=${sftype}"
+	URI+="&top=${top}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.slowLogList[]'
+}
+
+getRDSSlowStatementLogs() {
+	[ $# -eq 3 ] && getRDSSlowStatementLogsImpl "$@"
+	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, statement type and number of logs to show" 1>&2
 }
 
 listDomains() {
@@ -2884,6 +2905,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
 	getRDSSnapshots
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showerrors" ]; then
 	getRDSErrorLogs "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowstatements" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowqueries" ]; then
+	getRDSSlowStatementLogs "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
