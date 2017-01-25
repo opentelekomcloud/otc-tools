@@ -190,6 +190,16 @@ curldeleteauth()
 	docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
+curldeleteauth_language()
+{
+	TKN="$1"; shift
+	docurl -sS -X DELETE \
+		-H "Content-Type: application/json" \
+		-H "Accept: application/json" \
+		-H "X-Language: en-us" \
+		-H "X-Auth-Token: $TKN" "$1"
+}
+
 curlpatchauth()
 {
 	TKN="$1"; shift
@@ -666,8 +676,10 @@ printHelp() {
 	echo "                        select|insert|update|delete  # one of the statement type"
 	echo "                        <entries>                    # top longest stmts to show (1-50)"
 	echo "otc rds showslowqueries ...                          # alias for 'showslowstatements'"
-	echo "otc rds createsnapshot <id> <name> <description>     # create a snapshot of an instance"
+	echo "otc rds createsnapshot <id> <name> <description>     # create a snapshot from an instance"
 	echo "otc rds createbackup ...                             # alias for 'createsnapshot'"
+	echo "otc rds deletesnapshot <id>                          # deletes a snapshot of an instance"
+	echo "otc rds deletebackup ...                             # alias for 'deletesnapshot'"
 	echo
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
@@ -1160,7 +1172,7 @@ getRDSInstanceBackupPolicy() {
 
 getRDSSnapshots() {
 	local URI="${AUTH_URL_RDS_PROJECT}/backups"
-	echo "URI: $URI"
+	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
 }
 
@@ -1243,6 +1255,16 @@ createRDSSnapshotImpl() {
 createRDSSnapshot() {
 	[ $# -eq 3 ] && createRDSSnapshotImpl "$@"
 	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, name and a description of the snapshot" 1>&2
+}
+
+deleteRDSSnapshot() {
+	if [ $# -eq 1 ]; then
+		local backupId=$1
+		local URI="${AUTH_URL_RDS_PROJECT}/backups/${backupId}"
+		curldeleteauth_language $TOKEN $URI | jq .
+	else
+		echo "ERROR: Please specify snapshot/backup id to delete" 1>&2
+	fi
 }
 
 listDomains() {
@@ -2936,6 +2958,9 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowstatements" ] ||
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createsnapshot" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createbackup" ]; then
 	createRDSSnapshot "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletesnapshot" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletebackup" ]; then
+	deleteRDSSnapshot "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
