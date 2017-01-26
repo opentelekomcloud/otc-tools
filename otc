@@ -467,6 +467,23 @@ getIamToken() {
 
 	AUTH_URL_CES="$CEILOMETER_URL"
 	AUTH_URL_CCE="${BASEURL/iam/cce}"
+
+}
+
+build_data_volumes_json() {
+   info_str=$1
+
+   DATA_VOLUMES=""
+   disks=(${info_str//,/ })
+   for disk in "${disks[@]}"
+   do
+      info=(${disk//:/ })
+      if test -n "$DATA_VOLUMES"; then
+         DATA_VOLUMES="$DATA_VOLUMES,";
+      fi
+      DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
+   done
+   echo $DATA_VOLUMES
 }
 
 # Usage
@@ -1829,6 +1846,10 @@ ECSCreate() {
 		USERDATAJSON="\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
+   if test -n "$DATADISKS"; then
+      DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
+   fi
+
 	REQ_CREATE_VM='{
 		"server": {
 			"availability_zone": "'"$AZ"'",
@@ -1837,6 +1858,9 @@ ECSCreate() {
 			"root_volume": {
 				"volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE'
 			},
+         "data_volumes": ['"
+            $DATA_VOLUMES
+         "'],
 			"flavorRef": "'"$INSTANCE_TYPE"'",
 			'"$PERSONALIZATION"'
 			'"$USERDATAJSON"'
