@@ -190,6 +190,16 @@ curldeleteauth()
 	docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
+curldeleteauth_language()
+{
+	TKN="$1"; shift
+	docurl -sS -X DELETE \
+		-H "Content-Type: application/json" \
+		-H "Accept: application/json" \
+		-H "X-Language: en-us" \
+		-H "X-Auth-Token: $TKN" "$1"
+}
+
 curlpatchauth()
 {
 	TKN="$1"; shift
@@ -659,6 +669,17 @@ printHelp() {
 	echo "otc rds showbackuppolicy <id> ...                    # show backup policy of database <id>"
 	echo "otc rds listsnapshots                                # list all backups"
 	echo "otc rds listbackups                                  # alias for 'listsnapshots'"
+	echo "otc rds showerrors <id> <startDate> <endDate>        # shows db instance errors currently"
+	echo "                        <page> <entries>             # limited to last month and MySQL"
+	echo "otc rds showslowstatements                           # shows db instance errors currently"
+	echo "                        <id>                         # id of db instance"
+	echo "                        select|insert|update|delete  # one of the statement type"
+	echo "                        <entries>                    # top longest stmts to show (1-50)"
+	echo "otc rds showslowqueries ...                          # alias for 'showslowstatements'"
+	echo "otc rds createsnapshot <id> <name> <description>     # create a snapshot from an instance"
+	echo "otc rds createbackup ...                             # alias for 'createsnapshot'"
+	echo "otc rds deletesnapshot <id>                          # deletes a snapshot of an instance"
+	echo "otc rds deletebackup ...                             # alias for 'deletesnapshot'"
 	echo
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
@@ -1136,7 +1157,7 @@ deleteRDSInstanceImpl() {
 
 deleteRDSInstance() {
 	[ $# -eq 2 ] && deleteRDSInstanceImpl "$@"
-	[ $# -eq 0 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
+	[ $# -ne 2 ] && echo "ERROR: Please specify RDS instance id to delete and number of backups to keep" 1>&2
 }
 
 getRDSInstanceBackupPolicy() {
@@ -1147,13 +1168,103 @@ getRDSInstanceBackupPolicy() {
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
-
 }
 
 getRDSSnapshots() {
 	local URI="${AUTH_URL_RDS_PROJECT}/backups"
-	echo "URI: $URI"
+	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
+}
+
+printHelpQueryRDSErrorLogs() {
+	echo 1>&2 "Parameters are: instanceId, startDate, endDate, page, entries"
+	echo 1>&2 "Where:"
+	echo 1>&2 "'instanceId' are the id of the database instance"
+	echo 1>&2 "'startDate' and 'endDate' are of format like: 2016-08-29+06:35"
+	echo 1>&2 "'page' is the page number, starting from 1"
+	echo 1>&2 "'entries' the number of log lines per page, valid numbers are 1 to 100"
+}
+
+getRDSErrorLogsPrepareRequestParameters() {
+	if [ $# -eq 5 ]; then
+		local startDate=${2/:/%3A} # : => %3A
+		local endDate=${3/:/%3A} # : => %3A
+		echo "$1 $startDate $endDate $4 $5"
+		return 0
+	fi
+	echo "ERROR: 5 parameters are expected" 1>&2
+	printHelpQueryRDSErrorLogs
+	echo ""
+	return 1
+}
+
+getRDSErrorLogsImpl() {
+	local instanceId=$1
+	local startDate=$2
+	local endDate=$3
+	local curPage=$4
+	local perPage=$5
+	local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceId}/errorlog"
+	URI+="?startDate=${startDate}"
+	URI+="&endDate=${endDate}"
+	URI+="&curPage=${curPage}"
+	URI+="&perPage=${perPage}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.errorLogList[]| "\(.datetime) \(.content)"'
+}
+
+getRDSErrorLogs() {
+	local parameters=$(getRDSErrorLogsPrepareRequestParameters $*)
+	[ -n "$parameters" ] && getRDSErrorLogsImpl $parameters
+}
+
+getRDSSlowStatementLogsImpl() {
+	local instanceId=$1
+	local sftype=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+	local top=$3
+	local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceId}/slowlog"
+	URI+="?sftype=${sftype}"
+	URI+="&top=${top}"
+	#echo "URI: $URI"
+	curlgetauth $TOKEN "$URI" | jq -r '.slowLogList[]'
+}
+
+getRDSSlowStatementLogs() {
+	[ $# -eq 3 ] && getRDSSlowStatementLogsImpl "$@"
+	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, statement type and number of logs to show" 1>&2
+}
+
+createRDSSnapshotImpl() {
+	local instanceId=$1
+	local name=$2
+	local description=$3
+	local URI="${AUTH_URL_RDS_PROJECT}/backups"
+	local REQ=""
+	REQ+="{"
+	REQ+='	"backup": {'
+	REQ+='		"name":        "'${name}'",'
+	REQ+='		"instance":    "'${instanceId}'",'
+	REQ+='		"description": "'${description}'"'
+	REQ+="	}"
+	REQ+="}"
+	#echo "URI: $URI"
+	#echo "REQ: $REQ"
+	curlpostauth $TOKEN "$REQ" "$URI" | jq -r '.'
+}
+
+createRDSSnapshot() {
+	[ $# -eq 3 ] && createRDSSnapshotImpl "$@"
+	[ $# -ne 3 ] && echo "ERROR: Please specify instance id, name and a description of the snapshot" 1>&2
+}
+
+deleteRDSSnapshot() {
+	if [ $# -eq 1 ]; then
+		local backupId=$1
+		local URI="${AUTH_URL_RDS_PROJECT}/backups/${backupId}"
+		curldeleteauth_language $TOKEN $URI | jq .
+	else
+		echo "ERROR: Please specify snapshot/backup id to delete" 1>&2
+	fi
 }
 
 listDomains() {
@@ -2839,6 +2950,17 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listbackups" ]; then
 	getRDSSnapshots
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showerrors" ]; then
+	getRDSErrorLogs "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowstatements" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowqueries" ]; then
+	getRDSSlowStatementLogs "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createsnapshot" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createbackup" ]; then
+	createRDSSnapshot "$@"
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletesnapshot" ] ||
+     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletebackup" ]; then
+	deleteRDSSnapshot "$@"
 
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
