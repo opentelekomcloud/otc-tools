@@ -726,6 +726,7 @@ printHelp() {
 	echo "	SELECTORS  define which data is used with up to three key=value pairs"
 	echo "	   e.g. instance_id=00826ea4-aa15-4725-9fa7-8ea10f765a3f"
 	echo "   Note that timestamps in response are in ms since 1970"
+	echo "   API docu calls SELECTORS dimensions and aggregation mode filter"
 	echo "otc alarms list         # list configured alarms"
 	echo "otc alarms show ALID    # display details of alarm ALID"
 	echo
