@@ -505,6 +505,8 @@ printHelp() {
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+   echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
+   echo "                                       example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
 	echo "    --[no]wait"
 	echo
@@ -2443,6 +2445,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			;;
 			--disksize|--disk-size)
 			ROOTDISKSIZE="$2"
+			shift # past argument
+			;;
+			--datadisks)
+			DATADISKS="$2"
 			shift # past argument
 			;;
 			--direction)
