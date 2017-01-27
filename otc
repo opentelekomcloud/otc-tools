@@ -2396,6 +2396,10 @@ AlarmsAction() {
 	curlputauth "$TOKEN" "{ \"alarm_enabled\": $1 }" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$2/action"
 }
 
+listTrackers() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
+}
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -3128,6 +3132,10 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
 	AlarmsAction "true" "$1"
 elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
 	deleteAlarms "$1"
+
+elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
+	listTrackers
+
 
 else
 	printHelp
