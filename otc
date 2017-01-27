@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.42
+VERSION=0.6.43
 
 # Get Config ####################################################################
 warn_too_open()
@@ -773,6 +773,11 @@ printHelp() {
 	echo "otc alarms show ALID    # display details of alarm ALID"
 	echo "otc alarms delete ALID  # delete alarm ALID"
 	echo "otc alarms en/disable ALID        # enable/disable ALID"
+	echo
+	echo "--- OTC2.0 new services ---"
+	echo "otc trace list          # List trackers from cloud trace"
+	echo "otc queues list         # List queues from distr message system"
+	echo "otc notifications list  # List notification topics from messaging service"
 	echo
 	echo "--- Global flags ---"
 	echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
@@ -2400,6 +2405,14 @@ listTrackers() {
 	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
 }
 
+listQueues() {
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq '.'
+}
+
+listTopics() {
+	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics&limit=100" | jq '.'
+}
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -3135,6 +3148,10 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
 
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
+	listQueues
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
+	listTopics
 
 
 else
