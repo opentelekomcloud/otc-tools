@@ -769,7 +769,10 @@ printHelp() {
 	echo "      Note that timestamps in response are in ms since 1970"
 	echo "      API docu calls SELECTORS dimensions and aggregation mode filter"
 	echo "otc alarms list         # list configured alarms"
+	echo "otc alarms limits       # display alarm quotas"
 	echo "otc alarms show ALID    # display details of alarm ALID"
+	echo "otc alarms delete ALID  # delete alarm ALID"
+	echo "otc alarms en/disable ALID        # enable/disable ALID"
 	echo
 	echo "--- Global flags ---"
 	echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
@@ -2381,7 +2384,17 @@ showAlarms() {
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$1" | jq '.'
 }
 
+showAlarmsQuotas() {
+	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/quotas" | jq '.'
+}
 
+deleteAlarms() {
+	curldeleteauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$1" | jq '.'
+}
+
+AlarmsAction() {
+	curlputauth "$TOKEN" "{ \"alarm_enabled\": $1 }" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$2/action"
+}
 
 ##########################################################################################
 
@@ -3107,6 +3120,14 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "list" ]; then
 	listAlarms
 elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "show" ]; then
 	showAlarms "$1"
+elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "limits" ]; then
+	showAlarmsQuotas
+elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "disable" ]; then
+	AlarmsAction "false" "$1"
+elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
+	AlarmsAction "true" "$1"
+elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
+	deleteAlarms "$1"
 
 else
 	printHelp
