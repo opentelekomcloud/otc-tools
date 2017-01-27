@@ -251,6 +251,14 @@ unset SUBNETAZ
 
 #FUNCTIONS ###############################################################################
 
+# Arguments CATALOGJSON SERVICETYPE
+getcatendpoint() {
+	SERVICE_EP=$(echo "$1" | jq "select(.type == \"$2\") | .endpoints[].url" | tr -d '"')
+	if test "$SERVICE_EP" != "null"; then
+		echo "$SERVICE_EP"
+	fi
+}
+
 # Arguments: SERVICESJSON ENDPOINTSJSON SERVICETYPE PROJECTID
 getendpoint() {
 	SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
@@ -259,6 +267,7 @@ getendpoint() {
 	echo "$SERVICE_EP"
 }
 
+# Arguments SERVICEJSON SERVICETYPE
 getv2endpoint() {
 	SERVICE_EP=$(echo "$1" | jq ".access.serviceCatalog[] | select(.type == \"$2\") | .endpoints[].publicURL" | tr -d '"')
 	if test "$SERVICE_EP" != "null"; then
@@ -357,21 +366,35 @@ getIamToken() {
 			echo "ERROR: Failed to determine user domain id from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
 		fi
-		SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
-		ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
-		#if test "$?" != "0"; then
-		#	echo "ERROR: No keystone v3 service catalog" 1>&2
-		#	exit 2
-		#fi
-		CINDER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" volumev2 $OS_PROJECT_ID)
-		NEUTRON_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" network $OS_PROJECT_ID)
-		GLANCE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" image $OS_PROJECT_ID)
-		DESIGNATE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" dns $OS_PROJECT_ID)
-		NOVA_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" compute $OS_PROJECT_ID)
-		HEAT_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" orchestration $OS_PROJECT_ID)
-		TROVE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" database $OS_PROJECT_ID)
-		KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
-		CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
+		# Parse IAM RESP catalogue
+		CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.catalog[]')
+		if test -n "$CATJSON" -a "$CATJSON" != "null"; then
+			CINDER_URL=$(getcatendpoint "$CATJSON" volumev2 $OS_PROJECT_ID)
+			NEUTRON_URL=$(getcatendpoint "$CATJSON" network $OS_PROJECT_ID)
+			GLANCE_URL=$(getcatendpoint "$CATJSON" image $OS_PROJECT_ID)
+			DESIGNATE_URL=$(getcatendpoint "$CATJSON" dns $OS_PROJECT_ID)
+			NOVA_URL=$(getcatendpoint "$CATJSON" compute $OS_PROJECT_ID)
+			HEAT_URL=$(getcatendpoint "$CATJSON" orchestration $OS_PROJECT_ID)
+			TROVE_URL=$(getcatendpoint "$CATJSON" database $OS_PROJECT_ID)
+			KEYSTONE_URL=$(getcatendpoint "$CATJSON" identity $OS_PROJECT_ID)
+			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
+		else
+			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
+			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
+			#if test "$?" != "0"; then
+			#	echo "ERROR: No keystone v3 service catalog" 1>&2
+			#	exit 2
+			#fi
+			CINDER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" volumev2 $OS_PROJECT_ID)
+			NEUTRON_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" network $OS_PROJECT_ID)
+			GLANCE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" image $OS_PROJECT_ID)
+			DESIGNATE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" dns $OS_PROJECT_ID)
+			NOVA_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" compute $OS_PROJECT_ID)
+			HEAT_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" orchestration $OS_PROJECT_ID)
+			TROVE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" database $OS_PROJECT_ID)
+			KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
+			CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
+		fi
 	else
 		IS_OTC=0
 		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
