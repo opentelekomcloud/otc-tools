@@ -812,13 +812,25 @@ find_id()
 	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
 }
 
+# Params: ARRNM Value addattr [match [attr [id]]]
+find_id_ext()
+{
+	ANM=${5:-name}
+	IDN=${6:-id}
+	if test -n "$4"; then FILT=" and .$3 == \"$4\""; fi
+	echo jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" 1>&2
+	jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" | tr -d '", '
+}
+
 # convert functions
+# $1: name
+# $2: VPCID (optional)
 convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"`
-	SUBNETID=`echo "$SUBNETS" | find_id subnets "$1"`
-	SUBNETAZ=`echo "$SUBNETS" | find_id subnets "$1" name availability_zone`
+	SUBNETID=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2"`
+	SUBNETAZ=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2" name availability_zone`
 	if test -z "$SUBNETID"; then
 		echo "ERROR: No subnet found by name $1" 1>&2
 		exit 3
@@ -1096,7 +1108,7 @@ getSUBNETList() {
 }
 
 getSUBNETDetail() {
-	if ! is_uuid "$1"; then convertSUBNETNameToId "$1"; else SUBNETID="$1"; fi
+	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[]'
 }
 
@@ -1595,12 +1607,15 @@ createELB() {
 	if test -n "$3"; then BANDWIDTH=$3; fi
 	if test -n "$2"; then NAME="$2"; fi
 	if test -z "$NAME"; then
-	if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
+		if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
 	fi
+	if test -n "$1"; then VPCID=$1; fi
+	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
 	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
 		if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
-			convertSUBNETNameToId $SUBNETNAME
+			convertSUBNETNameToId $SUBNETNAME $VPCID
 		fi
 		if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
 			convertSECUGROUPNameToId "$SECUGROUPNAME"
@@ -1616,17 +1631,14 @@ createELB() {
 		if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
 			echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 		fi
-		# TODO: FIXME: need to get these IDs through the API
-		if [[ $AZ == 'eu-de-01' ]];then
-			AZ='bf84aba586ce4e948da0b97d9a7d62fb'
-		elif [[ $AZ == 'eu-de-02' ]];then
-			AZ='bf84aba586ce4e948da0b97d9a7d62fc'
+		# TODO: FIXME: need to get these IDs through the API -- values are valid only for OTC Prod
+		if [[ $AZ == 'eu-de-01' ]]; then
+			AZID='bf84aba586ce4e948da0b97d9a7d62fb'
+		elif [[ $AZ == 'eu-de-02' ]]; then
+			AZID='bf84aba586ce4e948da0b97d9a7d62fc'
 		fi
-			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZ'", "security_group_id": "'$SECUGROUP'"'
+			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'", "security_group_id": "'$SECUGROUP'"'
 	fi
-	if test -n "$1"; then VPCID=$1; fi
-	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
 }
@@ -2743,7 +2755,7 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME"; fi
+	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
 	if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
 	SECUGROUPNAMELIST="$SECUGROUPNAME"
 	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
@@ -2867,8 +2879,9 @@ elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
 	SUBNETDelete "$1"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
+	# FIXME -- what should this do?
 	IMAGENAME=$1
-	# convertSUBNETNameToId "$SUBNETNAME"
+	# convertSUBNETNameToId "$SUBNETNAME" "$VPIC_ID"
 	# convertSECUGROUPNameToId "$SECUGROUPNAME"
 	# convertIMAGENameToId "$IMAGENAME"
 
@@ -3053,7 +3066,8 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delete" ]; then
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
 	createELB "$@"
 	echo "$ELBJOBID"
-	WaitForTask $ELBJOBID 2
+	#WaitForTask $ELBJOBID 2
+	WaitForTaskFieldOpt $ELBJOBID .entities.elb.id
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
 	getListenerList "$@"
