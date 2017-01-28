@@ -65,8 +65,17 @@ fi
 if test -z "$OS_USER_DOMAIN_NAME"; then
 	export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
 fi
+if test -n "$OS_AUTH_URL"; then
+	REG=${OS_AUTH_URL#*://}
+	REG=${REG#*.}
+	if test -z "$OS_REGION_NAME"; then
+		export OS_REGION_NAME=${OS_REGION_NAME%%.*}
+	fi
+	REG=${REG#*.}
+	export OS_CLOUD_ENV=${REG%%.*}
+fi
 if test -z "$OS_PROJECT_NAME"; then
-	export OS_PROJECT_NAME="eu-de"
+	export OS_PROJECT_NAME="$OS_REGION_NAME"
 fi
 # S3 environment
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
@@ -121,7 +130,7 @@ if test -n "$OS_AUTH_URL"; then
 		export IAM_AUTH_URL="$OS_AUTH_URL/tokens"
 	fi
 else
-	export IAM_AUTH_URL="https://iam.eu-de.otc.t-systems.com/v3/auth/tokens"
+	export IAM_AUTH_URL="https://iam.${OS_REGION_NAME}.otc.t-systems.com/v3/auth/tokens"
 fi
 
 # REST call curl wrappers ###########################################################
@@ -2149,8 +2158,6 @@ SUBNETCreate() {
 			"vpc_id":"'"$VPCID"'"
 		}
 	}'
-	#{ "subnet": { "name": "subnet", "cidr": "192.168.20.0/24", "gateway_ip": "192.168.20.1", "dhcp_enable": "true", "primary_dns": "114.114.114.114", "secondary_dns": "114.114.115.115", "availability_zone":"eu-de-01" ,"vpc_id":"3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
-	export REQ_CREATE_SUBNET
 	#echo $REQ_CREATE_SUBNET
 	curlpostauth "$TOKEN" "$REQ_CREATE_SUBNET" "$AUTH_URL_SUBNETS" | jq '.[]'
 }
