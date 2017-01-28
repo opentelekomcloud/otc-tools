@@ -580,7 +580,7 @@ printHelp() {
 	echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
 	echo "otc keypair delete <KPNAME>     # delete ssh key pair"
 	echo
-	echo "--- Elastic Volumes ---"
+	echo "--- Elastic Volume Service (EVS) ---"
 	echo "otc evs list                    # list all volumes"
 	echo "otc evs show <id>               # show details of volume <id>"
 	echo "otc evs create                  # create a volume"
@@ -605,7 +605,7 @@ printHelp() {
 	echo "otc snapshot show snapid               # details of snapshot snapid"
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
 	echo
-	echo "--- Virtual Private Network ---"
+	echo "--- Virtual Private Network (VPC) ---"
 	echo "otc vpc list                    # list all vpc"
 	echo "otc vpc show VPCID              # display VPC (Router) details"
 	echo "otc vpc delete VPCID            # delete VPC"
@@ -651,7 +651,7 @@ printHelp() {
 	echo "    --portmin             <port range lower end>"
 	echo "    --portmax             <port range upper end>"
 	echo
-	echo "--- Image Service ---"
+	echo "--- Image Management Service (IMS) ---"
 	echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
 	echo "otc images show <id>    # show image details"
 	echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
@@ -672,7 +672,7 @@ printHelp() {
 	echo "otc images update <id>          # change properties, --image-name, min-*"
 	echo "otc images delete <id>          # delete (private) image by ID"
 	echo
-	echo "--- Elastic Load Balancer ---"
+	echo "--- Elastic Load Balancer (ELB) ---"
 	echo "otc elb list            # list all load balancer"
 	echo "otc elb show <id>       # show elb details"
 	echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
@@ -750,13 +750,13 @@ printHelp() {
 	echo "otc host list <cid>               # list container hosts of cluster cid"
 	echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
 	echo
-	echo "--- Access Control ---"
+	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
 	echo
-	echo "--- Monitoring & Alarms ---"
+	echo "--- Monitoring & Alarms (Cloud Eye) ---"
 	echo "otc metrics list [NS [MET [SELECTORS]]]  # display list of avail metrics"
 	echo "otc metrics favorites                    # display list of favorite metrics"
 	echo "otc metrics show NS MET FROM TO PER AGR [SELECTORS]	# get metrics"
@@ -778,6 +778,13 @@ printHelp() {
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
+	echo
+	echo "--- Metadata helper ---"
+	echo "otc mds meta_data [FILT]          # Retrieve and output meta_data"
+	echo "otc mds vendor_data [FILT]        # Retrieve and output vendor_data"
+	echo "      FILT is an optional jq string to process the data"
+	echo "otc mds user_data                 # Retrieve and output user_data"
+	echo "otc mds password                  # Retrieve and output password (unused)"
 	echo
 	echo "--- Global flags ---"
 	echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
@@ -2413,6 +2420,15 @@ listTopics() {
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics&limit=100" | jq '.'
 }
 
+getMeta() {
+	DATA=$1; shift
+	if test -z "$1"; then FILT='.'; else FILT="$@"; fi
+	if test ${DATA%.json} != $DATA; then PROCESS="jq $FILT"; else
+		if test "$FILT" != "."; then PROCESS="grep $FILT"; else PROCESS="cat -"; fi
+	fi
+	docurl -sS "http://169.254.169.254/openstack/latest/$DATA" | $PROCESS
+}
+
 ##########################################################################################
 
 # Package dependency #####################################################################
@@ -3153,6 +3169,14 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
 
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
+	getMeta meta_data.json "$@"
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "vendor_data" ]; then
+	getMeta vendor_data.json "$@"
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
+	getMeta user_data "$@"
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
+	getMeta password "$@"
 
 else
 	printHelp
