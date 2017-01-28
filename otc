@@ -2426,7 +2426,11 @@ getMeta() {
 	if test ${DATA%.json} != $DATA; then PROCESS="jq $FILT"; else
 		if test "$FILT" != "."; then PROCESS="grep $FILT"; else PROCESS="cat -"; fi
 	fi
-	docurl -sS "http://169.254.169.254/openstack/latest/$DATA" | $PROCESS
+	RESP=$(docurl -sS "http://169.254.169.254/openstack/latest/$DATA")
+	echo "$RESP" | grep "404 Not Found" >/dev/null 2>&1
+	if test $? != 0 -o "$DATA" != "user_data"; then
+		echo "$RESP" | $PROCESS
+	fi
 }
 
 ##########################################################################################
