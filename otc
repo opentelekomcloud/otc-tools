@@ -2710,7 +2710,7 @@ if [ "$MAINCOM" == "s3" ]; then
 	exit $?
 fi
 
-if [ -n "$MAINCOM" -a "$MAINCOM" != "help" ]; then
+if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
 	getIamToken
 fi
 
