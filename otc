@@ -827,7 +827,7 @@ find_id_ext()
 	ANM=${5:-name}
 	IDN=${6:-id}
 	if test -n "$4"; then FILT=" and .$3 == \"$4\""; fi
-	echo jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" 1>&2
+	#echo jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" 1>&2
 	jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" | tr -d '", '
 }
 
@@ -1623,13 +1623,11 @@ deleteKEYPAIR() {
 createELB() {
 	if test -n "$3"; then BANDWIDTH=$3; fi
 	if test -n "$2"; then NAME="$2"; fi
-	if test -z "$NAME"; then
-		if test -z "$INSTANCE_NAME"; then NAME="ELB-$BANDWIDTH"; else NAME="$INSTANCE_NAME"; fi
-	fi
 	if test -n "$1"; then VPCID=$1; fi
 	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
+	DEFNAME="ELB-$BANDWIDTH"
 	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
 		if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
 			convertSUBNETNameToId $SUBNETNAME $VPCID
@@ -1649,12 +1647,29 @@ createELB() {
 			echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 		fi
 		# TODO: FIXME: need to get these IDs through the API -- values are valid only for OTC Prod
-		if [[ $AZ == 'eu-de-01' ]]; then
-			AZID='bf84aba586ce4e948da0b97d9a7d62fb'
-		elif [[ $AZ == 'eu-de-02' ]]; then
-			AZID='bf84aba586ce4e948da0b97d9a7d62fc'
+		if test "$OS_CLOUD_ENV" == "otc"; then
+			if [[ $AZ == 'eu-de-01' ]]; then
+				AZID='bf84aba586ce4e948da0b97d9a7d62fb'
+			elif [[ $AZ == 'eu-de-02' ]]; then
+				AZID='bf84aba586ce4e948da0b97d9a7d62fc'
+			else
+				echo "WARN: No IDs known for cloud AZ $AZ" 1>&2
+				AZID="$AZ"
+			fi
+		else
+			echo "WARN: No IDs known for cloud env $OS_CLOUD_ENV" 1>&2
+			AZID="$AZ"
 		fi
-			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'", "security_group_id": "'$SECUGROUP'"'
+		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'"'
+		if test -n "$SECUGROUP"; then
+			ELBTYPE="$ELBTYPE, \"security_group_id\": \"$SECUGROUP\""
+		else
+			echo "WARN: Need to specify --security-group-name/id" 1>&2
+		fi
+		DEFNAME="ELB-Int"
+	fi
+	if test -z "$NAME"; then
+		if test -z "$INSTANCE_NAME"; then NAME="$DEFNAME"; else NAME="$INSTANCE_NAME"; fi
 	fi
 	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
