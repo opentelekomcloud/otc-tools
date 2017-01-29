@@ -1071,10 +1071,18 @@ getBackupDetail() {
 	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup'
 }
 
+deleteBackupOTC() {
+	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
+	#curldeleteauth $TOKEN "$AUTH_URL_CBACKUPS/$BACK_ID" | jq '.'
+	BACKUP=$(curlpostauth $TOKEN "" "$AUTH_URL_CBACKUPS/$BACK_ID")
+	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
+        if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
+        WaitForTask $TASKID
+}
+
 deleteBackup() {
 	# TODO: Should we delete an associated snapshot as well that might have been
 	# created via the cloudbackups OTC service API along with the backup?
-	# Note: The documented cloudbackups service API to delete seems to not work
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
 	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup.container' | tr -d '"')
 	if test -n "$SNAP_ID" -a "$SNAP_ID" != "null"; then
@@ -3049,6 +3057,8 @@ elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
 	getBackupDetail "$1"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete" ]; then
+	deleteBackupOTC "$1"
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete_" ]; then
 	deleteBackup "$1"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "create" ] ||
      [ "$MAINCOM" == "backup" -a "$SUBCOM" == "backup" ] ; then
