@@ -1005,7 +1005,8 @@ getVPCDetail() {
 }
 
 VPCDelete() {
-	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$1"
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID"
 	echo
 }
 
@@ -1130,7 +1131,9 @@ getSUBNETDetail() {
 }
 
 SUBNETDelete() {
-	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID/subnets/$1"
+	if test -z "$VPCID"; then echo "ERROR: Need to specify --vpc-name/-id" 1>&2; exit 2; fi
+	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
+	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID/subnets/$SUBNETID"
 	echo
 }
 
@@ -2906,6 +2909,7 @@ elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ];then
 	getSUBNETDetail "$1"
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
 	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
+	if test "$2" == "--vpc-id"; then VPCID="$3"; fi
 	SUBNETDelete "$1"
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
