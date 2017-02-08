@@ -363,6 +363,7 @@ getIamToken() {
 	}
 	'
 	fi
+   if test -n "$OS_PROJECT_DOMAIN_NAME"; then IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },"); fi
 	export IAM2_REQ IAM3_REQ
 	#if test -n "$DEBUG"; then
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
