@@ -698,10 +698,12 @@ printHelp() {
 	echo "otc elb delete <eid>            # Delete ELB with <eid>"
 
 	echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
+	echo "otc elb showlistener <lid>      # show listener detail <lid>"
 	echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
 	#not implemented: modifylistener
 	echo "otc elb dellistener <lid>"
 	echo "otc elb listmember <lid>"
+	echo "otc elb showmember <lid> <mid>"
 	echo "otc elb addmember <lid> <vmid> <vmip>"
 	echo "otc elb delmember <lid> <mid> <vmip>"
 	#elb listcheck <lid> is missing (!)
@@ -1032,7 +1034,7 @@ VPCDelete() {
 }
 
 getPUBLICIPSList() {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.publicips[]  | {id: .id, pubip: .public_ip_address, privip: .private_ip_address, status: .status, bid: .bandwidth_id, bandwidth: .bandwidth_size|tostring , bandwidth_share_type: .bandwidth_share_type} | .id +"   " +.pubip +"   " +.privip +"   " +.status +"   " +.bid +"   " +.bandwidth +"   " +.bandwidth_share_type ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ipaddress +"   " +.private_ip_address +"   " +.status +"   " +.bandwidthid +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
 }
 
 getSECGROUPListDetail() {
@@ -1058,7 +1060,7 @@ getSECGROUPRULESList() {
 
 getEVSListOTC() {
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
-	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES/detail?limit=1200" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; .volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone, attach: .attachments } | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az+"   "+att(.attach) ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES/detail?limit=1200" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
 }
 
 getEVSList() {
@@ -1073,7 +1075,7 @@ getEVSDetail() {
 }
 
 getSnapshotList() {
-	curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 }
 
 getSnapshotDetail() {
@@ -1098,7 +1100,7 @@ getBackupPolicyDetail() {
 
 getBackupList() {
 	#curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
-	curlgetauth $TOKEN "$AUTH_URL_BACKS/detail?limit=1200" | jq '.backups[] | {id: .id, name: .name, status: .status, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.size+"   "+.az ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/detail?limit=1200" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 }
 
 getBackupDetail() {
@@ -1155,8 +1157,8 @@ restoreBackup() {
 }
 
 getSUBNETList() {
-	curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800" | jq '.[]'
-#| python -m json.tool
+	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800" | jq '.[]'
+   curlgetauth $TOKEN  "$AUTH_URL_SUBNETS?limit=800" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
 }
 
 getSUBNETDetail() {
@@ -1492,7 +1494,7 @@ concatarr() {
 getIMAGEList() {
 	IMAGE_FILTER=$(concatarr "&" "$@")
 	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800$IMAGE_FILTER"| jq '.images[] | .id +"   "+.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
 }
 
 getIMAGEDetail() {
@@ -1639,7 +1641,8 @@ getFLAVORList() {
 }
 
 getKEYPAIRList() {
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.[]'
+	#curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -1713,7 +1716,9 @@ createELB() {
 }
 
 getELBList() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.[]'
+	#curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
+
 }
 
 getELBDetail() {
@@ -1726,7 +1731,14 @@ deleteELB() {
 }
 
 getListenerList() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
+	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.loadbalancer_id' | tr -d '"'
+}
+
+getListenerDetail()
+{
+	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[] | select(.id = "$2")'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1" | jq '.'
 }
 
 deleteListener() {
@@ -1769,7 +1781,13 @@ getCheck() {
 
 #   echo "otc elb listmember <lid>"
 getMemberList() {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq '.[]'
+	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq '.'
+	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status+"   "+str(.listeners)' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status' | tr -d '"'
+}
+
+getMemberDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq ".[] | select(.id == \"$2\")"
 }
 
 #   echo "otc elb addmember <lid> <vmid> <vmip>"
@@ -1853,7 +1871,7 @@ ECSAttachVolumeListName() {
 
 ECSAttachVolumeName() {
 	local server_name="$1" dev_vol="$2" ecsid volid
-	ecsid=$(getECSList |  while read id name  ; do [ "$name" = "$server_name"  -o "$id" = "$server_name"  ] && echo $id && break; done)
+	ecsid=$(getECSList |  while read id name x; do [ "$name" = "$server_name"  -o "$id" = "$server_name"  ] && echo $id && break; done)
 	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" -o "$id" = "${dev_vol#*:}" ] && echo $id && break; done)
 	[ -z "$volid" ] && echo "$ERROR: volume '${dev_vol#*:}' doesn't exist" 1>&2 && return 1
 	ECSAttachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
@@ -1891,8 +1909,8 @@ ECSDetachVolumeListName() {
 
 ECSDetachVolumeName() {
 	local server_name="$1" dev_vol="$2" ecsid volid  ##### dev_vol could be of the form <device>:<volume> or just <volume>
-	ecsid=$(getECSList |  while read id name; do [ "$name" = "$server_name"  ] && echo $id && break; done)
-	volid=$(getEVSList |  while read id name; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
+	ecsid=$(getECSList |  while read id name x; do [ "$name" = "$server_name"  ] && echo $id && break; done)
+	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
 	if test -z "$volid"; then
 		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique" 1>&2
 		exit 2
@@ -2104,7 +2122,7 @@ ECSDelete() {
 		done
 	for ecs in $@; do
 		# convert $ecs to an id if given ecs is a name, otherwize keep the ecs=id
-		for id in $(getECSList | while read ecsid name; do [ "$ecsid" = "$ecs" ]||[ "$name" = "$ecs" ]||continue; echo "$ecsid";done)
+		for id in $(getECSList | while read ecsid name x; do [ "$ecsid" = "$ecs" ]||[ "$name" = "$ecs" ]||continue; echo "$ecsid";done)
 			do
 				IDS="$IDS { \"id\": \"$id\" },"
 				[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$ecs" "$DEV_VOL" ##### detach some external volumes before deleting the vm
@@ -3153,6 +3171,8 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
 
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
 	getListenerList "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showlistener" ]; then
+	getListenerDetail "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
 	createListener "$@"
@@ -3160,6 +3180,8 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
 	deleteListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
 	getMemberList "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showmember" ]; then
+	getMemberDetail "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
 	createMember "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delmember" ]; then
