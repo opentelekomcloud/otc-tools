@@ -296,7 +296,6 @@ getv2endpoint() {
 
 # Get a token (and the project ID)
 # TODO: Token caching ...
-
 TROVE_OVERRIDE=0
 IS_OTC=1
 getIamToken() {
@@ -398,6 +397,7 @@ getIamToken() {
 			TROVE_URL=$(getcatendpoint "$CATJSON" database $OS_PROJECT_ID)
 			KEYSTONE_URL=$(getcatendpoint "$CATJSON" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
+			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
 			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
@@ -767,6 +767,7 @@ printHelp() {
 	echo
 	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
+	echo "otc iam catalog         # catalog as returned with token"
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
@@ -2792,6 +2793,8 @@ if [ "$MAINCOM" == "s3" ]; then
 	exit $?
 fi
 
+if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
+
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
 	getIamToken
 fi
@@ -3053,6 +3056,8 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" ];then
+   echo -n ""
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
