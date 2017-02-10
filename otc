@@ -478,10 +478,12 @@ getIamToken() {
 	AUTH_URL_IMAGESV1="$GLANCE_URL/v1/cloudimages"
 	AUTH_URL_IMAGESV2="$GLANCE_URL/v2/cloudimages"
 
+	VBS_URL="${CINDER_URL/evs/vbs}"
 	AUTH_URL_CVOLUMES="$CINDER_URL/cloudvolumes"
 	AUTH_URL_CVOLUMES_DETAILS="$CINDER_URL/cloudvolumes/detail"
 	AUTH_URL_VOLS="$CINDER_URL/volumes"
-	AUTH_URL_CBACKUPS="$CINDER_URL/cloudbackups"
+	AUTH_URL_CBACKUPS="$VBS_URL/cloudbackups"
+	AUTH_URL_CBACKUPPOLS="$VBS_URL/backuppolicy"
 	AUTH_URL_BACKS="$CINDER_URL/backups"
 	AUTH_URL_SNAPS="$CINDER_URL/snapshots"
 
@@ -614,6 +616,8 @@ printHelp() {
 	echo "otc snapshot list                      # list snapshots"
 	echo "otc snapshot show snapid               # details of snapshot snapid"
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
+	echo "otc backuppolicy list                  # list backup policies"
+	echo "otc backuppolicy show NAME|ID          # details of backup policy"
 	echo
 	echo "--- Virtual Private Network (VPC) ---"
 	echo "otc vpc list                    # list all vpc"
@@ -932,6 +936,19 @@ convertBackupNameToId() {
 	export BACK_ID
 }
 
+convertBackupPolicyNameToId() {
+	BACKPOL_ID=`curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS?limit=1200" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	if test -z "$BACKPOL_ID"; then
+		echo "ERROR: No backup policy found by name $1" 1>&2
+		exit 3
+	fi
+	if test "$(echo "$BACKPOL_ID" | wc -w)" != "1"; then
+		BACKPOL_ID=$(echo "$BACKPOL_ID" | head -n1)
+		echo "Warn: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
+	fi
+	export BACKPOL_ID
+}
+
 convertSnapshotNameToId() {
 	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$SNAP_ID"; then
@@ -952,7 +969,8 @@ getECSVM() {
 }
 
 getECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id +"   " +.name  '
+	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
+	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | sed -e 's@\["\([^"]*\)",@\1,@g' -e 's@,"\([^"]*\)",@ \1,@g' -e 's@\(,\| \[\)"\([^"]*\)"\]@ \2@g'
 }
 
 getECSDetails() {
@@ -975,10 +993,10 @@ getECSDetail()
 getECSDetailsNew() {
 	RESP=$(getECSDetails "$1")
 	echo "# VMID                               |       name        | status |    AZ    | SSHKeyName |  Flavor  |   Image   | Volumes | Nets | SGs"
-	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|tostring; def vol(v): [v[]|{volid:.id}]|tostring; def sg(s): [s[]|{sgid:.name}]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + " | " + .name + " | " + .status + " | " + .az + " | " + .sshkey + " | " + .flavor + " | " + .image + " | " + vol(.volume) + " | " + adr(.addr) + " | " + sg(.sg)'
-	# TODO: Translate back Flavor, Volume IDs into names, shorten addr
-	# Work around SG bug (osTicket 117508)
+	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; def vol(v): [v[]|{volid:.id}]|[.[].volid]|tostring; def sg(s): [s[]|{sgid:.name}]|[.[].sgid]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + " | " + .name + " | " + .status + " | " + .az + " | " + .sshkey + " | " + .flavor + " | " + .image + " | " + vol(.volume) + " | " + adr(.addr) + " | " + sg(.sg)' | sed -e 's@\["\([^"]*\)",@\1,@g' -e 's@,"\([^"]*\)",@ \1,@g' -e 's@\(,\| \[\)"\([^"]*\)"\]@ \2@g'
+	# TODO: Volume IDs into names, SG names
 	# Add FloatingIP info
+	# Work around SG bug (osTicket 117508 - FIXED)
 }
 
 getLimits()
@@ -1064,8 +1082,19 @@ deleteSnapshot() {
 	curldeleteauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.'
 }
 
+getBackupPolicyList() {
+	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS" | jq '.backup_policies[] | {id: .backup_policy_id, name: .backup_policy_name, status: .scheduled_policy.status} | .id+"   "+.name+"   "+.status' | tr -d '"'
+}
+
+getBackupPolicyDetail() {
+	if ! is_uuid "$1"; then filter=".name = \"$1\""; else filter=".id = \"$1\""; fi
+	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS" | jq ".backup_policies[] | select($filter)"
+}
+# TODO: More backup policy stuff
+
 getBackupList() {
-	curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	#curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/detail?limit=1200" | jq '.backups[] | {id: .id, name: .name, status: .status, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.size+"   "+.az ' | tr -d '"'
 }
 
 getBackupDetail() {
@@ -3072,6 +3101,10 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
 		ECSDetachVolumeId   "$1" "$2"
 	fi
 
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "list" ]; then
+	getBackupPolicyList
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "show" ]; then
+	getBackupPolicyDetail "$1"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
 	getBackupList
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
