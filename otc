@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.43
+VERSION=0.6.44
 
 # Get Config ####################################################################
 warn_too_open()
@@ -594,6 +594,7 @@ printHelp() {
 	echo
 	echo "--- Elastic Volume Service (EVS) ---"
 	echo "otc evs list                    # list all volumes"
+	echo "otc evs details                 # list all volumesi (more details)"
 	echo "otc evs show <id>               # show details of volume <id>"
 	echo "otc evs create                  # create a volume"
 	echo "    --volume-name         <NAME>"
@@ -1039,7 +1040,7 @@ getSECGROUPListDetail() {
 }
 
 getSECGROUPList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.vpc +"   " +.name' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -1055,11 +1056,13 @@ getSECGROUPRULESList() {
 }
 
 getEVSListOTC() {
-	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES/detail?limit=1200" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; .volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone, attach: .attachments } | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az+"   "+att(.attach) ' | tr -d '"'
 }
 
 getEVSList() {
 	curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	#curlgetauth $TOKEN "$AUTH_URL_VOLS/details?limit=1200" | jq '.volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az ' | tr -d '"'
 }
 
 getEVSDetail() {
@@ -3070,6 +3073,10 @@ elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
 	getEVSList
+elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "details" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-details" ] ||
+     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "details" ];then
+	getEVSListOTC
 
 elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
