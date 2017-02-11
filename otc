@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.98
+VERSION=0.6.99
 
 # Get Config ####################################################################
 warn_too_open()
@@ -798,6 +798,13 @@ printHelp() {
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
 	echo
+	echo "--- Custom command support ---"
+	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
+	echo "      METHOD=GET/PUT/POST/DELETE, vars with \\\$ are evaluated (not sanitized!)"
+   echo "      example: otc custom GET \\\$BASEURL/v2/\\\$OS_PROJECT_ID/servers"
+	echo "    --jqfilter allows to use a filtering string for jq processing (def=.)"
+   echo "      e.g.: --jqfilter '.servers[] | .id+\\\"   \\\"+.name' GET \\\$NOVA_URL/servers"
+	echo
 	echo "--- Metadata helper ---"
 	echo "otc mds meta_data [FILT]          # Retrieve and output meta_data"
 	echo "otc mds vendor_data [FILT]        # Retrieve and output vendor_data"
@@ -966,6 +973,49 @@ convertSnapshotNameToId() {
 	fi
 	export SNAP_ID
 }
+
+handleCustom()
+{
+	if test "$1" == "--jqfilter"; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
+	if test -n "$JQFILTER"; then JQ="jq -r \"$JQFILTER\""; else JQ="cat -"; fi
+	METH=$1
+	# NOTE: We better TRUST the caller not to pass in malicious things here
+	#  so never call otc custom from a script that accepts non-sanitized args
+	# TODO: Replace the knowledge of internal shell vars by a documented set
+	#  the user can use here and do sed to fill in rather than eval.
+	URL=$(eval echo "$2")
+	shift; shift
+	ARGS=$(eval echo "$@")
+	echo "#DEBUG: curl -X $METH -d $ARGS $URL" 1>&2
+	#TODO: Capture return code ...
+	case "$METH" in
+		GET)
+			curlgetauth $TOKEN "$URL" | eval "$JQ"
+			;;
+		PUT)
+			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			;;
+		POST)
+			curlposttauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			;;
+		PATCH)
+			curlpatchauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			;;
+		DELETE)
+			if test -z "$ARGS"; then
+				curldeleteauth $TOKEN "$URL" | eval "$JQ"
+			else
+				curldeleteauthwithjsonparameter $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			fi
+			;;
+		*)
+			echo "ERROR: Unknown http method $METH in otc custom" 1>&2
+			exit 1
+			;;
+	esac
+   if test -z "$JQFILTER"; then echo; fi
+}
+
 
 getECSVM() {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
@@ -3302,6 +3352,9 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
 	getMeta user_data "$@"
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
 	getMeta password "$@"
+
+elif [ "$MAINCOM" == "custom" ]; then
+   handleCustom "$SUBCOM" "$@"
 
 else
 	printHelp

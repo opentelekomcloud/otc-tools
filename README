@@ -71,6 +71,20 @@ fragile now. Nevertheless, this tool is not yet mature enough that we commit
 to not break things here yet -- a future version might well provide switches
 to control the output. Pull requests are welcome :-)
 
+Custom commands
+---------------
+New in otc-tools-0.7.0, we support custom commands using
+  otc custom GET|PUT|POST|POST|PATCH URL JSON
+You can reference variables by using \$BASEURL \$CINDER_URL \$OS_PROJECT_ID.
+These are not standardized and well-documented yet (except for the OS_ ones
+which are the normal OpenStack environment). You'll need to check the source
+code. But the most important ones you already know now ...
+There is an optional --jqfilter FILTERSTRING.
+By default, the output from the REST call is passed through jq -r '.'.
+You can replace this with --jqfilter '' which results in no processing.
+Or you pass a string like --jqfilter '.servers[] | .id+\"   \"+.name'.
+Note the quoting for \".
+
 Packages
 --------
 Packages (RPMs/DEBs) on open Build Service home:garloff:OTC
