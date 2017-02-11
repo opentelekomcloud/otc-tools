@@ -531,8 +531,8 @@ printHelp() {
 	echo "Usage: otc.sh service action [options]"
 	echo "--- Elastic Cloud Server (VM management) ---"
 	echo "otc ecs list               # list ecs instances"
-	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (ECS: opt search string)"
-	echo "otc ecs details [ECS]      # list ecs instances in some detail (dito)"
+	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
+	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
 	echo "otc ecs create -n <name>   # create ecs instance <name>"
 	echo
@@ -580,6 +580,7 @@ printHelp() {
 	echo "otc ecs limits                  # display project quotas"
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "otc ecs az-list                 # list availability zones"
+	echo "otc ecs flavor-list             # list available flavors"
 	echo
 	echo "--- Task/Job management ---"
 	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
@@ -593,8 +594,8 @@ printHelp() {
 	echo "otc keypair delete <KPNAME>     # delete ssh key pair"
 	echo
 	echo "--- Elastic Volume Service (EVS) ---"
-	echo "otc evs list                    # list all volumes"
-	echo "otc evs details                 # list all volumesi (more details)"
+	echo "otc evs list                    # list all volumes (only id and name)"
+	echo "otc evs details                 # list all volumes (more details)"
 	echo "otc evs show <id>               # show details of volume <id>"
 	echo "otc evs create                  # create a volume"
 	echo "    --volume-name         <NAME>"
@@ -996,8 +997,8 @@ getECSDetail()
 
 getECSDetailsNew() {
 	RESP=$(getECSDetails "$1")
-	echo "# VMID                               |       name        | status |    AZ    | SSHKeyName |  Flavor  |   Image   | Volumes | Nets | SGs"
-	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; def vol(v): [v[]|{volid:.id}]|[.[].volid]|tostring; def sg(s): [s[]|{sgid:.name}]|[.[].sgid]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + " | " + .name + " | " + .status + " | " + .az + " | " + .sshkey + " | " + .flavor + " | " + .image + " | " + vol(.volume) + " | " + adr(.addr) + " | " + sg(.sg)' | sed -e 's@\["\([^"]*\)",@\1,@g' -e 's@,"\([^"]*\)",@ \1,@g' -e 's@\(,\| \[\)"\([^"]*\)"\]@ \2@g'
+	echo "# VMID                                       name          status      AZ      SSHKeyName    Flavor      Image     Volumes   Nets   SGs"
+	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; def vol(v): [v[]|{volid:.id}]|[.[].volid]|tostring; def sg(s): [s[]|{sgid:.name}]|[.[].sgid]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + "   " + .name + "   " + .status + "   " + .az + "   " + .sshkey + "   " + .flavor + "   " + .image + "   " + vol(.volume) + "   " + adr(.addr) + "   " + sg(.sg)' | sed -e 's@\["\([^"]*\)",@\1,@g' -e 's@,"\([^"]*\)",@ \1,@g' -e 's@\(,\| \[\)"\([^"]*\)"\]@ \2@g'
 	# TODO: Volume IDs into names, SG names
 	# Add FloatingIP info
 	# Work around SG bug (osTicket 117508 - FIXED)
@@ -1636,7 +1637,8 @@ getFLAVORListOld() {
 }
 
 getFLAVORList() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[] | "\(.id)   \(.name)  \(.vcpus)  \(.ram)  \(.os_extra_specs)"' | tr -d '"'
+	#curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[]'
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
 #| python -m json.tool
 }
 
@@ -3044,7 +3046,8 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ];then
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]  ;then
 	getFLAVORList
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||

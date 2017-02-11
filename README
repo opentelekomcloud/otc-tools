@@ -45,6 +45,32 @@ quotas. However, if you have very large environments, keep in mind that
 otc-tools might not show you the whole truth any more. Please talk to us
 or submit a PR if you need further increases in the limits.
 
+Output formatting
+-----------------
+otc tools tries to output things in a human readable format. It has two basic
+formats:
+
+* The list format: It creates a table with columns that are separated by 3 spaces.
+  Several values in a field are separated by one space (or a colon for ip:port
+  and for vmid:device). The first three columns are standardized, first is the
+  ID of the resource, second the name, third the status (if reported), then
+  further information (size, AZ, relations, ...) is appended.
+  There can be an optional header (explaining the column contents) which starts
+  with a '#'.
+  This format is returned by list and details subcommands and is supposed to be 
+  parsed by humans.
+* The JSON format: The REST calls return JSON objects of course and jq is used
+  to present a nicely formatted represntation of the object. The JSON can be
+  further passed.
+* The long running requests report the TASKID as last output, unless we wait
+  for further progress. In the latter case, the ID of the created resource
+  is output last.
+
+This has been tidied up for otc-tools-0.7 and should be more usable and less
+fragile now. Nevertheless, this tool is not yet mature enough that we commit
+to not break things here yet -- a future version might well provide switches
+to control the output. Pull requests are welcome :-)
+
 Packages
 --------
 Packages (RPMs/DEBs) on open Build Service home:garloff:OTC
