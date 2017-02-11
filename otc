@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.6.99
+VERSION=0.7.0
 
 # Get Config ####################################################################
 warn_too_open()
@@ -2492,7 +2492,7 @@ getUserDomainIdFromIamResponse() {
 }
 
 shortlistClusters() {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | {id: .metadata.uuid, name: .metadata.name} | .id +"  " +.name'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.az'
 }
 
 listClusters() {
@@ -2504,7 +2504,8 @@ showCluster() {
 }
 
 listClusterHosts() {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
 }
 
 showClusterHost() {
@@ -2520,7 +2521,8 @@ listMetrics() {
 	if test -n "$4"; then PARM="$PARM&dim.1=${4/=/,}"; fi
 	if test -n "$5"; then PARM="$PARM&dim.2=${5/=/,}"; fi
 	if test "${PARM:0:1}" = "&"; then PARM="?${PARM:1}"; fi
-	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq -r 'def str(v): v|tostring; .metrics[] | .namespace+"   "+.metric_name+"   "+.unit+"   "+.dimensions[0].value'
 }
 
 listFavMetrics() {
@@ -2538,7 +2540,9 @@ showMetrics() {
 }
 
 listAlarms() {
-	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms" | jq '.'
+	#TODO: Show multiple dimensions if available
+	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms" | jq -r 'def str(v): v|tostring; .metric_alarms[] | .alarm_id+"   "+.alarm_name+"   "+str(.alarm_enabled)+"   "+.metric.dimensions[0].value+"   "+.metric.namespace+"   "+.metric.metric_name+" "+.condition.comparison_operator+" "+str(.condition.value)+" "+.condition.unit '
 }
 
 showAlarms() {
@@ -2558,15 +2562,18 @@ AlarmsAction() {
 }
 
 listTrackers() {
-	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq -r '.[] | .tracker_name+"   "+.bucket_name+"   "+.status+"   "+.file_prefix_name'
 }
 
 listQueues() {
-	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq -r 'def str(v): v|tostring; .queues[] | .id+"   "+.name+"   "+str(.produced_messages)'
 }
 
 listTopics() {
-	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics&limit=100" | jq '.'
+	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
 getMeta() {
@@ -2869,9 +2876,9 @@ if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
 	getIamToken
 fi
 
-if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
-	echo "WARN: Using manually set database endpoint, not adv in svc catalog" 1>&2
-fi
+#if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
+#	echo "WARN: Using manually set database endpoint, not advertized in catalog" 1>&2
+#fi
 
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
 	printHelp
