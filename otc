@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.0
+VERSION=0.7.1
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1087,6 +1087,10 @@ VPCDelete() {
 getPUBLICIPSList() {
 	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
 	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
+}
+
+getPUBLICIPSDetail() {
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS/$1" | jq '.'
 }
 
 getSECGROUPListDetail() {
@@ -2881,6 +2885,18 @@ fi
 #	echo "WARN: Using manually set database endpoint, not advertized in catalog" 1>&2
 #fi
 
+# Support alternative names
+if [ "$MAINCOM" = "server" ]; then MAINCOM="ecs"; fi
+if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
+if [ "$MAINCOM" = "volumes" ]; then MAINCOM="evs"; fi
+if [ "$MAINCOM" = "volume" ]; then MAINCOM="evs"; fi
+if [ "$MAINCOM" = "router" ]; then MAINCOM="vpc"; fi
+if [ "$MAINCOM" = "floatingip" ]; then MAINCOM="publicip"; fi
+if [ "$MAINCOM" = "eip" ]; then MAINCOM="publicip"; fi
+if [ "$MAINCOM" = "image" ]; then MAINCOM="images"; fi
+if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
+if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
+
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
 	printHelp
 
@@ -3004,17 +3020,17 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
 	getPUBLICIPSList
-
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "show" ];then
+	getPUBLICIPSDetail $1
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ];then
 	PUBLICIPSCreate
-
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ];then
 	PUBLICIPSDelete $@
-
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "bind" ];then
+elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
+     [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "associate" ];then
 	PUBLICIPSBind $@
-
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "unbind" ];then
+elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
+     [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "disassociate" ];then
 	PUBLICIPSUnbind $@
 
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
@@ -3025,73 +3041,48 @@ elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
 	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
 	if test "$2" == "--vpc-id"; then VPCID="$3"; fi
 	SUBNETDelete "$1"
-
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
 	# FIXME -- what should this do?
 	IMAGENAME=$1
 	# convertSUBNETNameToId "$SUBNETNAME" "$VPIC_ID"
 	# convertSECUGROUPNameToId "$SECUGROUPNAME"
 	# convertIMAGENameToId "$IMAGENAME"
-
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
-
-	if [ "$VPCNAME" != "" ];then
-		convertVPCNameToId "$VPCNAME"
-	fi
+	if [ "$VPCNAME" != "" ];then convertVPCNameToId "$VPCNAME"; fi
 	SUBNETCreate
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
 	VPCNAME=$1
-	if [ "$VPCNAME" != "" ];then
-		convertVPCNameToId "$VPCNAME"
-	fi
-
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	getSECGROUPList
-
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
-	if [ "$VPCNAME" != "" ];then
-		convertVPCNameToId "$VPCNAME"
-	fi
-
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SECGROUPCreate
-
-elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ];then
-	SECUGROUP=$1
-
-	if [ "$SECUGROUP" == "" ];then
+elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
+     [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "show" ]; then
+	if [ -z "$1" ]; then
 		echo "ERROR: Must be specify the Security Group ID!" 1>&2
 		printHelp
 		exit 1
 	fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
-	getSECGROUPRULESList $SECUGROUP
-
+	getSECGROUPRULESList $1
 elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
-
-	if [ "$VPCNAME" != "" ];then
-		convertVPCNameToId "$VPCNAME"
-	fi
-
-	if [ "$SECUGROUPNAME" != "" ];then
-		convertSECUGROUPNameToId "$SECUGROUPNAME"
-	fi
-
+	if [ "$VPCNAME" != "" ];then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$SECUGROUPNAME" != "" ];then convertSECUGROUPNameToId "$SECUGROUPNAME"; fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
 	SECGROUPRULECreate
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
 	getIMAGEList "$@"
-
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
 	getIMAGEDetail $1
-
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
 	if test -r "$2"; then
 		uploadIMAGEfile $1 $2
 	else
 		uploadIMAGEobj $1 $2
 	fi
-
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
 	createIMAGE "$1"
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "register" ]; then
@@ -3153,21 +3144,16 @@ elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
 	echo $OS_PROJECT_ID
 
-elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
 	getEVSList
-elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "details" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-details" ] ||
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-details" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "details" ];then
 	getEVSListOTC
-
-elif [ "$MAINCOM" == "volume" -a "$SUBCOM" == "show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
 	getEVSDetail $1
-
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
@@ -3183,7 +3169,6 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
 	else
 		ECSAttachVolumeId   "$1" "$2"
 	fi
-
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
 	if [ "$1" = -n ] || [ "$1" = --name ]
 	then
