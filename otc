@@ -1085,7 +1085,8 @@ VPCDelete() {
 }
 
 getPUBLICIPSList() {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ipaddress +"   " +.private_ip_address +"   " +.status +"   " +.bandwidthid +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
+	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
 }
 
 getSECGROUPListDetail() {
