@@ -2875,16 +2875,6 @@ if [ "$MAINCOM" == "s3" ]; then
 	exit $?
 fi
 
-if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
-
-if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
-	getIamToken
-fi
-
-#if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
-#	echo "WARN: Using manually set database endpoint, not advertized in catalog" 1>&2
-#fi
-
 # Support alternative names
 if [ "$MAINCOM" = "server" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
@@ -2896,6 +2886,18 @@ if [ "$MAINCOM" = "eip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "image" ]; then MAINCOM="images"; fi
 if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
+if [ "$MAINCOM" = "auth" ]; then MAINCOM="iam"; fi
+
+
+if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
+
+if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
+	getIamToken
+fi
+
+#if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
+#	echo "WARN: Using manually set database endpoint, not advertized in catalog" 1>&2
+#fi
 
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
 	printHelp
