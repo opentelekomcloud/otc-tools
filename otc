@@ -2375,7 +2375,7 @@ BindPublicIpToCreatingVM() {
 	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID);done
 	##### input: $EIP
 	EIPID=$(getPUBLICIPSList | sed 's/   /;/g' \
-          |  while IFS=";" read id eip iip status bid b type;do
+          |  while IFS=";" read id eip status iip bid b type;do
                    [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
                    [ "$status" = "DOWN" ] && echo "$id"   && break
                    echo "ERROR: requested external IP is of wrong status: $status" 1>&2
