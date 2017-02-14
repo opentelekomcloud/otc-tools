@@ -676,17 +676,24 @@ printHelp() {
 	echo "otc images create NAME          # create (private) image with name"
 	echo "    --disk-format  <disk-format>"
 	echo "    --min-disk     <GB>"
-	echo "    --min-ram      <MB>          # optional (default 1024)"
-	echo "    --os-version   <os_version>  # optional (default Other)"
-	echo "    --property     <key=val>     # optional properties (multiple times possible)"
+	echo "    --min-ram      <MB>         # optional (default 1024)"
+	echo "    --os-version   <os_version> # optional (default Other)"
+	echo "    --property     <key=val>    # optional properties (multiple times possible)"
 	echo "otc images create NAME          # create image from ECS instance (snapshot)"
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
-	echo "    --description  <description> # optional"
+	echo "    --description  <description># optional"
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
 	echo "    --property, --min-disk, --os-version and --wait supported"
 	echo "otc images update <id>          # change properties, --image-name, min-*"
 	echo "otc images delete <id>          # delete (private) image by ID"
+	echo
+	echo "otc images listmember <id>      # list projects image id is shared with"
+	echo "otc images showmember <id> <prj>          # show detailed image sharing status"
+	echo "otc images addmember <id> <prj>           # share image id with prj"
+	echo "otc images delmember <id> <prj>           # stop sharing img id with prj"
+	echo "otc images acceptmember <id> <prj>        # accept image id shared by prj"
+	echo "otc images rejectmember <id> <prj>        # reject image id shared by prj"
 	echo
 	echo "--- Elastic Load Balancer (ELB) ---"
 	echo "otc elb list            # list all load balancer"
@@ -1690,6 +1697,32 @@ getImgMemberList()
 {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
 }
+
+getImgMemberDetail()
+{
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+}
+
+ImgMemberCreate()
+{
+	curlpostauth $TOKEN "{ \"member\": \"$2\" }" "$AUTH_URL_IMAGES/$1/members" | jq -r '.'
+}
+
+ImgMemberDelete()
+{
+	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2"
+}
+
+ImgMemberAccept()
+{
+	curlpostauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+}
+
+ImgMemberReject()
+{
+	curlpostauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+}
+
 
 
 getFLAVORListOld() {
@@ -3108,8 +3141,19 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "listmember" ];then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "listmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "members" ]; then
 	getImgMemberList "$@"
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "showmember" ]; then
+	getImgMemberDetail "$@"
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "addmember" ]; then
+	ImgMemberCreate "$@"
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "delmember" ]; then
+	ImgMemberDelete "$@"
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptmember" ]; then
+	ImgMemberAccept "$@"
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectmember" ]; then
+	ImgMemberReject "$@"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]  ;then
