@@ -688,12 +688,12 @@ printHelp() {
 	echo "otc images update <id>          # change properties, --image-name, min-*"
 	echo "otc images delete <id>          # delete (private) image by ID"
 	echo
-	echo "otc images listmember <id>      # list projects image id is shared with"
-	echo "otc images showmember <id> <prj>          # show detailed image sharing status"
-	echo "otc images addmember <id> <prj>           # share image id with prj"
-	echo "otc images delmember <id> <prj>           # stop sharing img id with prj"
-	echo "otc images acceptmember <id> <prj>        # accept image id shared by prj"
-	echo "otc images rejectmember <id> <prj>        # reject image id shared by prj"
+	echo "otc images listshare <id>       # list projects image id is shared with"
+	echo "otc images showshare <id> <prj> # show detailed image sharing status"
+	echo "otc images share <id> <prj>     # share image id with prj"
+	echo "otc images unshare <id> <prj>   # stop sharing img id with prj"
+	echo "otc images acceptshare <id> <prj>        # accept image id shared by prj"
+	echo "otc images rejectshare <id> <prj>        # reject image id shared by prj"
 	echo
 	echo "--- Elastic Load Balancer (ELB) ---"
 	echo "otc elb list            # list all load balancer"
@@ -2914,7 +2914,7 @@ if [ "$MAINCOM" == "s3" ]; then
 	exit $?
 fi
 
-# Support alternative names
+# Support aliases / alternative names
 if [ "$MAINCOM" = "server" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "volumes" ]; then MAINCOM="evs"; fi
@@ -2932,6 +2932,9 @@ if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
 if [ "$MAINCOM" = "notification" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "queue" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
+
+
+
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -3051,9 +3054,11 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
 	WaitForTask $ECSTASKID 5
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
 	ECSUpdate $1
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ]; then
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listaz" ]; then
 	getAZList
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ]; then
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "showaz" ]; then
 	getAZDetail "$1"
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
@@ -3142,37 +3147,48 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
 elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "listmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "listshare" ] ||
      [ "$MAINCOM" == "images" -a "$SUBCOM" == "members" ]; then
 	getImgMemberList "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "showmember" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "showmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "showshare" ]; then
 	getImgMemberDetail "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "addmember" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "addmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "share" ]; then
 	ImgMemberCreate "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "delmember" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "delmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "unshare" ]; then
 	ImgMemberDelete "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptmember" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptshare" ]; then
 	ImgMemberAccept "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectmember" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectmember" ] ||
+     [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectshare" ]; then
 	ImgMemberReject "$@"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]  ;then
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listflavor" ]  ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]; then
 	getFLAVORList
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ];then
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listkey" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ]; then
 	getKEYPAIRList
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ];then
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "showkey" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ]; then
 	getKEYPAIR "$@"
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "create" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ];then
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "createkey" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ]; then
 	createKEYPAIR "$@"
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ];then
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delkey" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ]; then
 	deleteKEYPAIR "$@"
 
 
@@ -3362,7 +3378,8 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
 
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list" ]; then
 	shortlistClusters
-elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ]; then
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ] ||
+     [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "details" ]; then
 	listClusters
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "show" ]; then
 	showCluster "$@"
