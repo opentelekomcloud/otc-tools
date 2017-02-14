@@ -996,7 +996,7 @@ handleCustom()
 			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		POST)
-			curlposttauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			curlpostauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		PATCH)
 			curlpatchauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
@@ -1685,6 +1685,12 @@ updateIMAGE()
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
 	fi
 }
+
+getImgMemberList()
+{
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
+}
+
 
 getFLAVORListOld() {
 	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.[]'
@@ -3102,6 +3108,8 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "listmember" ];then
+	getImgMemberList "$@"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]  ;then
