@@ -315,20 +315,20 @@ getIamToken() {
 	'
 	IAM3_REQ='{
 			"auth": {
-			"identity": {
+			 "identity": {
 				"methods": [ "password" ],
-				"password": {
+				 "password": {
 					"user": {
 						"name": "'"$OS_USERNAME"'",
 						"password": "'"$OS_PASSWORD"'",
 						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
 					}
-				}
-			},
-			"scope": {
+				 }
+			 },
+			 "scope": {
 				"project": { "id": "'"$OS_PROJECT_ID"'" }
+			 }
 			}
-		}
 	}
 	'
 	else
@@ -346,15 +346,15 @@ getIamToken() {
 	{
 		"auth": {
 			"identity": {
-			"methods": [ "password" ],
+			 "methods": [ "password" ],
 				"password": {
-				"user": {
+				 "user": {
 					"name": "'"$OS_USERNAME"'",
 					"password": "'"$OS_PASSWORD"'",
 					"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+				 }
 				}
-			}
-		},
+			},
 			"scope": {
 				"project": { "name": "'"$OS_PROJECT_NAME"'" }
 			}
@@ -792,8 +792,9 @@ printHelp() {
 	echo "      AGR = min, max, average, variance  to specify aggregation mode"
 	echo "      SELECTORS  define which data is used with up to three key=value pairs"
 	echo "        e.g. instance_id=00826ea4-aa15-4725-9fa7-8ea10f765a3f"
-	echo "      Note that timestamps in response are in ms since 1970"
+	echo "      Note that timestamps in response are in s since 1970 (UTC)"
 	echo "      API docu calls SELECTORS dimensions and aggregation mode filter"
+	echo "      Example: otc metrics list \"\" \"\" instance_id=\$VMUUID"
 	echo "otc alarms list         # list configured alarms"
 	echo "otc alarms limits       # display alarm quotas"
 	echo "otc alarms show ALID    # display details of alarm ALID"
@@ -2587,7 +2588,7 @@ showMetrics() {
 	if test -n "$7"; then DIM="&dim.0=${7/=/,}"; else DIM=""; fi
 	if test -n "$8"; then DIM="$DIM&dim.1=${8/=/,}"; fi
 	if test -n "$9"; then DIM="$DIM&dim.2=${9/=/,}"; fi
-	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metric-data?namespace=$1&metric_name=$2&from=$START&to=$STOP&period=$5&filter=$6$DIM" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metric-data?namespace=$1&metric_name=$2&from=$START&to=$STOP&period=$5&filter=$6$DIM" | jq '.' | sed -e 's/"timestamp": \([0-9]*\)\([0-9]\{3\}\),/"timestamp": \1.\2,/' -e 's/"timestamp": \([0-9]*\)\.000,/"timestamp": \1,/'
 }
 
 listAlarms() {
