@@ -26,7 +26,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.2
+VERSION=0.7.3
 
 # Get Config ####################################################################
 warn_too_open()
@@ -781,6 +781,16 @@ printHelp() {
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
+	echo "otc iam users           # get user list"
+	echo "otc iam groups          # get group list"
+	echo "--- Access Control: Federation ---"
+	echo "otc iam listidp         # list Identity Providers"
+	echo "otc iam showidp IDP     # details of IDP"
+	echo "otc iam listmapping     # list mappings"
+	echo "otc iam showmapping IDP # details of mapping IDP"
+	echo "otc iam listprotocol    # list of federation protocols"
+	echo "otc iam showprotocol PR # show details of federation protocal"
+	echo "otc iam keystonemeta    # show keystone metadata"
 	echo
 	echo "--- Monitoring & Alarms (Cloud Eye) ---"
 	echo "otc metrics list [NS [MET [SELECTORS]]]  # display list of avail metrics"
@@ -3227,6 +3237,20 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ];then
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
 	echo $OS_PROJECT_ID
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listidp" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers" | jq -r 'def str(v): v|tostring; .identity_providers[] | .id+"   "+str(.enabled)+"   "+.links.self+"   "+.description'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showidp" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers/$1" | jq -r '.'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listmapping" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings" | jq -r 'def str(s): s|tostring; .mappings[] | .id+"   "+.links.self+"   "+str(.rules[].local)+"   "+str(.rules[].remote)'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showmapping" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings/$1" | jq -r '.'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listprotocol" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols" | jq -r '.protocols[] | .id+"   "+.mapping_id+"   "+.links.self'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showprotocol" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols/$1" | jq -r '.'
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "keystonemeta" ]; then
+	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/auth/OS-FEDERATION/SSO/metadata"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
