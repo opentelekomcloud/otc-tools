@@ -13,6 +13,7 @@
 # NEEDED FOR TOKEN AUTH
 # If you are using the otc tool along with native openstack client tools
 # just put the normal OS_ variables in novarc or .ostackrc and you're good to go
+# The recommendation is thus NOT to use .otc_env.sh at all!
 
 OLD_OS_PASSWORD="$OS_PASSWORD"
 
