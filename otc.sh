@@ -1008,6 +1008,7 @@ handleCustom()
 	# TODO: Replace the knowledge of internal shell vars by a documented set
 	#  the user can use here and do sed to fill in rather than eval.
 	URL=$(eval echo "$2")
+	if test "${URL:0:1}" == "/"; then URL="$BASEURL$URL"; fi
 	shift; shift
 	ARGS=$(eval echo "$@")
 	echo "#DEBUG: curl -X $METH -d $ARGS $URL" 1>&2
@@ -1732,12 +1733,14 @@ ImgMemberDelete()
 
 ImgMemberAccept()
 {
-	curlpostauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+	PRJ=${2:-$OS_PROJECT_ID}
+	curlputauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
 }
 
 ImgMemberReject()
 {
-	curlpostauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+	PRJ=${2:-$OS_PROJECT_ID}
+	curlputauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
 }
 
 
