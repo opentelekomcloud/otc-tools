@@ -79,6 +79,7 @@ You can reference variables by using \$BASEURL \$CINDER_URL \$OS_PROJECT_ID.
 These are not standardized and well-documented yet (except for the OS_ ones
 which are the normal OpenStack environment). You'll need to check the source
 code. But the most important ones you already know now ...
+If you start the URL with a / (instead of http[s], \$BASEURL will be prepended.
 There is an optional --jqfilter FILTERSTRING.
 By default, the output from the REST call is passed through jq -r '.'.
 You can replace this with --jqfilter '' which results in no processing.
