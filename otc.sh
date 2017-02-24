@@ -415,6 +415,7 @@ getIamToken() {
 			KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
 		fi
+      if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
 		IS_OTC=0
 		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
@@ -2960,6 +2961,7 @@ if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
+if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
 	getIamToken
@@ -3223,7 +3225,7 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
 # These are not (yet) supported on OTC
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ];then
    echo -n ""
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
