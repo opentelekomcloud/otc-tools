@@ -9,6 +9,16 @@
 #
 # === Variables
 #
+# Recognized variables from environment:
+#
+# BANDWIDTH
+#  set to default value "25" if unset
+# VOLUMETYPE
+#  set to default value "SATA" if unset
+# APILIMIT
+#  Either an integer, limiting the number of API results per call, or "off", removing limits.
+#  If unset, default limits are used (different among API calls).
+#
 # === Examples
 #
 # Examples
@@ -850,6 +860,35 @@ getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
 }
 
+PARAMSTRING=""
+setlimit() {
+	if [ -z "$APILIMIT" ]
+	then
+		export PARAMSTRING="?limit=$1"
+	elif [ "$APILIMIT" == "off" ]
+	then
+		export PARAMSTRING=""
+	elif ( echo $APILIMIT | grep -q "^[0-9]*$" )
+	then
+		export PARAMSTRING="?limit=$APILIMIT"
+	else
+		echo "APILIMIT set to $APILIMIT which is neither off not an integer." 1>&2
+		exit 1
+	fi
+
+	while [ -n "$2" ]
+	do
+		echo $2
+		if [ -z "PARAMSTRING" ]
+		then
+			export PARAMSTRING="?$2"
+		else
+			export PARAMSTRING="$PARAMSTRING&$2"
+		fi
+		shift
+	done
+}
+
 # Params: ARRNM Value [attr [id]]
 find_id()
 {
@@ -880,7 +919,8 @@ arraytostr()
 convertSUBNETNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800"`
+	setlimit 800
+	SUBNETS=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS$PARAMSTRING"`
 	SUBNETID=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2" name availability_zone`
 	if test -z "$SUBNETID"; then
@@ -893,7 +933,8 @@ convertSUBNETNameToId() {
 convertVPCNameToId() {
 	#curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500"
 	#VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | jq '.vpcs[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | find_id vpcs "$1"`
+	setlimit 500
+	VPCID=`curlgetauth $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | find_id vpcs "$1"`
 	if test -z "$VPCID"; then
 		echo "ERROR: No VPC found by name $1" 1>&2
 		exit 3
@@ -906,9 +947,11 @@ convertSECUGROUPNameToId() {
 	unset IFS
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$1"`
-	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
+	setlimit 500
+	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
-		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+		setlimit 500
+		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	fi
 	if test -z "$SECUGROUP"; then
 		echo "ERROR: No security-group found by name $1" 1>&2
@@ -923,7 +966,8 @@ convertSECUGROUPNameToId() {
 
 convertIMAGENameToId() {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800" | find_id images "$1"`
+	setlimit 800
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING" | find_id images "$1"`
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
@@ -936,7 +980,8 @@ convertIMAGENameToId() {
 }
 
 convertECSNameToId() {
-	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	setlimit 1200
+	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
 		exit 3
@@ -949,7 +994,8 @@ convertECSNameToId() {
 }
 
 convertEVSNameToId() {
-	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1200" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	setlimit 1200
+	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
 		exit 3
@@ -962,7 +1008,8 @@ convertEVSNameToId() {
 }
 
 convertBackupNameToId() {
-	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	setlimit 1200
+	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS$PARAMSTRING" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$BACK_ID"; then
 		echo "ERROR: No backup found by name $1" 1>&2
 		exit 3
@@ -975,7 +1022,8 @@ convertBackupNameToId() {
 }
 
 convertBackupPolicyNameToId() {
-	BACKPOL_ID=`curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS?limit=1200" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	setlimit 1200
+	BACKPOL_ID=`curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$BACKPOL_ID"; then
 		echo "ERROR: No backup policy found by name $1" 1>&2
 		exit 3
@@ -988,7 +1036,8 @@ convertBackupPolicyNameToId() {
 }
 
 convertSnapshotNameToId() {
-	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	setlimit 1200
+	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$SNAP_ID"; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
 		exit 3
@@ -1050,23 +1099,24 @@ getECSVM() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
 }
 
-getShortECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1600" | jq -r  '.servers[] | .id+"   "+.name'
-}
-
 getECSList() {
-	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
+	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
 }
 
 getECSDetails() {
 	if test -n "$1"; then
 		if is_uuid "$1"; then
-			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.id == "'$1'")'
+			setlimit 1200
+			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
 		else
-			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[] | select (.name|test("'$1'"))'
+			setlimit 1200
+			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.name|test("'$1'"))'
 		fi
 	else
-		curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq '.servers[]'
+		setlimit 1200
+		curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[]'
 	fi
 }
 
@@ -1099,7 +1149,8 @@ getAZDetail() {
 
 
 getVPCList() {
-	curlgetauth $TOKEN "$AUTH_URL_VPCS?limit=500" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
 #| python -m json.tool
 }
 
@@ -1116,7 +1167,8 @@ VPCDelete() {
 
 getPUBLICIPSList() {
 	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
 }
 
 getPUBLICIPSDetail() {
@@ -1124,12 +1176,14 @@ getPUBLICIPSDetail() {
 }
 
 getSECGROUPListDetail() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.[]'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.[]'
 #| python -m json.tool
 }
 
 getSECGROUPList() {
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=500" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -1140,17 +1194,20 @@ getSECGROUPRULESListOld() {
 
 getSECGROUPRULESList() {
 	if ! is_uuid "$1"; then convertSECUGROUPNameToId "$1"; else SECUGROUP="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS?limit=800" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
+	setlimit 800
+	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
 #| python -m json.tool
 }
 
 getEVSListOTC() {
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
-	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES/detail?limit=1200" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_CVOLUMES/detail$PARAMSTRING" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
 }
 
 getEVSList() {
-	curlgetauth $TOKEN "$AUTH_URL_VOLS?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/details?limit=1200" | jq '.volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az ' | tr -d '"'
 }
 
@@ -1161,12 +1218,14 @@ getEVSDetail() {
 }
 
 getSnapshotList() {
-	curlgetauth $TOKEN "$AUTH_URL_SNAPS?limit=1200" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 }
 
 getSnapshotDetail() {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID?limit=1200" | jq '.snapshot'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID$PARAMSTRING" | jq '.snapshot'
 }
 
 deleteSnapshot() {
@@ -1186,12 +1245,14 @@ getBackupPolicyDetail() {
 
 getBackupList() {
 	#curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
-	curlgetauth $TOKEN "$AUTH_URL_BACKS/detail?limit=1200" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/detail$PARAMSTRING" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 }
 
 getBackupDetail() {
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup'
+	setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID$PARAMSTRING" | jq '.backup'
 }
 
 deleteBackupOTC() {
@@ -1207,9 +1268,11 @@ deleteBackup() {
 	# TODO: Should we delete an associated snapshot as well that might have been
 	# created via the cloudbackups OTC service API along with the backup?
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID?limit=1200" | jq '.backup.container' | tr -d '"')
+	setlimit 1200
+	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID$PARAMSTRING" | jq '.backup.container' | tr -d '"')
 	if test -n "$SNAP_ID" -a "$SNAP_ID" != "null"; then
-		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID?limit=1200" | jq '.snapshot.name' | tr -d '"')
+		setlimit 1200
+		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID$PARAMSTRING" | jq '.snapshot.name' | tr -d '"')
 		if test -n "$SNAP_NAME" -a "$SNAP_NAME" != "null"; then
 			if test "${SNAP_NAME:0:17}" = "autobk_snapshot_2"; then
 				echo "Also deleting autogenerated container/snapshot $SNAP_ID ($SNAP_NAME)" 1>&2
@@ -1244,7 +1307,8 @@ restoreBackup() {
 
 getSUBNETList() {
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800" | jq '.[]'
-   curlgetauth $TOKEN  "$AUTH_URL_SUBNETS?limit=800" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
+	setlimit 800
+	curlgetauth $TOKEN  "$AUTH_URL_SUBNETS$PARAMSTRING" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
 }
 
 getSUBNETDetail() {
@@ -1580,7 +1644,8 @@ concatarr() {
 getIMAGEList() {
 	IMAGE_FILTER=$(concatarr "&" "$@")
 	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
+	setlimit 800
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
 }
 
 getIMAGEDetail() {
@@ -1751,19 +1816,22 @@ ImgMemberReject()
 
 
 getFLAVORListOld() {
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.[]'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.[]'
 #| python -m json.tool
 }
 
 getFLAVORList() {
 	#curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[]'
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
 #| python -m json.tool
 }
 
 getKEYPAIRList() {
 	#curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.'
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
+	setlimit 800
+	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES$PARAMSTRING" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -1838,7 +1906,8 @@ createELB() {
 
 getELBList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.'
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
+	setlimit 500
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB$PARAMSTRING" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
 
 }
 
@@ -2643,7 +2712,8 @@ listQueues() {
 
 listTopics() {
 	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
-	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
+	setlimit 100 "offset=0"
+	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
 getMeta() {
