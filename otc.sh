@@ -1050,8 +1050,11 @@ getECSVM() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
 }
 
+getShortECSList() {
+	curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1600" | jq -r  '.servers[] | .id+"   "+.name'
+}
+
 getECSList() {
-	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
 	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL?limit=1200" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
 }
 
@@ -2974,9 +2977,10 @@ fi
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
 	printHelp
 
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-short" ]; then
+	getShortECSList
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
 	getECSList
-
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
 	getECSDetail "$1"
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "details" ]; then
