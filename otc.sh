@@ -1099,6 +1099,12 @@ getECSVM() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
 }
 
+getShortECSList() {
+	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1600" | jq -r  '.servers[] | .id+"   "+.name'
+	setlimit 1600
+	curlgetauth $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq -r  '.servers[] | .id+"   "+.name'
+}
+
 getECSList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
 	setlimit 1200
