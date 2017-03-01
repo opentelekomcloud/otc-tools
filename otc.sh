@@ -1,7 +1,7 @@
 #!/bin/bash
 #[ "$1" = -x ] && shift && set -x
 # vi:set ts=3 sw=3:
-# == Module: Open Telekom Cloud Cli Interface 0.6.x
+# == Module: Open Telekom Cloud Cli Interface 0.7.x
 #
 # Manage OTC via Command Line
 #
@@ -17,7 +17,7 @@
 #  set to default value "SATA" if unset
 # APILIMIT
 #  Either an integer, limiting the number of API results per call, or "off", removing limits.
-#  If unset, default limits are used (different among API calls).
+#  If unset, default limits are used (different among API calls), can be overridden by --limit NNN.
 #
 # === Examples
 #
@@ -36,7 +36,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.4
+VERSION=0.7.5
 
 # Get Config ####################################################################
 warn_too_open()
@@ -542,6 +542,7 @@ printHelp() {
 	echo "Usage: otc.sh service action [options]"
 	echo "--- Elastic Cloud Server (VM management) ---"
 	echo "otc ecs list               # list ecs instances"
+	echo "    --limit NNN            # limit records (works for most list functions)"
 	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
 	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
@@ -950,7 +951,6 @@ convertSECUGROUPNameToId() {
 	setlimit 500
 	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
-		setlimit 500
 		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	fi
 	if test -z "$SECUGROUP"; then
@@ -980,7 +980,7 @@ convertIMAGENameToId() {
 }
 
 convertECSNameToId() {
-	setlimit 1200
+	setlimit 1600
 	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
@@ -994,7 +994,7 @@ convertECSNameToId() {
 }
 
 convertEVSNameToId() {
-	setlimit 1200
+	setlimit 1600
 	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
@@ -1008,7 +1008,7 @@ convertEVSNameToId() {
 }
 
 convertBackupNameToId() {
-	setlimit 1200
+	setlimit 1600
 	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS$PARAMSTRING" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$BACK_ID"; then
 		echo "ERROR: No backup found by name $1" 1>&2
@@ -1022,7 +1022,7 @@ convertBackupNameToId() {
 }
 
 convertBackupPolicyNameToId() {
-	setlimit 1200
+	setlimit 800
 	BACKPOL_ID=`curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$BACKPOL_ID"; then
 		echo "ERROR: No backup policy found by name $1" 1>&2
@@ -1036,7 +1036,7 @@ convertBackupPolicyNameToId() {
 }
 
 convertSnapshotNameToId() {
-	setlimit 1200
+	setlimit 1600
 	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	if test -z "$SNAP_ID"; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
@@ -1112,16 +1112,14 @@ getECSList() {
 }
 
 getECSDetails() {
+	setlimit 1200
 	if test -n "$1"; then
 		if is_uuid "$1"; then
-			setlimit 1200
 			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
 		else
-			setlimit 1200
 			curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.name|test("'$1'"))'
 		fi
 	else
-		setlimit 1200
 		curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[]'
 	fi
 }
@@ -1212,7 +1210,7 @@ getEVSListOTC() {
 }
 
 getEVSList() {
-	setlimit 1200
+	setlimit 1600
 	curlgetauth $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/details?limit=1200" | jq '.volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az ' | tr -d '"'
 }
@@ -1230,8 +1228,8 @@ getSnapshotList() {
 
 getSnapshotDetail() {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
-	setlimit 1200
-	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID$PARAMSTRING" | jq '.snapshot'
+	#setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot'
 }
 
 deleteSnapshot() {
@@ -1240,12 +1238,14 @@ deleteSnapshot() {
 }
 
 getBackupPolicyList() {
-	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS" | jq '.backup_policies[] | {id: .backup_policy_id, name: .backup_policy_name, status: .scheduled_policy.status} | .id+"   "+.name+"   "+.status' | tr -d '"'
+	setlimit 800
+	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | {id: .backup_policy_id, name: .backup_policy_name, status: .scheduled_policy.status} | .id+"   "+.name+"   "+.status' | tr -d '"'
 }
 
 getBackupPolicyDetail() {
+	setlimit 800
 	if ! is_uuid "$1"; then filter=".name = \"$1\""; else filter=".id = \"$1\""; fi
-	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS" | jq ".backup_policies[] | select($filter)"
+	curlgetauth $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq ".backup_policies[] | select($filter)"
 }
 # TODO: More backup policy stuff
 
@@ -1257,8 +1257,8 @@ getBackupList() {
 
 getBackupDetail() {
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-	setlimit 1200
-	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID$PARAMSTRING" | jq '.backup'
+	#setlimit 1200
+	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup'
 }
 
 deleteBackupOTC() {
@@ -1274,11 +1274,10 @@ deleteBackup() {
 	# TODO: Should we delete an associated snapshot as well that might have been
 	# created via the cloudbackups OTC service API along with the backup?
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-	setlimit 1200
-	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID$PARAMSTRING" | jq '.backup.container' | tr -d '"')
+	#setlimit 1600
+	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup.container' | tr -d '"')
 	if test -n "$SNAP_ID" -a "$SNAP_ID" != "null"; then
-		setlimit 1200
-		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID$PARAMSTRING" | jq '.snapshot.name' | tr -d '"')
+		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot.name' | tr -d '"')
 		if test -n "$SNAP_NAME" -a "$SNAP_NAME" != "null"; then
 			if test "${SNAP_NAME:0:17}" = "autobk_snapshot_2"; then
 				echo "Also deleting autogenerated container/snapshot $SNAP_ID ($SNAP_NAME)" 1>&2
@@ -1330,11 +1329,13 @@ SUBNETDelete() {
 }
 
 getRDSInstanceList() {
+	#setlimit 500
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
 }
 
 getRDSAllInstanceDetailsImpl() {
-	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r .instances[]
+	#setlimit 500
+	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r '.instances[]'
 }
 
 getRDSInstanceDetailsImpl() {
@@ -1568,6 +1569,7 @@ deleteRDSSnapshot() {
 }
 
 listDomains() {
+   #setlimit 500
 	curlgetauth $TOKEN $AUTH_URL_DNS | jq .
 }
 
@@ -1651,6 +1653,7 @@ getIMAGEList() {
 	IMAGE_FILTER=$(concatarr "&" "$@")
 	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
 	setlimit 800
+   if test -z "$PARAMSTRING" -a -n "$IMAGE_FILTER"; then IMAGE_FILTER="?${IMAGE_FILTER:1}"; fi
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
 }
 
@@ -2776,6 +2779,12 @@ if test "$1" = "debug"; then DEBUG=2; shift; fi
 MAINCOM=$1; shift
 # fetch subcommand
 SUBCOM=$1; shift
+
+if test "$1" == "--limit"; then
+  APILIMIT=$2; shift; shift
+elif test "${1:0:8}" = "--limit="; then
+  APILIMIT=${1:8}; shift
+fi
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
