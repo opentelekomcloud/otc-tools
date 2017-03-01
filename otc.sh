@@ -543,6 +543,7 @@ printHelp() {
 	echo "--- Elastic Cloud Server (VM management) ---"
 	echo "otc ecs list               # list ecs instances"
 	echo "    --limit NNN            # limit records (works for most list functions)"
+	echo "    --marker ID            # start with record after marker (UUID) (dito)"
 	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
 	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
@@ -863,25 +864,36 @@ getid() {
 
 PARAMSTRING=""
 setlimit() {
-	if [ -z "$APILIMIT" ]
-	then
+	if [ -z "$APILIMIT" ]; then
 		export PARAMSTRING="?limit=$1"
-	elif [ "$APILIMIT" == "off" ]
-	then
+	elif [ "$APILIMIT" == "off" ]; then
 		export PARAMSTRING=""
-	elif ( echo $APILIMIT | grep -q "^[0-9]*$" )
-	then
+	elif ( echo $APILIMIT | grep -q "^[0-9]*$" ); then
 		export PARAMSTRING="?limit=$APILIMIT"
 	else
 		echo "APILIMIT set to $APILIMIT which is neither off not an integer." 1>&2
 		exit 1
 	fi
 
-	while [ -n "$2" ]
-	do
+	if  ( echo $APIOFFSET | grep -q "^[0-9]\+$" ); then
+		if [ -z "PARAMSTRING" ]; then
+			export PARAMSTRING="?start=$APIOFFSET"
+		else
+			export PARAMSTRING="$PARAMSTRING&start=$APIOFFSET"
+		fi
+	fi
+
+	if [ -n "$APIMARKER" ]; then
+		if [ -z "PARAMSTRING" ]; then
+			export PARAMSTRING="?marker=$APIMARKER"
+		else
+			export PARAMSTRING="$PARAMSTRING&marker=$APIMARKER"
+		fi
+	fi
+
+	while [ -n "$2" ]; do
 		echo $2
-		if [ -z "PARAMSTRING" ]
-		then
+		if [ -z "PARAMSTRING" ]; then
 			export PARAMSTRING="?$2"
 		else
 			export PARAMSTRING="$PARAMSTRING&$2"
@@ -2785,6 +2797,22 @@ if test "$1" == "--limit"; then
 elif test "${1:0:8}" = "--limit="; then
   APILIMIT=${1:8}; shift
 fi
+if test "$1" == "--offset"; then
+  APIOFFSET=$2; shift; shift
+elif test "${1:0:9}" = "--offset="; then
+  APIOFFSET=${1:9}; shift
+fi
+if test "$1" == "--marker"; then
+  APIMARKER=$2; shift; shift
+elif test "${1:0:9}" = "--marker="; then
+  APIMARKER=${1:9}; shift
+fi
+if test "$1" == "--limit"; then
+  APILIMIT=$2; shift; shift
+elif test "${1:0:8}" = "--limit="; then
+  APILIMIT=${1:8}; shift
+fi
+
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
