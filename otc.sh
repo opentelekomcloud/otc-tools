@@ -3343,7 +3343,8 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ];then
    echo -n ""
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ];then
