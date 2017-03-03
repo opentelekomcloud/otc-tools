@@ -30,7 +30,7 @@ this provides sufficient information to get doing.
 
 Limitations
 -----------
-This tool does not try to cover all functionality of ITC. Rather it tries to 
+This tool does not try to cover all functionality of OTC. Rather it tries to
 be a demo and test tool for many functions; it however does fill in some gaps
 where the OTC API is extended or different from the standard OpenStack API,
 so feel free to use it here and contribute to fill gaps you care about. There
@@ -39,11 +39,15 @@ is a small, but active community on github.com/OpenTelekomCloud/.
 The OpenStack REST API has a paginated interfaces to allow the consumer to
 control how large a response may get. otc-tools currently just always tries
 to get everything in one go; it increases the default limits to at least
-500 (higher, up to 1200 in some categories). These limits should be more than
+500 (higher, up to 1600 in some categories). These limits should be more than
 large enough to avoid you running into them if you move within the default
 quotas. However, if you have very large environments, keep in mind that
 otc-tools might not show you the whole truth any more. Please talk to us
 or submit a PR if you need further increases in the limits.
+You can control API limits using --limit= and --marker= options.
+Note that the OTC API Gateway has also limits on the response size; otc.sh
+does not yet automatically paginate to avoid answers that have been cut off
+(and thus fail due to SSL decryption failure).
 
 Output formatting
 -----------------
