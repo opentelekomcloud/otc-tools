@@ -18,6 +18,9 @@
 # APILIMIT
 #  Either an integer, limiting the number of API results per call, or "off", removing limits.
 #  If unset, default limits are used (different among API calls), can be overridden by --limit NNN.
+# MAXGETKB
+#  The maximum size for API (GET) response size that the API gateway allows without cutting it
+#  if off (and thus breaking it for https). otc.sh tries to auto-paginate here ...
 #
 # === Examples
 #
@@ -86,6 +89,9 @@ if test -n "$OS_AUTH_URL"; then
 fi
 if test -z "$OS_PROJECT_NAME"; then
 	export OS_PROJECT_NAME="$OS_REGION_NAME"
+fi
+if test -z "$MAXGETKB"; then
+	export MAXGETKB=251
 fi
 # S3 environment
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
@@ -201,6 +207,39 @@ curlgetauth()
 	TKN="$1"; shift
 	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+}
+
+curlgetauth_pag()
+{
+   URL="$2"
+   unset HASLIM
+   echo "$URL" | grep -q  'limit=' && HASLIM=1
+	#echo "$HASLIM $MAXGETKB $RECSZ" 1>&2
+   if test -n "$HASLIM" -o -z "$MAXGETKB" -o "$MAXGETKB" == "off" -o -z "$RECSZ"; then curlgetauth "$@"; return; fi
+	TKN="$1"
+	unset HASPAR
+	echo "$URL" | grep -q '?' && HASPAR=1
+	#RECSZ, HDRSZ, ARRNM, IDFIELD
+	LIM=$((($MAXGETKB*1024-$HDRSZ)/$RECSZ))
+	if test "$HASPAR" == 1; then
+		LIMPAR="&limit=$LIM"
+	else
+		LIMPAR="?limit=$LIM"
+	fi
+   TMPF=$(mktemp /tmp/otc.sh.$$.XXXXXXXX)
+	MARKPAR=""
+	NOANS=0; LASTNO=1
+	while test $NOANS != $LASTNO -a $(($NOANS%$LIM)) == 0; do
+		LASTNO=$NOANS
+		docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
+			-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$URL$LIMPAR$MARKPAR" >>$TMPF
+		ANS=$(cat $TMPF | jq -r ".${ARRNM}[] | .${IDFIELD}")
+		NOANS=$(echo "$ANS" | wc -l)
+		LAST=$(echo "$ANS" | tail -n1 | tr -d '"')
+		MARKPAR="&marker=$LAST"
+	done
+	cat $TMPF
+   rm $TMPF
 }
 
 curldeleteauth()
@@ -847,11 +886,25 @@ getid() {
 	head -n1 | cut -d':' -f2 | tr -d '" ,'
 }
 
+# Store params used to do auto-pagination
+# $1 => approx record size
+# $2 => header size
+# $3 => array name
+# $4 => name od marker (default: id)
+setapilimit()
+{
+	RECSZ=$1
+	HDRSZ=$2
+	ARRNM=$3
+	IDFIELD=${4:-id}
+}
+
 PARAMSTRING=""
-setlimit() {
-	if [ -z "$APILIMIT" ]; then
+setlimit()
+{
+	if [ -z "$APILIMIT" -a -n "$1" ]; then
 		export PARAMSTRING="?limit=$1"
-	elif [ "$APILIMIT" == "off" ]; then
+	elif [ "$APILIMIT" == "off" -o -z "$1" ]; then
 		export PARAMSTRING=""
 	elif ( echo $APILIMIT | grep -q "^[0-9]*$" ); then
 		export PARAMSTRING="?limit=$APILIMIT"
@@ -1104,8 +1157,9 @@ getShortECSList() {
 
 getECSList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
-	setlimit 1200
-	curlgetauth $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
+	#setlimit 1200
+	setlimit; setapilimit 2000 40 servers id
+	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
 }
 
 getECSDetails() {
