@@ -567,6 +567,7 @@ printHelp() {
 	echo "otc ecs list               # list ecs instances"
 	echo "    --limit NNN            # limit records (works for most list functions)"
 	echo "    --marker ID            # start with record after marker (UUID) (dito)"
+	echo "    --maxgetkb NN          # auto-paginate (limiting responses to NN KiB max, def 250)"
 	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
 	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
@@ -2885,6 +2886,12 @@ if test "$1" == "--limit"; then
   APILIMIT=$2; shift; shift
 elif test "${1:0:8}" = "--limit="; then
   APILIMIT=${1:8}; shift
+fi
+
+if test "$1" == "--maxgetkb"; then
+  MAXGETKB=$2; shift; shift;
+elif test "${1:0:11}" = "--maxgetkb="; then
+  MAXGETKB=${1:11}; shift
 fi
 
 if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi

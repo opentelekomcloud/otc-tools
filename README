@@ -45,9 +45,11 @@ quotas. However, if you have very large environments, keep in mind that
 otc-tools might not show you the whole truth any more. Please talk to us
 or submit a PR if you need further increases in the limits.
 You can control API limits using --limit= and --marker= options.
+
 Note that the OTC API Gateway has also limits on the response size; otc.sh
-does not yet automatically paginate to avoid answers that have been cut off
-(and thus fail due to SSL decryption failure).
+does try to automatically paginate to avoid answers that have been cut off
+(and thus fail due to SSL decryption failure). Use --maxgetkb= to override
+default (250kiB).
 
 Output formatting
 -----------------
