@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.5
+VERSION=0.7.6
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1639,10 +1639,10 @@ deleteRDSSnapshot() {
 }
 
 listDomains() {
-	# TODO: Parse & Display
-	# TODO: pagination
-   #setlimit 500
-	curlgetauth $TOKEN $AUTH_URL_DNS | jq .
+   setlimit 100
+	#setlimit; setapilimit 500 100 zones
+	#curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r '.'
+	curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r 'def str(s): s|tostring; .zones[] | .id+"   "+.name+"   "+.status+"   "+.zone_type+"   "+str(.ttl)+"   "+str(.record_num)+"   "+.description'
 }
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
@@ -1691,20 +1691,19 @@ addRecord() {
 	for val in $5; do VALS="$VALS \"$val\","; done
 	IFS="$OLDIFS"
 	REQ="$REQ, \"records\": [ ${VALS%,} ] }"
-	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$1/recordsets | jq .
+	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$1/recordsets | jq '.'
 }
 
 showRecord() {
-	curlgetauth $OTKEN $AUTH_URL_DNS/$1/recordsets/$2 | jq .
+	curlgetauth $TOKEN $AUTH_URL_DNS/$1/recordsets/$2 | jq '.'
 }
 
 listRecords() {
-	# TODO parsing
 	# TODO pagination
 	if test -z "$1"; then
-		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets" | jq .
+		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	else
-		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq .
+		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	fi
 }
 
