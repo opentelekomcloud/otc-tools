@@ -429,8 +429,9 @@ getIAMToken() {
 			TROVE_URL=$(getcatendpoint "$CATJSON" database $OS_PROJECT_ID)
 			KEYSTONE_URL=$(getcatendpoint "$CATJSON" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
-			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
-			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.'; fi
+			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
+			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
+			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
 			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
@@ -819,6 +820,7 @@ printHelp() {
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
+	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
 	echo "otc iam users           # get user list"
 	echo "otc iam groups          # get group list"
 	echo "--- Access Control: Federation ---"
@@ -2851,14 +2853,14 @@ case "$HTTPS_PROXY" in
 		;;
 esac
 
-# FIXME: Need proper position independent option parser
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-
 # Debugging
 if test "$1" = "debug"; then DEBUG=1; shift; fi
 if test "$1" = "debug"; then DEBUG=2; shift; fi
 
+# FIXME: Need proper position independent option parser
+
 if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
+if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
 
 # fetch main command
 MAINCOM=$1; shift
@@ -2866,6 +2868,7 @@ MAINCOM=$1; shift
 SUBCOM=$1; shift
 
 if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
+if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
 
 if test "$1" == "--limit"; then
   APILIMIT=$2; shift; shift
@@ -2895,6 +2898,7 @@ elif test "${1:0:11}" = "--maxgetkb="; then
 fi
 
 if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
+if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
@@ -3161,8 +3165,10 @@ if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
-	if [ "$MAINCOM" == "iam" ] && \
-		[ "$SUBCOM" == "users" -o "$SUBCOM" == "groups" ]; then
+	if [ "$MAINCOM" == "iam" -a -z "$REQSCOPE" ] && \
+		[  "$SUBCOM" != "token" -a "$SUBCOM" != "project" -a "$SUBCOM" != "catalog" \
+		-a "$SUBCOM" != "services" -a "$SUBCOM" != "endpoints" -a "$SUBCOM" != "roles" \
+		-a "$SUBCOM" != "domain" ]; then
 		REQSCOPE="domain"
 	fi
 	getIAMToken $REQSCOPE
