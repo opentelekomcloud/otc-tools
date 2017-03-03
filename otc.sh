@@ -308,14 +308,29 @@ getv2endpoint() {
 # TODO: Token caching ...
 TROVE_OVERRIDE=0
 IS_OTC=1
-getIamToken() {
+getIAMToken() {
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
 	BASEURL=${BASEURL%%/v[23]*}
+   REQSCOPE=${1:-project}
 
+   # Project by ID or by Name
 	if test -n "$OS_PROJECT_ID"; then
+		TENANT="\"tenantId\": \"$OS_PROJECT_ID\""
+      PROJECT="\"project\": { \"id\": \"$OS_PROJECT_ID\" }"
+   else
+		TENANT="\"tenantName\": \"$OS_PROJECT_NAME\""
+      PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
+   fi
+	# Token scope: project vs domain
+	if test "$REQSCOPE" == "domain"; then
+		SCOPE="\"scope\": { \"domain\": { \"name\": \"$OS_USER_DOMAIN_NAME\" } } "
+	else
+		SCOPE="\"scope\": { $PROJECT }"
+   fi
+
 	IAM2_REQ='{
 			"auth": {
-				"tenantId": "'"$OS_PROJECT_ID"'",
+				'$TENANT',
 				"passwordCredentials": {
 					"username": "'"$OS_USERNAME"'",
 					"password": "'"$OS_PASSWORD"'"
@@ -335,43 +350,10 @@ getIamToken() {
 					}
 				 }
 			 },
-			 "scope": {
-				"project": { "id": "'"$OS_PROJECT_ID"'" }
-			 }
+			 '$SCOPE'
 			}
 	}
 	'
-	else
-	IAM2_REQ='{
-			"auth": {
-				"tenantName": "'"$OS_PROJECT_NAME"'",
-				"passwordCredentials": {
-					"username": "'"$OS_USERNAME"'",
-					"password": "'"$OS_PASSWORD"'"
-				}
-			}
-		}
-	'
-	IAM3_REQ='
-	{
-		"auth": {
-			"identity": {
-			 "methods": [ "password" ],
-				"password": {
-				 "user": {
-					"name": "'"$OS_USERNAME"'",
-					"password": "'"$OS_PASSWORD"'",
-					"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
-				 }
-				}
-			},
-			"scope": {
-				"project": { "name": "'"$OS_PROJECT_NAME"'" }
-			}
-		}
-	}
-	'
-	fi
    if test -n "$OS_PROJECT_DOMAIN_NAME"; then IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },"); fi
 	export IAM2_REQ IAM3_REQ
 	#if test -n "$DEBUG"; then
@@ -397,6 +379,7 @@ getIamToken() {
 		fi
 		# Parse IAM RESP catalogue
 		CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.catalog[]')
+		ROLEJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.roles[]')
 		if test -n "$CATJSON" -a "$CATJSON" != "null"; then
 			CINDER_URL=$(getcatendpoint "$CATJSON" volumev2 $OS_PROJECT_ID)
 			NEUTRON_URL=$(getcatendpoint "$CATJSON" network $OS_PROJECT_ID)
@@ -408,6 +391,7 @@ getIamToken() {
 			KEYSTONE_URL=$(getcatendpoint "$CATJSON" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
 			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
+			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.'; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
 			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
@@ -450,7 +434,7 @@ getIamToken() {
 	fi
 	# FIXME: Delete this
 	# For now fall back to hardcoded URLs
-	if test -z "$NOVA_URL" -a "$IS_OTC" = "1"; then
+	if test -z "$NOVA_URL" -a "$IS_OTC" = "1" -a "$REQSCOPE" == "project"; then
 		echo "WARN: Using hardcoded endpoints, will be removed" 1>&2
 		CINDER_URL=${BASEURL/iam/evs}/v2/$OS_PROJECT_ID
 		NEUTRON_URL=${BASEURL/iam/vpc}
@@ -790,6 +774,7 @@ printHelp() {
 	echo
 	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
+	echo "    --domainscope       # generate a domain scoped token (can be used globally)"
 	echo "otc iam catalog         # catalog as returned with token"
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam services        # service catalog"
@@ -2783,14 +2768,21 @@ case "$HTTPS_PROXY" in
 		;;
 esac
 
+# FIXME: Need proper position independent option parser
+if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
+
 # Debugging
 if test "$1" = "debug"; then DEBUG=1; shift; fi
 if test "$1" = "debug"; then DEBUG=2; shift; fi
+
+if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
 
 # fetch main command
 MAINCOM=$1; shift
 # fetch subcommand
 SUBCOM=$1; shift
+
+if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
 
 if test "$1" == "--limit"; then
   APILIMIT=$2; shift; shift
@@ -2813,6 +2805,7 @@ elif test "${1:0:8}" = "--limit="; then
   APILIMIT=${1:8}; shift
 fi
 
+if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
 
 #if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
@@ -3074,13 +3067,16 @@ if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 
 
 
-
-
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
+if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
-	getIamToken
+	if [ "$MAINCOM" == "iam" ] && \
+		[ "$SUBCOM" == "users" -o "$SUBCOM" == "groups" ]; then
+		REQSCOPE="domain"
+	fi
+	getIAMToken $REQSCOPE
 fi
 
 #if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
@@ -3349,6 +3345,8 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ];then
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ];then
+   echo -n ""
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ];then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
@@ -3374,6 +3372,7 @@ elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showprotocol" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols/$1" | jq -r '.'
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "keystonemeta" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/auth/OS-FEDERATION/SSO/metadata"
+   echo
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
