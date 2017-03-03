@@ -1000,10 +1000,11 @@ convertSECUGROUPNameToId() {
 	unset IFS
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | jq '.security_groups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	#SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS" | find_id security_groups "$1"`
-	setlimit 500
-	SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
+	#setlimit 500
+	setlimit; setapilimit 4000 40 security_groups
+	SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
 	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
-		SECUGROUP=`curlgetauth $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+		SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	fi
 	if test -z "$SECUGROUP"; then
 		echo "ERROR: No security-group found by name $1" 1>&2
@@ -1638,6 +1639,8 @@ deleteRDSSnapshot() {
 }
 
 listDomains() {
+	# TODO: Parse & Display
+	# TODO: pagination
    #setlimit 500
 	curlgetauth $TOKEN $AUTH_URL_DNS | jq .
 }
@@ -1696,6 +1699,8 @@ showRecord() {
 }
 
 listRecords() {
+	# TODO parsing
+	# TODO pagination
 	if test -z "$1"; then
 		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets" | jq .
 	else
@@ -1895,22 +1900,25 @@ ImgMemberReject()
 
 
 getFLAVORListOld() {
-	setlimit 500
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.[]'
+	#setlimit 500
+	setlimit; setapilimit 720 30 flavors
+	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.[]'
 #| python -m json.tool
 }
 
 getFLAVORList() {
 	#curlgetauth $TOKEN "$AUTH_URL_FLAVORS?limit=500" | jq '.flavors[]'
-	setlimit 500
-	curlgetauth $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
+	#setlimit 500
+	setlimit; setapilimit 720 30 flavors
+	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
 #| python -m json.tool
 }
 
 getKEYPAIRList() {
 	#curlgetauth $TOKEN "$AUTH_URL_KEYNAMES?limit=800" | jq '.'
-	setlimit 800
-	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES$PARAMSTRING" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
+	#setlimit 800
+	setlimit; setapilimit 1080 40 keypairs
+	curlgetauth_pag $TOKEN "$AUTH_URL_KEYNAMES$PARAMSTRING" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
 #| python -m json.tool
 }
 
@@ -1985,8 +1993,9 @@ createELB() {
 
 getELBList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB_LB?limit=500" | jq '.'
-	setlimit 500
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB$PARAMSTRING" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
+	#setlimit 500
+	setlimit; setapilimit 500 40 loadbalancers
+	curlgetauth_pag $TOKEN "$AUTH_URL_ELB_LB$PARAMSTRING" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
 
 }
 
@@ -2001,6 +2010,7 @@ deleteELB() {
 
 getListenerList() {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
+	# TODO limits?
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.loadbalancer_id' | tr -d '"'
 }
 
