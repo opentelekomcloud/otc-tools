@@ -692,11 +692,10 @@ printHelp() {
 	echo
 	echo "otc security-group list                   # list all sec. group"
 	echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
-	echo
 	echo "otc security-group create                 # create security group"
 	echo "    -g <groupname>"
 	echo "    --vpc-name <vpc name>"
-	echo
+	echo "otc security-group delete SGID            # delete security group"
 	echo "otc security-group-rules create           # create sec. group rule"
 	echo "    --security-group-name <secgroupname>"
 	echo "    --direction           <direction>"
@@ -1270,6 +1269,37 @@ getSECGROUPRULESList() {
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
 #| python -m json.tool
+}
+
+SECGROUPCreate() {
+	if test -z "$SECUGROUPNAME" -a -n "$1"; then SECUGROUPNAME="$1"; fi
+	if test -n "$VPCID"; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
+	REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON } }"
+	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
+	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+}
+
+SECGROUPDelete() {
+	if ! is_uuid "$1"; then convertSECUGROUPNameToId "$1"; else SECUGROUP="$1"; fi
+	curldeleteauth "$TOKEN" "$NEUTRON_URL/v2.0/security-groups/$SECUGROUP"
+}
+
+SECGROUPRULECreate() {
+	REQ_CREATE_SECGROUPRULE='{
+		"security_group_rule": {
+			"direction":"'"$DIRECTION"'",
+			"port_range_min":"'"$PORTMIN"'",
+			"port_range_max":"'"$PORTMAX"'",
+			"ethertype":"'"$ETHERTYPE"'",
+			"protocol":"'"$PROTOCOL"'",
+			"security_group_id":"'"$SECUGROUP"'"
+		}
+	}'
+	#{"security_group_rule":{ "direction":"'"$DIRECTION"'", "port_range_min":"'"$PORTMIN"'", "ethertype":"'"$ETHERTYPE"'", "port_range_max":"'"$PORTMAX"'", "protocol":"'"$PROTOCOL"'", "remote_group_id":"'"$REMOTEGROUPID"'", "security_group_id":"'"$SECUGROUPID"'" } }
+	#{"security_group_rule":{ "direction":"ingress", "port_range_min":"80", "ethertype":"IPv4", "port_range_max":"80", "protocol":"tcp", "remote_group_id":"85cc3048-abc3-43cc-89b3-377341426ac5", "security_group_id":"a7734e61-b545-452d-a3cd-0189cbd9747a" } }
+	export REQ_CREATE_SECGROUPRULE
+	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUPRULE 1>&2; fi
+	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 }
 
 getEVSListOTC() {
@@ -2591,36 +2621,6 @@ PUBLICIPSUnbind() {
 	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
 }
 
-SECGROUPCreate() {
-	REQ_CREATE_SECGROUP='{
-		"security_group": {
-			"name":"'"$SECUGROUPNAME"'",
-			"vpc_id" : "'"$VPCID"'"
-		}
-	}'
-	#{ "security_group": { "name":"qq", "vpc_id" : "3ec3b33f-ac1c-4630-ad1c-7dba1ed79d85" } }
-	export REQ_CREATE_SECGROUP
-	echo $REQ_CREATE_SECGROUP
-	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
-}
-
-SECGROUPRULECreate() {
-	REQ_CREATE_SECGROUPRULE='{
-		"security_group_rule": {
-			"direction":"'"$DIRECTION"'",
-			"port_range_min":"'"$PORTMIN"'",
-			"port_range_max":"'"$PORTMAX"'",
-			"ethertype":"'"$ETHERTYPE"'",
-			"protocol":"'"$PROTOCOL"'",
-			"security_group_id":"'"$SECUGROUP"'"
-		}
-	}'
-	#{"security_group_rule":{ "direction":"'"$DIRECTION"'", "port_range_min":"'"$PORTMIN"'", "ethertype":"'"$ETHERTYPE"'", "port_range_max":"'"$PORTMAX"'", "protocol":"'"$PROTOCOL"'", "remote_group_id":"'"$REMOTEGROUPID"'", "security_group_id":"'"$SECUGROUPID"'" } }
-	#{"security_group_rule":{ "direction":"ingress", "port_range_min":"80", "ethertype":"IPv4", "port_range_max":"80", "protocol":"tcp", "remote_group_id":"85cc3048-abc3-43cc-89b3-377341426ac5", "security_group_id":"a7734e61-b545-452d-a3cd-0189cbd9747a" } }
-	export REQ_CREATE_SECGROUPRULE
-	echo $REQ_CREATE_SECGROUPRULE
-	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
-}
 
 # $1 = TASKID
 # $2 = Field to wait for
@@ -3340,8 +3340,8 @@ elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	getSECGROUPList
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
-	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-	SECGROUPCreate
+	if [ -n "$VPCNAME" -a -z "$VPCID" ]; then convertVPCNameToId "$VPCNAME"; fi
+	SECGROUPCreate "$@"
 elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "show" ]; then
 	if [ -z "$1" ]; then
@@ -3356,6 +3356,8 @@ elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
 	if [ "$SECUGROUPNAME" != "" ];then convertSECUGROUPNameToId "$SECUGROUPNAME"; fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
 	SECGROUPRULECreate
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "delete" ];then
+	SECGROUPDelete "$@"
 
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
 	getIMAGEList "$@"
