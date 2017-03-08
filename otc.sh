@@ -125,12 +125,6 @@ if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
 	warn_too_open ~/$CRED
 fi
 
-if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD"; then
-	echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, and OS_PROJECT_NAME environment" 1>&2
-	echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
-	exit 1
-fi
-
 # ENVIROMENT SETTINGS ####################################################################
 
 # Defaults
@@ -348,6 +342,12 @@ getv2endpoint() {
 TROVE_OVERRIDE=0
 IS_OTC=1
 getIAMToken() {
+	if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD" -o -z "$IAM_AUTH_URL"; then
+		echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, OS_AUTH_URL, and OS_PROJECT_NAME environment" 1>&2
+		echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
+		exit 1
+	fi
+
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
 	BASEURL=${BASEURL%%/v[23]*}
    REQSCOPE=${1:-project}
