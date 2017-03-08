@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.6
+VERSION=0.7.7
 
 # Get Config ####################################################################
 warn_too_open()
@@ -543,6 +543,8 @@ getIAMToken() {
 	AUTH_URL_SMN="${BASEURL/iam/smn}"
 	AUTH_URL_CTS="${BASEURL/iam/cts}"
 	AUTH_URL_DMS="${BASEURL/iam/dms}"
+	AUTH_URL_MRS="${BASEURL/iam/mrs}"
+	AUTH_URL_ANTIDDOS="${BASEURL/iam/antiddos}"
 }
 
 build_data_volumes_json() {
@@ -851,10 +853,23 @@ printHelp() {
 	echo "otc alarms delete ALID  # delete alarm ALID"
 	echo "otc alarms en/disable ALID        # enable/disable ALID"
 	echo
+	echo "--- HEAT ---"
+	echo "otc stack list          # List heat stacks"
+	echo "otc stack show SID      # Show stack SID (Name or ID)"
+	echo "otc stack resources SID # List stack resources"
+	echo "otc stack showresource SID        # Show resource details"
+	echo "otc stack events SID    # List stack events"
+	echo "otc stack template SID  # Display stack template"
+	echo "otc stack resourcetypes # Show supported resource types"
+	echo "otc stack buildinfo     # Show build information"
+	echo "otc stack deployments   # List deployed stacks"
+	echo "otc stack showdeployment DID      # Show deployment details"
+	echo
 	echo "--- OTC2.0 new services ---"
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
+	echo "otc kms list            # List keys from key management service"
 	echo
 	echo "--- Custom command support ---"
 	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
@@ -1969,6 +1984,73 @@ deleteKEYPAIR() {
 	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
 }
 
+det_StackID()
+{
+	if [[ "$1" = */* ]]; then STACK=$1
+	elif is_uuid "$1"; then
+		NAME=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.id == \"$1\") | .stack_name")
+		if test -z "$NAME" -o "$NAME" = "null"; then echo "ERROR: No stack found by this ID $1" 1>&2; exit 1; fi
+		STACK="$NAME/$1"
+	else
+		ID=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.stack_name == \"$1\") | .id")
+		if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No stack found by this NAME $1" 1>&2; exit 1; fi
+		STACK="$1/$ID"
+	fi
+}
+
+# HEAT
+listStacks() {
+	curlgetauth $TOKEN $HEAT_URL/stacks | jq -r '.stacks[] | .id+"   "+.stack_name+"   "+.stack_status+"   "+.description' | tr -d '"'
+}
+
+showStack() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK | jq -r '.'
+}
+
+listStackSnapshots() {
+	# Not supported on OTC 2.0
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/snapshots | jq -r '.'
+}
+
+listStackResources() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources | jq -r 'def str(s): s|tostring; .resources[] | .physical_resource_id+"   "+.resource_name+"   "+.resource_status+"   "+.resource_type+"   "+.logical_resource_id+"   "+str(.required_by)'
+}
+
+showStackResource() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources/$2 | jq -r '.'
+}
+
+listStackEvents() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/events | jq -r 'def str(s): s|tostring; .events[] | .id+"   "+.resource_name+"   "+.resource_status+"   "+.event_time+"   "+.logical_resource_id+"   "+.physical_resource_id'
+}
+
+showStackTemplate() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/template | jq -r '.'
+}
+
+listStackResTypes() {
+   curlgetauth $TOKEN $HEAT_URL/resource_types | jq -r '.'
+}
+
+showStackBuildInfo() {
+   curlgetauth $TOKEN $HEAT_URL/build_info | jq -r '.'
+}
+
+listStackDeployments() {
+	# TODO: Add parsing ....
+   curlgetauth $TOKEN $HEAT_URL/software_deployments | jq -r '.'
+}
+
+showStackDeployment() {
+   curlgetauth $TOKEN $HEAT_URL/software_deployments/$1 | jq -r '.'
+}
+
 createELB() {
 	if test -n "$3"; then BANDWIDTH=$3; fi
 	if test -n "$2"; then NAME="$2"; fi
@@ -2807,6 +2889,34 @@ listTopics() {
 	setlimit 100 "offset=0"
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
+
+# These don't work yet well
+listMRSClusters()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/cluster-infos" | jq -r '.'
+}
+
+listMRSJobs()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes" | jq -r '.'
+}
+
+showMRSJob()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes/$1" | jq -r '.'
+}
+
+listAntiDDoS()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
+}
+
+listKMS()
+{
+	# POST, bad API design
+	curlpostauth "$TOKEN" "" "$AUTH_URL_KMS/v1.0/$OS_PROJECT_ID/kms/list-keys" | jq -r '.'
+}
+
 
 getMeta() {
 	DATA=$1; shift
@@ -3660,12 +3770,45 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
 elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
 	deleteAlarms "$1"
 
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "list" ]; then
+	listStacks
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "show" ]; then
+	showStack "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "snapshots" ]; then
+	listStackSnapshots "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resources" ]; then
+	listStackResources "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showresource" ]; then
+	showStackResource "$1" "$2"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "events" ]; then
+	listStackEvents "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "template" ]; then
+	showStackTemplate "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resourcetypes" ]; then
+	listStackResTypes
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "buildinfo" ]; then
+	showStackBuildInfo
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "deployments" ]; then
+	listStackDeployments
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
+	showStackDeployment "$1"
+
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
+elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
+	listAntiDDoS
+elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
+	listKMS
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
+	listMRSClusters
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs" ]; then
+	listMRSJobs
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
+	showMRSJob $1
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
 	getMeta meta_data.json "$@"
