@@ -82,9 +82,10 @@ if test -n "$OS_AUTH_URL"; then
 	REG=${OS_AUTH_URL#*://}
 	REG=${REG#*.}
 	if test -z "$OS_REGION_NAME"; then
-		export OS_REGION_NAME=${OS_REGION_NAME%%.*}
+		export OS_REGION_NAME=${REG%%.*}
 	fi
-	REG=${REG#*.}
+	#echo "OS_REGION_NAME: $OS_REGION_NAME"
+	#REG=${REG#*.}
 	export OS_CLOUD_ENV=${REG%%.*}
 fi
 if test -z "$OS_PROJECT_NAME"; then
@@ -325,7 +326,7 @@ getcatendpoint() {
 getendpoint() {
 	SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
 	if test -z "$SERVICE_ID"; then return; fi
-	SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID) | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
+	SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID and .region == \"$OS_REGION_NAME\") | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
 	echo "$SERVICE_EP"
 }
 
