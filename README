@@ -17,7 +17,9 @@ Usage
 -----
 Set your OpenStack environment (OS_ variables) just like you do for the native
 OpenStack clients (typically by sourcing a ~/.ostackrc or ~/novarc or ~/.openrc
-file).
+file). The minimum set is OS_USERNAME, OS_USER_DOMAIN_NAME (could be derived from
+OS__USERNAME for MyWorkplace users), OS_PASSWORD, OS_PROJECT_NAME (eu-de), and
+OS_AUTH_URL (https://iam.eu-de.otc.t-systems.com/v3).
 
 Optionally, you can also set some additional defaults on otc_env.sh by editing
 it and copying it into your home as ~/.otc_env.sh.
