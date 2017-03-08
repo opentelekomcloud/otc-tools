@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.6
+VERSION=0.7.7
 
 # Get Config ####################################################################
 warn_too_open()
@@ -849,6 +849,18 @@ printHelp() {
 	echo "otc alarms show ALID    # display details of alarm ALID"
 	echo "otc alarms delete ALID  # delete alarm ALID"
 	echo "otc alarms en/disable ALID        # enable/disable ALID"
+	echo
+	echo "--- HEAT ---"
+	echo "otc stack list          # List heat stacks"
+	echo "otc stack show SID      # Show stack SID (Name or ID)"
+	echo "otc stack resources SID # List stack resources"
+	echo "otc stack showresource SID        # Show resource details"
+	echo "otc stack events SID    # List stack events"
+	echo "otc stack template SID  # Display stack template"
+	echo "otc stack resourcetypes # Show supported resource types"
+	echo "otc stack buildinfo     # Show build information"
+	echo "otc stack deployments   # List deployed stacks"
+	echo "otc stack showdeployment DID      # Show deployment details"
 	echo
 	echo "--- OTC2.0 new services ---"
 	echo "otc trace list          # List trackers from cloud trace"
@@ -1966,6 +1978,73 @@ createKEYPAIR() {
 
 deleteKEYPAIR() {
 	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
+}
+
+det_StackID()
+{
+	if [[ "$1" = */* ]]; then STACK=$1
+	elif is_uuid "$1"; then
+		NAME=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.id == \"$1\") | .stack_name")
+		if test -z "$NAME" -o "$NAME" = "null"; then echo "ERROR: No stack found by this ID $1" 1>&2; exit 1; fi
+		STACK="$NAME/$1"
+	else
+		ID=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.stack_name == \"$1\") | .id")
+		if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No stack found by this NAME $1" 1>&2; exit 1; fi
+		STACK="$1/$ID"
+	fi
+}
+
+# HEAT
+listStacks() {
+	curlgetauth $TOKEN $HEAT_URL/stacks | jq -r '.stacks[] | .id+"   "+.stack_name+"   "+.stack_status+"   "+.description' | tr -d '"'
+}
+
+showStack() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK | jq -r '.'
+}
+
+listStackSnapshots() {
+	# Not supported on OTC 2.0
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/snapshots | jq -r '.'
+}
+
+listStackResources() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources | jq -r 'def str(s): s|tostring; .resources[] | .physical_resource_id+"   "+.resource_name+"   "+.resource_status+"   "+.resource_type+"   "+.logical_resource_id+"   "+str(.required_by)'
+}
+
+showStackResource() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources/$2 | jq -r '.'
+}
+
+listStackEvents() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/events | jq -r 'def str(s): s|tostring; .events[] | .id+"   "+.resource_name+"   "+.resource_status+"   "+.event_time+"   "+.logical_resource_id+"   "+.physical_resource_id'
+}
+
+showStackTemplate() {
+	det_StackID $1
+   curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/template | jq -r '.'
+}
+
+listStackResTypes() {
+   curlgetauth $TOKEN $HEAT_URL/resource_types | jq -r '.'
+}
+
+showStackBuildInfo() {
+   curlgetauth $TOKEN $HEAT_URL/build_info | jq -r '.'
+}
+
+listStackDeployments() {
+	# TODO: Add parsing ....
+   curlgetauth $TOKEN $HEAT_URL/software_deployments | jq -r '.'
+}
+
+showStackDeployment() {
+   curlgetauth $TOKEN $HEAT_URL/software_deployments/$1 | jq -r '.'
 }
 
 createELB() {
@@ -3658,6 +3737,29 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
 	AlarmsAction "true" "$1"
 elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
 	deleteAlarms "$1"
+
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "list" ]; then
+	listStacks
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "show" ]; then
+	showStack "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "snapshots" ]; then
+	listStackSnapshots "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resources" ]; then
+	listStackResources "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showresource" ]; then
+	showStackResource "$1" "$2"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "events" ]; then
+	listStackEvents "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "template" ]; then
+	showStackTemplate "$1"
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resourcetypes" ]; then
+	listStackResTypes
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "buildinfo" ]; then
+	showStackBuildInfo
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "deployments" ]; then
+	listStackDeployments
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
+	showStackDeployment "$1"
 
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
