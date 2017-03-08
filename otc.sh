@@ -542,6 +542,8 @@ getIAMToken() {
 	AUTH_URL_SMN="${BASEURL/iam/smn}"
 	AUTH_URL_CTS="${BASEURL/iam/cts}"
 	AUTH_URL_DMS="${BASEURL/iam/dms}"
+	AUTH_URL_MRS="${BASEURL/iam/mrs}"
+	AUTH_URL_ANTIDDOS="${BASEURL/iam/antiddos}"
 }
 
 build_data_volumes_json() {
@@ -866,6 +868,7 @@ printHelp() {
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
+	echo "otc kms list            # List keys from key management service"
 	echo
 	echo "--- Custom command support ---"
 	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
@@ -2886,6 +2889,34 @@ listTopics() {
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
+# These don't work yet well
+listMRSClusters()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/cluster-infos" | jq -r '.'
+}
+
+listMRSJobs()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes" | jq -r '.'
+}
+
+showMRSJob()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes/$1" | jq -r '.'
+}
+
+listAntiDDoS()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
+}
+
+listKMS()
+{
+	# POST, bad API design
+	curlpostauth "$TOKEN" "" "$AUTH_URL_KMS/v1.0/$OS_PROJECT_ID/kms/list-keys" | jq -r '.'
+}
+
+
 getMeta() {
 	DATA=$1; shift
 	if test -z "$1"; then FILT='.'; else FILT="$@"; fi
@@ -3767,6 +3798,16 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
+elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
+	listAntiDDoS
+elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
+	listKMS
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
+	listMRSClusters
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs" ]; then
+	listMRSJobs
+elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
+	showMRSJob $1
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
 	getMeta meta_data.json "$@"
