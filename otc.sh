@@ -669,6 +669,7 @@ printHelp() {
 	echo "otc vpc create                  # create vpc"
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
+	echo "otc vpc limits                  # list VPC related quota"
 	echo
 	echo "otc subnet list                 # list all subnet"
 	echo "otc subnet show <SID>           # show details for subnet <SID>"
@@ -1247,6 +1248,11 @@ VPCDelete() {
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID"
 	echo
+}
+
+getVPCLimits() {
+	curlgetauth $TOKEN "${AUTH_URL_VPCS%vpcs}quotas" | jq -r 'def str(s): s|tostring; .quotas.resources[] | .type+"   "+str(.used)+"/"+str(.quota)'
+#| python -m json.tool
 }
 
 getPUBLICIPSList() {
@@ -3412,6 +3418,8 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ];then
 	VPCDelete $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 	VPCCreate
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ];then
+	getVPCLimits
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
 	getPUBLICIPSList
