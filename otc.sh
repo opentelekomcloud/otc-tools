@@ -2350,7 +2350,7 @@ ECSCreate() {
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "null" -a "$SUBNETAZ" != "$AZ"; then
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
@@ -2410,16 +2410,18 @@ ECSCreate() {
 	MORENICS=""
 	if test -n "MORESUBNETS"; then
 		SUBNETIDOLD="$SUBNETID"
-		IFS="," for sub in $MORESUBNETS; do
+		OLDIFS="$IFS"; IFS=","
+		for sub in $MORESUBNETS; do
 			subn=${sub%%:*}
 			fixed=${sub#*:}
-			if ! is_uuid "$subn"; then convertSUBNETNametoID "$subn"; subn="$SUBNETID"; fi
+			if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
 			if test "$fixed" == "$sub"; then
 				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\" }"
 			else
 				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\", \"ip_address\": \"$fixed\" }"
 			fi
 		done
+		IFS="$OLDIFS"
 		SUBNETID="$SUBNETIDOLD"
 	fi
 
@@ -3344,6 +3346,11 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
 		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
 		SECUGROUP="${SECUGROUP#,}"
+	fi
+	if test -z "$INSTANCE_NAME"; then
+		if test -n "$1"; then INSTANCE_NAME="$1"
+		else INSTANCE_NAME="VM-$(date +%s)-$$"
+		fi
 	fi
 
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
