@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.7
+VERSION=0.7.8
 
 # Get Config ####################################################################
 warn_too_open()
@@ -589,6 +589,7 @@ printHelp() {
 	echo "    --image-name          <IMAGE>"
 	echo "    --subnet-name         <SUBNET>"
 	echo "    --fixed-ip            <IP>"
+	echo "    --nicsubs <SUBN1>[:FIX1][,<SUBN2>[:FIX2][,...]]   # 2ndary NICs "
 	echo "    --vpc-name            <VPC>"
 	echo "    --security-group-name <SGNAME>"
 	echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
@@ -604,7 +605,7 @@ printHelp() {
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
    echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
    echo "                                       example: SSD:20,SATA:50"
-	echo "    --az                  <AZ>		# determined from subnet by default"
+	echo "    --az                  <AZ>		 # determined from subnet by default"
 	echo "    --[no]wait"
 	echo
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
@@ -2405,6 +2406,22 @@ ECSCreate() {
    if test -n "$DATADISKS"; then
       DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
    fi
+	# multi-NIC
+	MORENICS=""
+	if test -n "MORESUBNETS"; then
+		SUBNETIDOLD="$SUBNETID"
+		IFS="," for sub in $MORESUBNETS; do
+			subn=${sub%%:*}
+			fixed=${sub#*:}
+			if ! is_uuid "$subn"; then convertSUBNETNametoID "$subn"; subn="$SUBNETID"; fi
+			if test "$fixed" == "$sub"; then
+				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\" }"
+			else
+				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\", \"ip_address\": \"$fixed\" }"
+			fi
+		done
+		SUBNETID="$SUBNETIDOLD"
+	fi
 
 	REQ_CREATE_VM='{
 		"server": {
@@ -2422,7 +2439,7 @@ ECSCreate() {
 			'"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' }'"$MORENICS"' ],
 			'"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
@@ -3086,6 +3103,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			;;
 			--subnet-name)
 			SUBNETNAME="$2"
+			shift # past argument
+			;;
+			--nicsubs)
+			MORESUBNETS="$2"
 			shift # past argument
 			;;
 			-v|--vpc-id)
