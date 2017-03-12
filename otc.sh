@@ -361,6 +361,12 @@ getIAMToken() {
 		TENANT="\"tenantName\": \"$OS_PROJECT_NAME\""
       PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
    fi
+   # USER by ID or by Name
+	if test -n "$OS_USER_ID"; then
+		USER="\"id\": \"$OS_USER_ID\""
+   else
+		USER="\"name\": \"$OS_USERNAME\""
+	fi
 	# Token scope: project vs domain
 	if test "$REQSCOPE" == "domain"; then
 		SCOPE="\"scope\": { \"domain\": { \"name\": \"$OS_USER_DOMAIN_NAME\" } } "
@@ -384,7 +390,7 @@ getIAMToken() {
 				"methods": [ "password" ],
 				 "password": {
 					"user": {
-						"name": "'"$OS_USERNAME"'",
+						'$USER',
 						"password": "'"$OS_PASSWORD"'",
 						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
 					}
