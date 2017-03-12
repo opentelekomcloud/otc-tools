@@ -623,6 +623,10 @@ printHelp() {
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "otc ecs az-list                 # list availability zones"
 	echo "otc ecs flavor-list             # list available flavors"
+	echo "otc ecs attach-nic ECSID PORT   # attach vNIC to VM: port-spec see below"
+	echo "     --port-id PORTID           # Specify port-id"
+	echo "     --net-id NETID [--fixed-ip IP]  # Specify net [and fixed-ip]"
+	echo "otc ecs detach-nic ECSID PORT   # detach vNIC from VM"
 	echo
 	echo "--- Task/Job management ---"
 	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
@@ -2329,6 +2333,38 @@ ECSDetachVolumeId() {
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_CLOUD/$server_id/detachvolume/$volume" | jq '.[]'
 }
 
+ECSAttachPort()
+{
+	ECS_ID=$1; shift
+	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
+	unset PORTSPEC
+	if test "$1" == "--port-id"; then PORTSPEC="\"port_id\": \"$2\""; shift; shift
+	elif test "${1:0:10}" == "--port-id="; then PORTSPEC="\"port_id\": \"${1:10}\""; shift
+	elif is_uuid "$1"; then PORTSPEC="\"port_id\": \"$1\""; shift
+	elif test "$1" == "--net-id"; then PORTSPEC="\"net_id\": \"$2\""; shift; shift
+	elif test "${1:0:9}" == "--net-id="; then PORTSPEC="\"net_id\": \"${1:9}\""; shift
+	else echo "WARN: Need --net-id or --port-id, got \"$@\"" 1>&2
+	fi
+	if test "$1" == "--fixed-ip"; then PORTSPEC="$PORTSPEC, \"fixed_ips\": { [ \"ip_address\": \"$2\" ] }"; shift; shift
+	elif test "${1:0:11}" == "--fixed-ip="; then PORTSPEC="$PORTSEPC, \"fixed_ips\": { [ \"ip_address\": \"${1:11}\" ] }"; shift
+	fi
+	REQ="{ \"interfaceAttachment\": { $PORTSPEC } }"
+	curlpostauth "$TOKEN" "$REQ" $AUTH_URL_ECS/$ECS_ID/os-interface | jq -r '.'
+}
+
+ECSDetachPort()
+{
+	ECS_ID=$1; shift
+	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
+	unset PORT
+	if test "$1" == "--port-id"; then PORT=$2; shift; shift
+	elif test "${1:0:10}" == "--port-id="; then PORT=${1:10}; shift
+	elif is_uuid "$1"; then PORT=$1; shift
+	else echo "WARN: Need --port-id, got \"$@\"" 1>&2
+	fi
+	curldeleteauth "$TOKEN" $AUTH_URL_ECS/$ECS_ID/os-interface/$PORT | jq '.'
+}
+
 ECSCreate() {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
 		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -" 1>&2
@@ -3437,6 +3473,10 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ] ||
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "showaz" ]; then
 	getAZDetail "$1"
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "attach-nic" ]; then
+	ECSAttachPort "$@"
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "detach-nic" ]; then
+	ECSDetachPort "$@"
 
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
 	getVPCList
