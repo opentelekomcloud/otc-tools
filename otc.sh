@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.7
+VERSION=0.7.8
 
 # Get Config ####################################################################
 warn_too_open()
@@ -595,6 +595,7 @@ printHelp() {
 	echo "    --image-name          <IMAGE>"
 	echo "    --subnet-name         <SUBNET>"
 	echo "    --fixed-ip            <IP>"
+	echo "    --nicsubs <SUBN1>[:FIX1][,<SUBN2>[:FIX2][,...]]   # 2ndary NICs "
 	echo "    --vpc-name            <VPC>"
 	echo "    --security-group-name <SGNAME>"
 	echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
@@ -610,7 +611,7 @@ printHelp() {
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
    echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
    echo "                                       example: SSD:20,SATA:50"
-	echo "    --az                  <AZ>		# determined from subnet by default"
+	echo "    --az                  <AZ>		 # determined from subnet by default"
 	echo "    --[no]wait"
 	echo
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
@@ -675,6 +676,7 @@ printHelp() {
 	echo "otc vpc create                  # create vpc"
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
+	echo "otc vpc limits                  # list VPC related quota"
 	echo
 	echo "otc subnet list                 # list all subnet"
 	echo "otc subnet show <SID>           # show details for subnet <SID>"
@@ -1253,6 +1255,11 @@ VPCDelete() {
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID"
 	echo
+}
+
+getVPCLimits() {
+	curlgetauth $TOKEN "${AUTH_URL_VPCS%vpcs}quotas" | jq -r 'def str(s): s|tostring; .quotas.resources[] | .type+"   "+str(.used)+"/"+str(.quota)'
+#| python -m json.tool
 }
 
 getPUBLICIPSList() {
@@ -2349,7 +2356,7 @@ ECSCreate() {
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "null" -a "$SUBNETAZ" != "$AZ"; then
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
@@ -2405,6 +2412,24 @@ ECSCreate() {
    if test -n "$DATADISKS"; then
       DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
    fi
+	# multi-NIC
+	MORENICS=""
+	if test -n "MORESUBNETS"; then
+		SUBNETIDOLD="$SUBNETID"
+		OLDIFS="$IFS"; IFS=","
+		for sub in $MORESUBNETS; do
+			subn=${sub%%:*}
+			fixed=${sub#*:}
+			if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
+			if test "$fixed" == "$sub"; then
+				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\" }"
+			else
+				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\", \"ip_address\": \"$fixed\" }"
+			fi
+		done
+		IFS="$OLDIFS"
+		SUBNETID="$SUBNETIDOLD"
+	fi
 
 	REQ_CREATE_VM='{
 		"server": {
@@ -2422,7 +2447,7 @@ ECSCreate() {
 			'"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' }'"$MORENICS"' ],
 			'"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
@@ -3088,6 +3113,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			SUBNETNAME="$2"
 			shift # past argument
 			;;
+			--nicsubs)
+			MORESUBNETS="$2"
+			shift # past argument
+			;;
 			-v|--vpc-id)
 			VPCID="$2"
 			shift # past argument
@@ -3324,6 +3353,11 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
 		SECUGROUP="${SECUGROUP#,}"
 	fi
+	if test -z "$INSTANCE_NAME"; then
+		if test -n "$1"; then INSTANCE_NAME="$1"
+		else INSTANCE_NAME="VM-$(date +%s)-$$"
+		fi
+	fi
 
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
@@ -3418,6 +3452,8 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ];then
 	VPCDelete $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
 	VPCCreate
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ];then
+	getVPCLimits
 
 elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
 	getPUBLICIPSList
