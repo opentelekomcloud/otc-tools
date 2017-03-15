@@ -611,7 +611,7 @@ printHelp() {
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
 	echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                       example: SSD:20,SATA:50"
-	echo "    --az                  <AZ>		# determined from subnet by default"
+	echo "    --az                  <AZ>		 # determined from subnet by default"
 	echo "    --[no]wait"
 	echo
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
@@ -876,6 +876,7 @@ printHelp() {
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
+	echo "otc notifications publish URN SUBJECT     # Publish notification (stdin)"
 	echo "otc kms list            # List keys from key management service"
 	echo
 	echo "--- Custom command support ---"
@@ -2931,6 +2932,16 @@ listTopics() {
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
+publishNotification()
+{
+	TOPIC_URN="$1"
+	SUBJECT="$2"
+	shift; shift
+	# Read message from stdin
+	MESG=$(tr -d '\r' | tr '\n' '\r' | sed -re 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r/\\n/g')
+	curlpostauth "$TOKEN" "{ \"subject\": \"$SUBJECT\", \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$TOPIC_URN/publish" | jq -r '.'
+}
+
 # These don't work yet well
 listMRSClusters() {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/cluster-infos" | jq -r '.'
@@ -3834,6 +3845,8 @@ elif [ "$MAINCOM" == "queues" ] && [ "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "notifications" ] && [ "$SUBCOM" == "list" ]; then
 	listTopics
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "publish" ]; then
+	publishNotification "$@"
 elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
 	listAntiDDoS
 elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
