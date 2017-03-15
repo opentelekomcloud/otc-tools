@@ -144,16 +144,18 @@ else
 	export IAM_AUTH_URL="https://iam.${OS_REGION_NAME}.otc.t-systems.com/v3/auth/tokens"
 fi
 
+if test -z "$TMPDIR"; then TMPDIR=/dev/shm; fi
+
 # REST call curl wrappers ###########################################################
 
-RC=0
+ECODE=`mktemp $TMPDIR/error.$$.XXXXXXXX`
 # Generic wrapper to facilitate debugging
 docurl()
 {
 	if test -n "$DEBUG"; then
 		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
-			TMPHDR=`mktemp /tmp/curlhdr.$$.XXXXXXXXXX`
+			TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
 			RC=$?
 			echo -n "DEBUG: Header" 1>&2
@@ -175,6 +177,7 @@ docurl()
 		MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
 		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "$MSG" | tr -d '"' 1>&2; RC=42; fi
 	fi
+	echo "$RC" >> $ECODE
 	return $RC
 }
 
@@ -232,7 +235,7 @@ curlgetauth_pag()
 	else
 		LIMPAR="?limit=$LIM"
 	fi
-	TMPF=$(mktemp /tmp/otc.sh.$$.XXXXXXXX)
+	TMPF=$(mktemp $TMPDIR/otc.sh.$$.XXXXXXXX)
 	MARKPAR=""
 	NOANS=0; LASTNO=1
 	while test $NOANS != $LASTNO -a $(($NOANS%$LIM)) == 0; do
@@ -1206,7 +1209,6 @@ handleCustom()
 			exit 1
 			;;
 	esac
-	#echo "$RC" 1>&2
 	if test -z "$JQFILTER"; then echo; fi
 	return $RC
 }
@@ -4164,3 +4166,11 @@ elif [ "$MAINCOM" == "custom" ]; then
 else
 	printHelp
 fi
+
+ERR=$?
+while read RC; do
+	if test "$RC" != "0"; then break; fi
+done < $ECODE
+if test "$RC" = "0"; then RC=$ERR; fi
+rm -f $ECODE
+exit $RC
