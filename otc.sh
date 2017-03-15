@@ -146,6 +146,7 @@ fi
 
 # REST call curl wrappers ###########################################################
 
+RC=0
 # Generic wrapper to facilitate debugging
 docurl()
 {
@@ -154,17 +155,27 @@ docurl()
 		if test "$DEBUG" = "2"; then
 			TMPHDR=`mktemp /tmp/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
+			RC=$?
 			echo -n "DEBUG: Header" 1>&2
 			cat $TMPHDR  | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 			rm $TMPHDR
 		else
 			ANS=`curl $INS "$@"`
+			RC=$?
 		fi
-		echo "DEBUG: $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+		echo "DEBUG: ($RC) $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 		echo "$ANS"
 	else
-		curl $INS "$@"
+		ANS=`curl $INS "$@"`
+		RC=$?
+		echo "$ANS"
 	fi
+	if test $RC != 0; then echo "$ANS" 1>&2
+	else
+		MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "$MSG" | tr -d '"' 1>&2; RC=42; fi
+	fi
+	return $RC
 }
 
 curlpost()
@@ -1195,7 +1206,9 @@ handleCustom()
 			exit 1
 			;;
 	esac
-   if test -z "$JQFILTER"; then echo; fi
+	#echo "$RC" 1>&2
+	if test -z "$JQFILTER"; then echo; fi
+	return $RC
 }
 
 
@@ -3546,18 +3559,27 @@ if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "volumes" ]; then MAINCOM="evs"; fi
 if [ "$MAINCOM" = "volume" ]; then MAINCOM="evs"; fi
 if [ "$MAINCOM" = "router" ]; then MAINCOM="vpc"; fi
+if [ "$MAINCOM" = "floating-ip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "floatingip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "eip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "image" ]; then MAINCOM="images"; fi
 if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
 if [ "$MAINCOM" = "auth" ]; then MAINCOM="iam"; fi
+if [ "$MAINCOM" = "identity" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "metric" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "alarm" ]; then MAINCOM="alarms"; fi
 if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
+if [ "$MAINCOM" = "cts" ]; then MAINCOM="trace"; fi
+if [ "$MAINCOM" = "snm" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "notification" ]; then MAINCOM="notifications"; fi
+if [ "$MAINCOM" = "topics" ]; then MAINCOM="notifications"; fi
+if [ "$MAINCOM" = "topic" ]; then MAINCOM="notifications"; fi
+if [ "$MAINCOM" = "dms" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "queue" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
+if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
+if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
 
 
 
@@ -4139,7 +4161,6 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
 
 elif [ "$MAINCOM" == "custom" ]; then
 	handleCustom "$SUBCOM" "$@"
-
 else
 	printHelp
 fi
