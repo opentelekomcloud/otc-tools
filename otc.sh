@@ -39,7 +39,7 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.8
+VERSION=0.7.9
 
 # Get Config ####################################################################
 warn_too_open()
@@ -2181,10 +2181,10 @@ createELB()
 	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
 	DEFNAME="ELB-$BANDWIDTH"
 	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
-		if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
+		if [ -n "$SUBNETNAME" -a -z "$SUBNETID" ]; then
 			convertSUBNETNameToId $SUBNETNAME $VPCID
 		fi
-		if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
+		if [ -n "$SECUGROUPNAME" != "" -a -z "$SECUGROUP" ]; then
 			convertSECUGROUPNameToId "$SECUGROUPNAME"
 		fi
 		if test -z "$AZ"; then
@@ -3168,7 +3168,9 @@ deleteSubscription()
 
 sendSMS()
 {
-	curlpostauth "$TOKEN" "{ \"endpoint\": \"$1\", \"message\": \"$2\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/sms" | jq -r '.'
+	EP=$1; shift
+	MESG=$(echo "$@" | cleansmnmessage)
+	curlpostauth "$TOKEN" "{ \"endpoint\": \"$EP\", \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/sms" | jq -r '.'
 }
 
 
@@ -4136,7 +4138,7 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
 	getMeta password "$@"
 
 elif [ "$MAINCOM" == "custom" ]; then
-   handleCustom "$SUBCOM" "$@"
+	handleCustom "$SUBCOM" "$@"
 
 else
 	printHelp
