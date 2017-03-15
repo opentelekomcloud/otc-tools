@@ -1222,7 +1222,8 @@ getECSList()
 	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
 }
 
-getECSDetails() {
+getECSDetails()
+{
 	#setlimit 1200
 	setlimit; setapilimit 2000 40 servers id
 	if test -n "$1"; then
@@ -2347,7 +2348,7 @@ getECSJOBList()
 getFileContentJSON()
 {
 	INJECTFILE=$1
-	if [ "$INJECTFILE" != "" ];then
+	if [ "$INJECTFILE" != "" ]; then
 		IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
 		FILENAME_NAME=${FILE_AR[1]}
 		TARGET_FILENAME=${FILE_AR[0]}
@@ -2954,7 +2955,7 @@ WaitForTask()
 	DEFTOUT=$((1+3600/$SEC))
 	TOUT=$((2*${3:-$DEFTOUT}))
 	unset FIELD
-	if [ "$WAIT_FOR_JOB" == "true" ];then
+	if [ "$WAIT_FOR_JOB" == "true" ]; then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
 
@@ -3244,7 +3245,7 @@ fi
 if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
 if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
 
-#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
+#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
@@ -3691,7 +3692,7 @@ elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ]; then
 	# convertSECUGROUPNameToId "$SECUGROUPNAME"
 	# convertIMAGENameToId "$IMAGENAME"
 elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ]; then
-	if [ "$VPCNAME" != "" ];then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SUBNETCreate
 
 elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ]; then
