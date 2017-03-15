@@ -39,84 +39,82 @@
 # License: CC-BY-SA 3.0
 #
 
-VERSION=0.7.8
+VERSION=0.7.9
 
 # Get Config ####################################################################
-warn_too_open()
-{
+warn_too_open() {
 	PERM=$(stat -Lc "%a" "$1")
-	if test "${PERM:2:1}" != "0"; then
+	if [ "${PERM:2:1}" != "0" ]; then
 		echo "Warning: $1 permissions too open ($PERM)" 1>&2
 	fi
 }
 
-may_read_env_files()
-{
+may_read_env_files() {
 	for file in "$@"; do
-		if test -r "$file"; then
+		if [ -r "$file" ]; then
 			echo "Note: Reading environment from $file ..." 1>&2
 			source "$file"
 			warn_too_open "$file"
-			if test -n "$OS_PASSWORD" -a -n "$OS_USERNAME"; then break; fi
+			if [ -n "$OS_PASSWORD" ] && [ -n "$OS_USERNAME" ]; then break; fi
 		fi
 	done
 }
 
 otc_dir="$(dirname "$0")"
 # Parse otc-tools specific config file (deprecated)
-if test -r ~/.otc_env.sh; then
+if [ -r ~/.otc_env.sh ]; then
 	source ~/.otc_env.sh
 	warn_too_open ~/.otc_env.sh
 #else
 #	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation" 1>&2
 fi
 # Parse standard OpenStack environment setting files if needed
-if test -z "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
+if [ -z "$OS_PASSWORD" -o -z "$OS_USERNAME" ]; then
 	may_read_env_files ~/.ostackrc.$OTC_TENANT ~/.ostackrc ~/.novarc ~/novarc
 fi
 # Defaults
-if test -z "$OS_USER_DOMAIN_NAME"; then
+if [ -z "$OS_USER_DOMAIN_NAME" ]; then
 	export OS_USER_DOMAIN_NAME="${OS_USERNAME##* }"
 fi
-if test -n "$OS_AUTH_URL"; then
+if [ -n "$OS_AUTH_URL" ]; then
 	REG=${OS_AUTH_URL#*://}
 	REG=${REG#*.}
-	if test -z "$OS_REGION_NAME"; then
+	if [ -z "$OS_REGION_NAME" ]; then
 		export OS_REGION_NAME=${REG%%.*}
 	fi
 	#echo "OS_REGION_NAME: $OS_REGION_NAME"
 	#REG=${REG#*.}
 	export OS_CLOUD_ENV=${REG%%.*}
 fi
-if test -z "$OS_PROJECT_NAME"; then
+if [ -z "$OS_PROJECT_NAME" ]; then
 	export OS_PROJECT_NAME="$OS_REGION_NAME"
 fi
-if test -z "$MAXGETKB"; then
+if [ -z "$MAXGETKB" ]; then
 	export MAXGETKB=251
 fi
 # S3 environment
-if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
+if [ -z "$S3_ACCESS_KEY_ID" ] && [ -r ~/.s3rc.$OTC_TENANT ]; then
 	echo "Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..." 1>&2
 	source ~/.s3rc.$OTC_TENANT
 	warn_too_open ~/.s3rc.$OTC_TENANT
 fi
-if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc; then
+if [ -z "$S3_ACCESS_KEY_ID" ] && [ -r ~/.s3rc ]; then
 	echo "Note: Reading S3 environment from ~/.s3rc ..." 1>&2
 	source ~/.s3rc
 	warn_too_open ~/.s3rc
 fi
 # Alternatively parse CSV as returned by OTC
-if test -r ~/credentials-$OTC_TENANT.csv; then
+if [ -r ~/credentials-$OTC_TENANT.csv ]; then
 	CRED=credentials-$OTC_TENANT.csv
 else
 	CRED=credentials.csv
 fi
-if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
+if [ -z "$S3_ACCESS_KEY_ID" ] && [ -r ~/$CRED ]; then
 	echo -n "Note: Parsing S3 $CRED ... " 1>&2
 	LN=$(tail -n1 ~/$CRED | sed 's/"//g')
 	UNM=${LN%%,*}
 	LN=${LN#*,}
-	if test "$UNM" = "$OS_USERNAME"; then
+	if [ "$UNM" = "$OS_USERNAME" ]; then
 		echo "succeeded" 1>&2
 		export S3_ACCESS_KEY_ID="${LN%,*}"
 		export S3_SECRET_ACCESS_KEY="${LN#*,}"
@@ -129,12 +127,25 @@ fi
 # ENVIROMENT SETTINGS ####################################################################
 
 # Defaults
-if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
-if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
+if [ -z "$BANDWIDTH" ]; then 
+	BANDWIDTH=25
+else
+	echo "Using individual bandwidth $BANDWIDTH."
+fi
 
-test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
+if [ -z "$VOLUMETYPE" ]; then 
+	VOLUMETYPE="SATA"
+else
+	echo "Using individual volumetype $VOLUMETYPE."
+fi
 
-if test -n "$OS_AUTH_URL"; then
+if [ -z "$S3_HOSTNAME" ]; then 
+	export S3_HOSTNAME="obs.otc.t-systems.com"
+else 
+	echo "Using individual S3 host $S3_HOSTNAME."
+fi
+
+if [ -n "$OS_AUTH_URL" ]; then
 	if [[ "$OS_AUTH_URL" = *"/v3" ]]; then
 		export IAM_AUTH_URL="$OS_AUTH_URL/auth/tokens"
 	else
@@ -147,15 +158,14 @@ fi
 # REST call curl wrappers ###########################################################
 
 # Generic wrapper to facilitate debugging
-docurl()
-{
-	if test -n "$DEBUG"; then
+docurl() {
+	if [ -n "$DEBUG" ]; then
 		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
-		if test "$DEBUG" = "2"; then
+		if [ "$DEBUG" = "2" ]; then
 			TMPHDR=`mktemp /tmp/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
 			echo -n "DEBUG: Header" 1>&2
-			cat $TMPHDR  | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+			cat $TMPHDR | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 			rm $TMPHDR
 		else
 			ANS=`curl $INS "$@"`
@@ -167,13 +177,11 @@ docurl()
 	fi
 }
 
-curlpost()
-{
+curlpost() {
 	docurl -i -sS -H "Content-Type: application/json" -d "$1" "$2"
 }
 
-curlpostauth()
-{
+curlpostauth() {
 	TKN="$1"; shift
 	docurl -sS -X POST \
 		-H "Content-Type: application/json" \
@@ -183,48 +191,44 @@ curlpostauth()
 		-d "$1" "$2"
 }
 
-curlputauth()
-{
+curlputauth() {
 	TKN="$1"; shift
 	docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" -d "$1" "$2"
 }
 
-curlputauthbinfile()
-{
+curlputauthbinfile() {
 	TKN="$1"; shift
 	docurl -sS -X PUT -H "Content-Type: application/octet-stream" \
 		-H "X-Auth-Token: $TKN" -T "$1" "$2"
 }
 
-curlgetauth()
-{
+curlgetauth() {
 	TKN="$1"; shift
 	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
-curlgetauth_pag()
-{
-   URL="$2"
-   unset HASLIM
-   echo "$URL" | grep -q  'limit=' && HASLIM=1
+curlgetauth_pag() {
+	URL="$2"
+	unset HASLIM
+	echo "$URL" | grep -q 'limit=' && HASLIM=1
 	#echo "$HASLIM $MAXGETKB $RECSZ" 1>&2
-   if test -n "$HASLIM" -o -z "$MAXGETKB" -o "$MAXGETKB" == "off" -o -z "$RECSZ"; then curlgetauth "$@"; return; fi
+	if [ -n "$HASLIM" -o -z "$MAXGETKB" -o "$MAXGETKB" == "off" -o -z "$RECSZ" ]; then curlgetauth "$@"; return; fi
 	TKN="$1"
 	unset HASPAR
 	echo "$URL" | grep -q '?' && HASPAR=1
 	#RECSZ, HDRSZ, ARRNM, IDFIELD
 	LIM=$((($MAXGETKB*1024-$HDRSZ)/$RECSZ))
-	if test "$HASPAR" == 1; then
+	if [ "$HASPAR" == 1 ]; then
 		LIMPAR="&limit=$LIM"
 	else
 		LIMPAR="?limit=$LIM"
 	fi
-   TMPF=$(mktemp /tmp/otc.sh.$$.XXXXXXXX)
+	TMPF=$(mktemp /tmp/otc.sh.$$.XXXXXXXX)
 	MARKPAR=""
 	NOANS=0; LASTNO=1
-	while test $NOANS != $LASTNO -a $(($NOANS%$LIM)) == 0; do
+	while [ $NOANS != $LASTNO ] && [ $(($NOANS%$LIM)) == 0 ]; do
 		LASTNO=$NOANS
 		docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
 			-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$URL$LIMPAR$MARKPAR" >>$TMPF
@@ -234,17 +238,15 @@ curlgetauth_pag()
 		MARKPAR="&marker=$LAST"
 	done
 	cat $TMPF
-   rm $TMPF
+	rm $TMPF
 }
 
-curldeleteauth()
-{
+curldeleteauth() {
 	TKN="$1"; shift
 	docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 }
 
-curldeleteauth_language()
-{
+curldeleteauth_language() {
 	TKN="$1"; shift
 	docurl -sS -X DELETE \
 		-H "Content-Type: application/json" \
@@ -253,10 +255,9 @@ curldeleteauth_language()
 		-H "X-Auth-Token: $TKN" "$1"
 }
 
-curlpatchauth()
-{
+curlpatchauth() {
 	TKN="$1"; shift
-	if test -z "$3"; then CTYPE="application/json"; else CTYPE="$3"; fi
+	if [ -z "$3" ]; then CTYPE="application/json"; else CTYPE="$3"; fi
 	docurl -sS -X PATCH \
 		-H "Content-Type: $CTYPE" \
 		-H "Accept: application/json" \
@@ -265,30 +266,28 @@ curlpatchauth()
 }
 
 # ARGS: TKN URL PATH OP VALUE [CONTENTTYPE]
-curldopatch()
-{
+curldopatch() {
 	TKN="$1"; shift
 	#if test -z "$4"; then OP="remove"; else OP="$3"; VAL="\"value\": \"$4\", "; fi
-	if test "$3" != "remove"; then VAL="\"value\": \"$4\", "; fi
-	if test -z "$5"; then CTYPE="application/json"; else CTYPE="$5"; fi
+	if [ "$3" != "remove" ]; then VAL="\"value\": \"$4\", "; fi
+	if [ -z "$5" ]; then CTYPE="application/json"; else CTYPE="$5"; fi
 	curlpatchauth "$TKN" "[{\"path\": \"$2\", $VAL\"op\": \"$3\"}]" "$1" "$CTYPE"
 }
 
 # ARGS: TKN URL PATH VALUE [CONTENTTYPE]
-curladdorreplace()
-{
+curladdorreplace() {
 	TKN="$1"; shift
-	if test -z "$4"; then CTYPE="application/json"; else CTYPE="$4"; fi
+	if [ -z "$4" ]; then CTYPE="application/json"; else CTYPE="$4"; fi
 	VAL=`curlgetauth "$TKN" "$1" | jq ".$2"`
 	echo "DEBUG: /$2: $VAL -> $3" 1>&2
-	if test "$VAL" = "null"; then
-		if test -z "$3"; then
+	if [ "$VAL" = "null" ]; then
+		if [ -z "$3" ]; then
 			echo "WARN: Nothing to do, /$2 already non-existent" 1>&2
 		else
 			curldopatch "$TKN" "$1" "/$2" "add" "$3" "$CTYPE"
 		fi
 	else
-		if test -z "$3"; then
+		if [ -z "$3" ]; then
 			curldopatch "$TKN" "$1" "/$2" "remove" "" "$CTYPE"
 		else
 			curldopatch "$TKN" "$1" "/$2" "replace" "$3" "$CTYPE"
@@ -296,8 +295,7 @@ curladdorreplace()
 	fi
 }
 
-curldeleteauthwithjsonparameter()
-{
+curldeleteauthwithjsonparameter() {
 	# $1: TOKEN
 	# $2: PARAMETER
 	# $3: URI
@@ -317,7 +315,7 @@ unset SUBNETAZ
 # Arguments CATALOGJSON SERVICETYPE
 getcatendpoint() {
 	SERVICE_EP=$(echo "$1" | jq "select(.type == \"$2\") | .endpoints[].url" | tr -d '"')
-	if test "$SERVICE_EP" != "null"; then
+	if [ "$SERVICE_EP" != "null" ]; then
 		echo "$SERVICE_EP"
 	fi
 }
@@ -325,7 +323,7 @@ getcatendpoint() {
 # Arguments: SERVICESJSON ENDPOINTSJSON SERVICETYPE PROJECTID
 getendpoint() {
 	SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
-	if test -z "$SERVICE_ID"; then return; fi
+	if [ -z "$SERVICE_ID" ]; then return; fi
 	SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID and .region == \"$OS_REGION_NAME\") | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
 	echo "$SERVICE_EP"
 }
@@ -333,7 +331,7 @@ getendpoint() {
 # Arguments SERVICEJSON SERVICETYPE
 getv2endpoint() {
 	SERVICE_EP=$(echo "$1" | jq ".access.serviceCatalog[] | select(.type == \"$2\") | .endpoints[].publicURL" | tr -d '"')
-	if test "$SERVICE_EP" != "null"; then
+	if [ "$SERVICE_EP" != "null" ]; then
 		echo "$SERVICE_EP"
 	fi
 }
@@ -343,7 +341,7 @@ getv2endpoint() {
 TROVE_OVERRIDE=0
 IS_OTC=1
 getIAMToken() {
-	if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD" -o -z "$IAM_AUTH_URL"; then
+	if [ -z "$OS_USERNAME" -o -z "$OS_PASSWORD" -o -z "$IAM_AUTH_URL" ]; then
 		echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, OS_AUTH_URL, and OS_PROJECT_NAME environment" 1>&2
 		echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
 		exit 1
@@ -351,28 +349,30 @@ getIAMToken() {
 
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
 	BASEURL=${BASEURL%%/v[23]*}
-   REQSCOPE=${1:-project}
+	REQSCOPE=${1:-project}
 
-   # Project by ID or by Name
-	if test -n "$OS_PROJECT_ID"; then
+	# Project by ID or by Name
+	if [ -n "$OS_PROJECT_ID" ]; then
 		TENANT="\"tenantId\": \"$OS_PROJECT_ID\""
-      PROJECT="\"project\": { \"id\": \"$OS_PROJECT_ID\" }"
-   else
+		PROJECT="\"project\": { \"id\": \"$OS_PROJECT_ID\" }"
+	else
 		TENANT="\"tenantName\": \"$OS_PROJECT_NAME\""
-      PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
-   fi
-   # USER by ID or by Name
+		PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
+	fi
+
+	# USER by ID or by Name
 	if test -n "$OS_USER_ID"; then
 		USER="\"id\": \"$OS_USER_ID\""
-   else
+	else
 		USER="\"name\": \"$OS_USERNAME\""
 	fi
+	
 	# Token scope: project vs domain
-	if test "$REQSCOPE" == "domain"; then
+	if [ "$REQSCOPE" == "domain" ]; then
 		SCOPE="\"scope\": { \"domain\": { \"name\": \"$OS_USER_DOMAIN_NAME\" } } "
 	else
 		SCOPE="\"scope\": { $PROJECT }"
-   fi
+	fi
 
 	IAM2_REQ='{
 			"auth": {
@@ -385,48 +385,49 @@ getIAMToken() {
 		}
 	'
 	IAM3_REQ='{
-			"auth": {
-			 "identity": {
-				"methods": [ "password" ],
-				 "password": {
+		"auth": {
+			"identity": {
+			"methods": [ "password" ],
+				"password": {
 					"user": {
-						'$USER',
-						"password": "'"$OS_PASSWORD"'",
-						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+					"name": "'"$OS_USERNAME"'",
+					'$USER',
+					"password": "'"$OS_PASSWORD"'",
+					"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
 					}
-				 }
-			 },
-			 '$SCOPE'
-			}
-	}
-	'
-   if test -n "$OS_PROJECT_DOMAIN_NAME"; then IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },"); fi
+				}
+			},
+			'$SCOPE'
+		}
+	}'
+	
+	if [ -n "$OS_PROJECT_DOMAIN_NAME" ]; then IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },"); fi
 	export IAM2_REQ IAM3_REQ
-	#if test -n "$DEBUG"; then
+	#f -n "$DEBUG"; then
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 	#fi
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
 		IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
 		TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 		#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
-		if test -z "$OS_PROJECT_ID"; then
+		if [ -z "$OS_PROJECT_ID" ]; then
 			OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
 		fi
-		if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
+		if [ -z "$TOKEN" -o -z "$OS_PROJECT_ID" ]; then
 			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
 		fi
-		if test -z "$OS_USER_DOMAIN_ID"; then
+		if [ -z "$OS_USER_DOMAIN_ID" ]; then
 			OS_USER_DOMAIN_ID=`echo "$IAMRESP" | getUserDomainIdFromIamResponse `
 		fi
-		if test -z "$OS_USER_DOMAIN_ID"; then
+		if [ -z "$OS_USER_DOMAIN_ID" ]; then
 			echo "ERROR: Failed to determine user domain id from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
 		fi
 		# Parse IAM RESP catalogue
 		CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.catalog[]')
 		ROLEJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.roles[]')
-		if test -n "$CATJSON" -a "$CATJSON" != "null"; then
+		if [ -n "$CATJSON" ] && [ "$CATJSON" != "null" ] ; then
 			CINDER_URL=$(getcatendpoint "$CATJSON" volumev2 $OS_PROJECT_ID)
 			NEUTRON_URL=$(getcatendpoint "$CATJSON" network $OS_PROJECT_ID)
 			GLANCE_URL=$(getcatendpoint "$CATJSON" image $OS_PROJECT_ID)
@@ -437,8 +438,8 @@ getIAMToken() {
 			KEYSTONE_URL=$(getcatendpoint "$CATJSON" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
-			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
-			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
+			if [ -n "$OUTPUT_CAT" ]; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
+			if [ -n "$OUTPUT_ROLES" ]; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
 			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
@@ -456,16 +457,16 @@ getIAMToken() {
 			KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
 		fi
-      if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
+	if [ -n "$OUTPUT_DOM" ]; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
 		IS_OTC=0
 		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
 		IAMJSON=`echo "$IAMRESP" | tail -n1`
 		TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`
-		if test -z "$OS_PROJECT_ID"; then
+		if [ -z "$OS_PROJECT_ID" ]; then
 			OS_PROJECT_ID=`echo "$IAMJSON" | tail -n1 | jq -r '.access.token.tenant.id'`
 		fi
-		if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
+		if [ -z "$TOKEN" -o -z "$OS_PROJECT_ID" ]; then
 			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
 		fi
@@ -481,7 +482,7 @@ getIAMToken() {
 	fi
 	# FIXME: Delete this
 	# For now fall back to hardcoded URLs
-	if test -z "$NOVA_URL" -a "$IS_OTC" = "1" -a "$REQSCOPE" == "project"; then
+	if [ -z "$NOVA_URL" ] && [ "$IS_OTC" = "1" ] && [ "$REQSCOPE" == "project" ] ; then
 		echo "WARN: Using hardcoded endpoints, will be removed" 1>&2
 		CINDER_URL=${BASEURL/iam/evs}/v2/$OS_PROJECT_ID
 		NEUTRON_URL=${BASEURL/iam/vpc}
@@ -497,8 +498,8 @@ getIAMToken() {
 	#if test -n "$DEBUG"; then
 	#	echo "$IAMRESP" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
 	#fi
-	if test -z "$KEYSTONE_URL"; then KEYSTONE_URL=$BASEURL/v3; fi
-	if test -z "$CEILOMETER_URL"; then CEILOMETER_URL=${BASEURL/iam/ces}; fi
+	if [ -z "$KEYSTONE_URL" ]; then KEYSTONE_URL=$BASEURL/v3; fi
+	if [ -z "$CEILOMETER_URL" ]; then CEILOMETER_URL=${BASEURL/iam/ces}; fi
 
 	AUTH_URL_ECS="$NOVA_URL/servers"
 	export AUTH_URL_ECS_JOB="${NOVA_URL/v2/v1}/jobs"
@@ -532,7 +533,7 @@ getIAMToken() {
 	AUTH_URL_ELB="${NEUTRON_URL/vpc/elb}/v1.0/$OS_PROJECT_ID/elbaas"
 	AUTH_URL_ELB_LB="$AUTH_URL_ELB/loadbalancers"
 
-	if test -z "$TROVE_URL"; then TROVE_URL=${BASEURL/iam/rds}; TROVE_OVERRIDE=1; fi
+	if [ -z "$TROVE_URL" ]; then TROVE_URL=${BASEURL/iam/rds}; TROVE_OVERRIDE=1; fi
 	AUTH_URL_RDS="$TROVE_URL/rds"
 	AUTH_URL_RDS_DOMAIN="${AUTH_URL_RDS}/v1/$OS_USER_DOMAIN_ID"
 	AUTH_URL_RDS_PROJECT="${AUTH_URL_RDS}/v1/$OS_PROJECT_ID"
@@ -554,19 +555,19 @@ getIAMToken() {
 }
 
 build_data_volumes_json() {
-   info_str=$1
+	info_str=$1
 
-   DATA_VOLUMES=""
-   disks=(${info_str//,/ })
-   for disk in "${disks[@]}"
-   do
-      info=(${disk//:/ })
-      if test -n "$DATA_VOLUMES"; then
-         DATA_VOLUMES="$DATA_VOLUMES,";
-      fi
-      DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
-   done
-   echo $DATA_VOLUMES
+	DATA_VOLUMES=""
+	disks=(${info_str//,/ })
+	for disk in "${disks[@]}"
+	do
+		info=(${disk//:/ })
+		if [ -n "$DATA_VOLUMES" ]; then
+		DATA_VOLUMES="$DATA_VOLUMES,";
+		fi
+	DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
+	done
+	echo $DATA_VOLUMES
 }
 
 # Usage
@@ -595,7 +596,6 @@ printHelp() {
 	echo "    --image-name          <IMAGE>"
 	echo "    --subnet-name         <SUBNET>"
 	echo "    --fixed-ip            <IP>"
-	echo "    --nicsubs <SUBN1>[:FIX1][,<SUBN2>[:FIX2][,...]]   # 2ndary NICs "
 	echo "    --vpc-name            <VPC>"
 	echo "    --security-group-name <SGNAME>"
 	echo "    --security-group-ids  <SGID>,<SGID>,<SGID>"
@@ -629,10 +629,6 @@ printHelp() {
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "otc ecs az-list                 # list availability zones"
 	echo "otc ecs flavor-list             # list available flavors"
-	echo "otc ecs attach-nic ECSID PORT   # attach vNIC to VM: port-spec see below"
-	echo "     --port-id PORTID           # Specify port-id"
-	echo "     --net-id NETID [--fixed-ip IP]  # Specify net [and fixed-ip]"
-	echo "otc ecs detach-nic ECSID PORT   # detach vNIC from VM"
 	echo
 	echo "--- Task/Job management ---"
 	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
@@ -756,7 +752,6 @@ printHelp() {
 	echo "    --subnet-name/id <subnet>             # creates internal ELB listening on subnet"
 	echo "    --security-group-name/id <secgroup>   # for internal ELBs"
 	echo "otc elb delete <eid>            # Delete ELB with <eid>"
-
 	echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
 	echo "otc elb showlistener <lid>      # show listener detail <lid>"
 	echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
@@ -908,8 +903,7 @@ printHelp() {
 # Functions
 
 # Check if $1 is in uuid format
-is_uuid()
-{
+is_uuid() {
 	echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1
 }
 
@@ -922,8 +916,7 @@ getid() {
 # $2 => header size
 # $3 => array name
 # $4 => name od marker (default: id)
-setapilimit()
-{
+setapilimit() {
 	RECSZ=$1
 	HDRSZ=$2
 	ARRNM=$3
@@ -931,9 +924,8 @@ setapilimit()
 }
 
 PARAMSTRING=""
-setlimit()
-{
-	if [ -z "$APILIMIT" -a -n "$1" ]; then
+setlimit() {
+	if [ -z "$APILIMIT" ] && [ -n "$1" ]; then
 		export PARAMSTRING="?limit=$1"
 	elif [ "$APILIMIT" == "off" -o -z "$1" ]; then
 		export PARAMSTRING=""
@@ -972,26 +964,23 @@ setlimit()
 }
 
 # Params: ARRNM Value [attr [id]]
-find_id()
-{
+find_id() {
 	ANM=${3:-name}
 	IDN=${4:-id}
 	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
 }
 
 # Params: ARRNM Value addattr [match [attr [id]]]
-find_id_ext()
-{
+find_id_ext() {
 	ANM=${5:-name}
 	IDN=${6:-id}
-	if test -n "$4"; then FILT=" and .$3 == \"$4\""; fi
+	if [ -n "$4" ]; then FILT=" and .$3 == \"$4\""; fi
 	#echo jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" 1>&2
 	jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" | tr -d '", '
 }
 
 # Flatten array
-arraytostr()
-{
+arraytostr() {
 	sed -e 's@\["\([^"]*\)",@\1,@g' -e 's@,"\([^"]*\)",@ \1,@g' -e 's@\(,\| \[\)"\([^"]*\)"\]@ \2@g'
 }
 
@@ -1006,7 +995,7 @@ convertSUBNETNameToId() {
 	SUBNETS=`curlgetauth_pag $TOKEN "$AUTH_URL_SUBNETS$PARAMSTRING"`
 	SUBNETID=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2" name availability_zone`
-	if test -z "$SUBNETID"; then
+	if [ -z "$SUBNETID" ]; then
 		echo "ERROR: No subnet found by name $1" 1>&2
 		exit 3
 	fi
@@ -1019,7 +1008,7 @@ convertVPCNameToId() {
 	#setlimit 500
 	setlimit; setapilimit 320 20 vpcs
 	VPCID=`curlgetauth_pag $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | find_id vpcs "$1"`
-	if test -z "$VPCID"; then
+	if [ -z "$VPCID" ]; then
 		echo "ERROR: No VPC found by name $1" 1>&2
 		exit 3
 	fi
@@ -1034,14 +1023,14 @@ convertSECUGROUPNameToId() {
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
-	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
+	if [ `echo "$SECUGROUP" | wc -w` -gt 1 ]; then
 		SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
 	fi
-	if test -z "$SECUGROUP"; then
+	if [ -z "$SECUGROUP" ]; then
 		echo "ERROR: No security-group found by name $1" 1>&2
 		exit 3
 	fi
-	if test `echo "$SECUGROUP" | wc -w` != 1; then
+	if [ `echo "$SECUGROUP" | wc -w` != 1 ]; then
 		echo "Warn: Non-unique Security Group mapping: $1 -> $SECUGROUP" 1>&2
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
@@ -1053,11 +1042,11 @@ convertIMAGENameToId() {
 	#setlimit 800
 	setlimit; setapilimit 1600 100 images
 	IMAGE_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING" | find_id images "$1"`
-	if test -z "$IMAGE_ID"; then
+	if [ -z "$IMAGE_ID" ]; then
 		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$IMAGE_ID" | wc -w)" != "1" ]; then
 		IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
 		echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
@@ -1068,11 +1057,11 @@ convertECSNameToId() {
 	#setlimit 1600
 	setlimit; setapilimit 420 40 servers id
 	ECS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	if test -z "$ECS_ID"; then
+	if [ -z "$ECS_ID" ]; then
 		echo "ERROR: No VM found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$ECS_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$ECS_ID" | wc -w)" != "1" ]; then
 		ECS_ID=$(echo "$ECS_ID" | head -n1)
 		echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
 	fi
@@ -1083,11 +1072,11 @@ convertEVSNameToId() {
 	#setlimit 1600
 	setlimit; setapilimit 400 30 volumes
 	EVS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	if test -z "$EVS_ID"; then
+	if [ -z "$EVS_ID" ]; then
 		echo "ERROR: No volume found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$EVS_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$EVS_ID" | wc -w)" != "1" ]; then
 		EVS_ID=$(echo "$EVS_ID" | head -n1)
 		echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
 	fi
@@ -1098,11 +1087,11 @@ convertBackupNameToId() {
 	#setlimit 1600
 	setlimit; setapilimit 1280 30 backups
 	BACK_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_BACKS$PARAMSTRING" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	if test -z "$BACK_ID"; then
+	if [ -z "$BACK_ID" ]; then
 		echo "ERROR: No backup found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$BACK_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$BACK_ID" | wc -w)" != "1" ]; then
 		BACK_ID=$(echo "$BACK_ID" | head -n1)
 		echo "Warn: Multiple backups found by that name; using $BACK_ID" 1>&2
 	fi
@@ -1113,11 +1102,11 @@ convertBackupPolicyNameToId() {
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
 	BACKPOL_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	if test -z "$BACKPOL_ID"; then
+	if [ -z "$BACKPOL_ID" ]; then
 		echo "ERROR: No backup policy found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$BACKPOL_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$BACKPOL_ID" | wc -w)" != "1" ]; then
 		BACKPOL_ID=$(echo "$BACKPOL_ID" | head -n1)
 		echo "Warn: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
 	fi
@@ -1128,28 +1117,27 @@ convertSnapshotNameToId() {
 	#setlimit 1600
 	setlimit; setapilimit 440 30 snapshots
 	SNAP_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
-	if test -z "$SNAP_ID"; then
+	if [ -z "$SNAP_ID" ]; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
 		exit 3
 	fi
-	if test "$(echo "$SNAP_ID" | wc -w)" != "1"; then
+	if [ "$(echo "$SNAP_ID" | wc -w)" != "1" ]; then
 		SNAP_ID=$(echo "$SNAP_ID" | head -n1)
 		echo "Warn: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
 	fi
 	export SNAP_ID
 }
 
-handleCustom()
-{
-	if test "$1" == "--jqfilter"; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
-	if test -n "$JQFILTER"; then JQ="jq -r \"$JQFILTER\""; else JQ="cat -"; fi
+handleCustom() {
+	if [ "$1" == "--jqfilter" ]; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
+	if [ -n "$JQFILTER" ]; then JQ="jq -r \"$JQFILTER\""; else JQ="cat -"; fi
 	METH=$1
 	# NOTE: We better TRUST the caller not to pass in malicious things here
 	#  so never call otc custom from a script that accepts non-sanitized args
 	# TODO: Replace the knowledge of internal shell vars by a documented set
 	#  the user can use here and do sed to fill in rather than eval.
 	URL=$(eval echo "$2")
-	if test "${URL:0:1}" == "/"; then URL="$BASEURL$URL"; fi
+	if [ "${URL:0:1}" == "/" ]; then URL="$BASEURL$URL"; fi
 	shift; shift
 	ARGS=$(eval echo "$@")
 	echo "#DEBUG: curl -X $METH -d $ARGS $URL" 1>&2
@@ -1168,7 +1156,7 @@ handleCustom()
 			curlpatchauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		DELETE)
-			if test -z "$ARGS"; then
+			if [ -z "$ARGS" ]; then
 				curldeleteauth $TOKEN "$URL" | eval "$JQ"
 			else
 				curldeleteauthwithjsonparameter $TOKEN "$ARGS" "$URL" | eval "$JQ"
@@ -1179,9 +1167,9 @@ handleCustom()
 			exit 1
 			;;
 	esac
-   if test -z "$JQFILTER"; then echo; fi
+	# Should not have any use. $JQFILTER gets parsed by "-n" in this function.
+	#if [ -z "$JQFILTER" ]; then echo; fi
 }
-
 
 getECSVM() {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
@@ -1206,7 +1194,7 @@ getECSList() {
 getECSDetails() {
 	#setlimit 1200
 	setlimit; setapilimit 2000 40 servers id
-	if test -n "$1"; then
+	if [ -n "$1" ]; then
 		if is_uuid "$1"; then
 			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
 		else
@@ -1217,8 +1205,7 @@ getECSDetails() {
 	fi
 }
 
-getECSDetail()
-{
+getECSDetail() {
 	getECSDetails "$1" | jq '{VM: .name, ID: .id, Detail: .}'
 }
 
@@ -1230,8 +1217,7 @@ getECSDetailsNew() {
 	# Add FloatingIP info
 }
 
-getLimits()
-{
+getLimits() {
 	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq '.'
 }
 
@@ -1243,12 +1229,11 @@ getAZDetail() {
 	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone/$1" | jq  '.'
 }
 
-
 getVPCList() {
 	#setlimit 500
 	setlimit; setapilimit 320 20 vpcs
 	curlgetauth_pag $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getVPCDetail() {
@@ -1264,7 +1249,7 @@ VPCDelete() {
 
 getVPCLimits() {
 	curlgetauth $TOKEN "${AUTH_URL_VPCS%vpcs}quotas" | jq -r 'def str(s): s|tostring; .quotas.resources[] | .type+"   "+str(.used)+"/"+str(.quota)'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getPUBLICIPSList() {
@@ -1282,19 +1267,19 @@ getSECGROUPListDetail() {
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.[]'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getSECGROUPList() {
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getSECGROUPRULESListOld() {
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getSECGROUPRULESList() {
@@ -1302,14 +1287,14 @@ getSECGROUPRULESList() {
 	#setlimit 800
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 SECGROUPCreate() {
-	if test -z "$SECUGROUPNAME" -a -n "$1"; then SECUGROUPNAME="$1"; fi
-	if test -n "$VPCID"; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
+	if [ -z "$SECUGROUPNAME" ] && [ -n "$1" ]; then SECUGROUPNAME="$1"; fi
+	if [ -n "$VPCID" ]; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
 	REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON } }"
-	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
+	if [ -n "$DEBUG" ]; then echo $REQ_CREATE_SECGROUP 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
 }
 
@@ -1332,7 +1317,7 @@ SECGROUPRULECreate() {
 	#{"security_group_rule":{ "direction":"'"$DIRECTION"'", "port_range_min":"'"$PORTMIN"'", "ethertype":"'"$ETHERTYPE"'", "port_range_max":"'"$PORTMAX"'", "protocol":"'"$PROTOCOL"'", "remote_group_id":"'"$REMOTEGROUPID"'", "security_group_id":"'"$SECUGROUPID"'" } }
 	#{"security_group_rule":{ "direction":"ingress", "port_range_min":"80", "ethertype":"IPv4", "port_range_max":"80", "protocol":"tcp", "remote_group_id":"85cc3048-abc3-43cc-89b3-377341426ac5", "security_group_id":"a7734e61-b545-452d-a3cd-0189cbd9747a" } }
 	export REQ_CREATE_SECGROUPRULE
-	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUPRULE 1>&2; fi
+	if [ -n "$DEBUG" ]; then echo $REQ_CREATE_SECGROUPRULE 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
 }
 
@@ -1403,8 +1388,8 @@ deleteBackupOTC() {
 	#curldeleteauth $TOKEN "$AUTH_URL_CBACKUPS/$BACK_ID" | jq '.'
 	BACKUP=$(curlpostauth $TOKEN "" "$AUTH_URL_CBACKUPS/$BACK_ID")
 	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-        if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
-        WaitForTask $TASKID
+		if [ -z "$TASKID" -o "$TASKID" = "null" ]; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
+		WaitForTask $TASKID
 }
 
 deleteBackup() {
@@ -1412,10 +1397,10 @@ deleteBackup() {
 	# created via the cloudbackups OTC service API along with the backup?
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
 	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup.container' | tr -d '"')
-	if test -n "$SNAP_ID" -a "$SNAP_ID" != "null"; then
+	if [ -n "$SNAP_ID" ] && [ "$SNAP_ID" != "null" ]; then
 		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot.name' | tr -d '"')
-		if test -n "$SNAP_NAME" -a "$SNAP_NAME" != "null"; then
-			if test "${SNAP_NAME:0:17}" = "autobk_snapshot_2"; then
+		if [ -n "$SNAP_NAME" ] && [ "$SNAP_NAME" != "null" ]; then
+			if [ "${SNAP_NAME:0:17}" = "autobk_snapshot_2" ]; then
 				echo "Also deleting autogenerated container/snapshot $SNAP_ID ($SNAP_NAME)" 1>&2
 				deleteSnapshot $SNAP_ID
 			else
@@ -1427,20 +1412,20 @@ deleteBackup() {
 }
 
 createBackup() {
-	if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
-	if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
-	if test -z "$NAME"; then NAME="Backup-$1"; fi
+	if [ "$1" == "--name" ]; then NAME="$2"; shift; shift; fi
+	if [ -z "$1" ]; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
+	if [ -z "$NAME" ]; then NAME="Backup-$1"; fi
 	REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
-	if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
+	if [ -n "$DESCRIPTION" ]; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
 	BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
 	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
+	if [ -z "$TASKID" -o "$TASKID" = "null" ]; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
 	echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
 	WaitForTaskFieldOpt $TASKID '.entities.backup_id'
 }
 
 restoreBackup() {
-	if test -z "$2"; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
+	if [ -z "$2" ]; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
 	REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
 	#echo
@@ -1459,7 +1444,7 @@ getSUBNETDetail() {
 }
 
 SUBNETDelete() {
-	if test -z "$VPCID"; then echo "ERROR: Need to specify --vpc-name/-id" 1>&2; exit 2; fi
+	if [ -z "$VPCID" ]; then echo "ERROR: Need to specify --vpc-name/-id" 1>&2; exit 2; fi
 	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID/subnets/$SUBNETID"
 	echo
@@ -1714,14 +1699,14 @@ listDomains() {
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
 createDomain() {
-	if test "${1: -1:1}" != "."; then
+	if [ "${1: -1:1}" != "." ]; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
 	REQ="{ \"name\": \"$1\""
-	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
-	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
-	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
-	if test -n "$5"; then REQ="$REQ, \"ttl\": $5"; fi
+	if [ -n "$2" ]; then REQ="$REQ, \"description\": \"$2\""; fi
+	if [ -n "$3" ]; then REQ="$REQ, \"zone_type\": \"$3\""; fi
+	if [ -n "$4" ]; then REQ="$REQ, \"email\": \"$4\""; fi
+	if [ -n "$5" ]; then REQ="$REQ, \"ttl\": $5"; fi
 	REQ="$REQ }"
 	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS | jq .
 }
@@ -1736,7 +1721,7 @@ deleteDomain() {
 
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
 addRecord() {
-	if test -z "$5"; then
+	if [ -z "$5" ]; then
 		echo "ERROR: Need to provide more params" 1>&2
 		exit 1
 	fi
@@ -1747,11 +1732,11 @@ addRecord() {
 			echo "WARN: Unknown record type \"$3\"" 1>&2
 			;;
 	esac
-	if test "${2: -1:1}" != "."; then
+	if [ "${2: -1:1}" != "." ]; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
 	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
-	if test -n "$6"; then REQ="$REQ, \"description\": \"$6\""; fi
+	if [ -n "$6" ]; then REQ="$REQ, \"description\": \"$6\""; fi
 	OLDIFS="$IFS"
 	VLAS=""
 	IFS=","
@@ -1767,7 +1752,7 @@ showRecord() {
 
 listRecords() {
 	# TODO pagination
-	if test -z "$1"; then
+	if [ -z "$1" ]; then
 		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	else
 		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
@@ -1794,7 +1779,7 @@ getIMAGEList() {
 	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
 	#setlimit 800
 	setlimit; setapilimit 1600 100 images
-   if test -z "$PARAMSTRING" -a -n "$IMAGE_FILTER"; then IMAGE_FILTER="?${IMAGE_FILTER:1}"; fi
+   if [ -z "$PARAMSTRING" ] && [ -n "$IMAGE_FILTER" ]; then IMAGE_FILTER="?${IMAGE_FILTER:1}"; fi
 	curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
 }
 
@@ -1805,14 +1790,14 @@ getIMAGEDetail() {
 }
 
 registerIMAGE() {
-	if test -z "$1"; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
-	if test -z "$2"; then echo "ERROR: Need to specify OBSBucket" 1>&2; exit 2; fi
-	if test -z "$MINDISK"; then echo "ERROR: Need to specify --min-disk" 1>&2; exit 2; fi
-	if test -z "$MINRAM"; then MINRAM=1024; fi
-	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
-	if test -z "$DISKFORMAT" -o "$DISKFORMAT" = "zvhd"; then DISKFORMAT="vhd"; fi
+	if [ -z "$1" ]; then echo "ERROR: Need to specify NAME" 1>&2; exit 2; fi
+	if [ -z "$2" ]; then echo "ERROR: Need to specify OBSBucket" 1>&2; exit 2; fi
+	if [ -z "$MINDISK" ]; then echo "ERROR: Need to specify --min-disk" 1>&2; exit 2; fi
+	if [ -z "$MINRAM" ]; then MINRAM=1024; fi
+	if [ -z "$DISKFORMAT" ]; then DISKFORMAT="${2##*.}"; fi
+	if [ -z "$DISKFORMAT" -o "$DISKFORMAT" = "zvhd" ]; then DISKFORMAT="vhd"; fi
 	unset OSVJSON
-	if test -n "$OSVERSION"; then OSVJSON="\"os_version\": \"$OSVERSION\","; fi
+	if [ -n "$OSVERSION" ]; then OSVJSON="\"os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		val="${prop##*=}"
@@ -1834,13 +1819,13 @@ registerIMAGE() {
 }
 
 createIMAGE() {
-	if test -z "$DISKFORMAT"; then DISKFORMAT="vhd"; fi
-	if test -z "$MINDISK" -a -z "$INSTANCE_ID"; then echo "ERROR: Need to specify --min-disk OR --instance-id" 1>&2; exit 2; fi
-	if test -z "$MINRAM"; then MINRAM=1024; fi
-	if test -n "$1"; then IMAGENAME="$1"; fi
-	if test -z "$IMAGENAME"; then echo "ERROR: Need to specify NAME with --image-name" 1>&2; exit 2; fi
+	if [ -z "$DISKFORMAT" ]; then DISKFORMAT="vhd"; fi
+	if [ -z "$MINDISK" ] && [ -z "$INSTANCE_ID" ]; then echo "ERROR: Need to specify --min-disk OR --instance-id" 1>&2; exit 2; fi
+	if [ -z "$MINRAM" ]; then MINRAM=1024; fi
+	if [ -n "$1" ]; then IMAGENAME="$1"; fi
+	if [ -z "$IMAGENAME" ]; then echo "ERROR: Need to specify NAME with --image-name" 1>&2; exit 2; fi
 	unset OSVJSON
-	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
+	if [ -n "$OSVERSION" ]; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		val="${prop##*=}"
@@ -1855,18 +1840,18 @@ createIMAGE() {
 		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
-	if test -z "$INSTANCE_ID"; then
+	if [ -z "$INSTANCE_ID" ]; then
 		# Create fresh image
 		REQ="{ $OSVJSON  \"container_format\": \"bare\",
 			\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 			\"min_ram\": $MINRAM, \"name\": \"$IMAGENAME\",
 			\"visibility\": \"private\", \"protected\": false }"
-		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+		if [ -n "$DESCRIPTION" ]; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 	else
 		# Create VM snapshot image
 		REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
-		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+		if [ -n "$DESCRIPTION" ]; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.')
 		echo "$RESP"
 		IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
@@ -1880,8 +1865,7 @@ deleteIMAGE() {
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"
 }
 
-uploadIMAGEobj()
-{
+uploadIMAGEobj() {
 	# The image upload via s3 bucket has been moved to v1 endpoint
 	ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
 	# Fall back to intermediate solution which abused the v2 OpenStack API
@@ -1895,24 +1879,21 @@ uploadIMAGEobj()
 	esac
 }
 
-uploadIMAGEfile()
-{
+uploadIMAGEfile() {
 	sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file"
 }
 
 IMGJOBID=""
-downloadIMAGE()
-{
-	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
+downloadIMAGE() {
+	if [ -z "$DISKFORMAT" ]; then DISKFORMAT="${2##*.}"; fi
 	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
 	echo "$IMSANS"
 	IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 }
 
-updateIMAGE()
-{
+updateIMAGE() {
 	# FIXME: This only updates one single value at a time, could be optimized a lot
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
@@ -1920,45 +1901,39 @@ updateIMAGE()
 	done
 	IFS="$OLDIFS"
 	# NOW handle min_disk, min_ram, name (if any change)
-	if test -n "$MINDISK"; then
+	if [ -n "$MINDISK" ]; then
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_disk" "$MINDISK" "application/openstack-images-v2.1-json-patch"
 	fi
-	if test -n "$MINRAM"; then
+	if [ -n "$MINRAM" ]; then
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_ram" "$MINRAM" "application/openstack-images-v2.1-json-patch"
 	fi
-	if test -n "$IMAGENAME"; then
+	if [ -n "$IMAGENAME" ]; then
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
 	fi
 }
 
-getImgMemberList()
-{
+getImgMemberList() {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
 }
 
-getImgMemberDetail()
-{
+getImgMemberDetail() {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
 }
 
-ImgMemberCreate()
-{
+ImgMemberCreate() {
 	curlpostauth $TOKEN "{ \"member\": \"$2\" }" "$AUTH_URL_IMAGES/$1/members" | jq -r '.'
 }
 
-ImgMemberDelete()
-{
+ImgMemberDelete() {
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2"
 }
 
-ImgMemberAccept()
-{
+ImgMemberAccept() {
 	PRJ=${2:-$OS_PROJECT_ID}
 	curlputauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
 }
 
-ImgMemberReject()
-{
+ImgMemberReject() {
 	PRJ=${2:-$OS_PROJECT_ID}
 	curlputauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
 }
@@ -1969,7 +1944,7 @@ getFLAVORListOld() {
 	#setlimit 500
 	setlimit; setapilimit 720 30 flavors
 	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.[]'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getFLAVORList() {
@@ -1977,7 +1952,7 @@ getFLAVORList() {
 	#setlimit 500
 	setlimit; setapilimit 720 30 flavors
 	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getKEYPAIRList() {
@@ -1985,16 +1960,16 @@ getKEYPAIRList() {
 	#setlimit 800
 	setlimit; setapilimit 1080 40 keypairs
 	curlgetauth_pag $TOKEN "$AUTH_URL_KEYNAMES$PARAMSTRING" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 getKEYPAIR() {
 	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES/$1" | jq '.[]'
-#| python -m json.tool
+	#| python -m json.tool
 }
 
 createKEYPAIR() {
-	if test -n "$2"; then PKEY="\"public_key\": \"$2\", "; fi
+	if [ -n "$2" ]; then PKEY="\"public_key\": \"$2\", "; fi
 	curlpostauth $TOKEN "{ \"keypair\": { $PKEY \"name\": \"$1\" } }" "$AUTH_URL_KEYNAMES" | jq '.'
 }
 
@@ -2002,16 +1977,15 @@ deleteKEYPAIR() {
 	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
 }
 
-det_StackID()
-{
+det_StackID() {
 	if [[ "$1" = */* ]]; then STACK=$1
 	elif is_uuid "$1"; then
 		NAME=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.id == \"$1\") | .stack_name")
-		if test -z "$NAME" -o "$NAME" = "null"; then echo "ERROR: No stack found by this ID $1" 1>&2; exit 1; fi
+		if [ -z "$NAME" -o "$NAME" = "null" ]; then echo "ERROR: No stack found by this ID $1" 1>&2; exit 1; fi
 		STACK="$NAME/$1"
 	else
 		ID=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.stack_name == \"$1\") | .id")
-		if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No stack found by this NAME $1" 1>&2; exit 1; fi
+		if [ -z "$ID" -o "$ID" = "null" ]; then echo "ERROR: No stack found by this NAME $1" 1>&2; exit 1; fi
 		STACK="$1/$ID"
 	fi
 }
@@ -2070,33 +2044,33 @@ showStackDeployment() {
 }
 
 createELB() {
-	if test -n "$3"; then BANDWIDTH=$3; fi
-	if test -n "$2"; then NAME="$2"; fi
-	if test -n "$1"; then VPCID=$1; fi
-	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
+	if [ -n "$3" ]; then BANDWIDTH=$3; fi
+	if [ -n "$2" ]; then NAME="$2"; fi
+	if [ -n "$1" ]; then VPCID=$1; fi
+	if [ -z "$VPCID" ] && [ -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ -z "$VPCID" ]; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
 	DEFNAME="ELB-$BANDWIDTH"
-	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
-		if [ "$SUBNETNAME" != "" ] && [ "$SUBNETID" == "" ]; then
+	if [ -n "$SUBNETID" -o -n "$SUBNETNAME" ]; then
+		if [ -n "$SUBNETNAME" ] && [ -z "$SUBNETID" ]; then
 			convertSUBNETNameToId $SUBNETNAME $VPCID
 		fi
-		if [ "$SECUGROUPNAME" != "" ] && [ "$SECUGROUP" == "" ]; then
+		if [ -n "$SECUGROUPNAME" ] && [ -z "$SECUGROUP" ]; then
 			convertSECUGROUPNameToId "$SECUGROUPNAME"
 		fi
-		if test -z "$AZ"; then
-			if test -n "$SUBNETAZ"; then
+		if [ -z "$AZ" ]; then
+			if [ -n "$SUBNETAZ" ]; then
 				AZ="$SUBNETAZ"
 			else
 				echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
 				exit 2
 			fi
 		fi
-		if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+		if [ -n "$SUBNETAZ" ] && [ "$SUBNETAZ" != "$AZ" ]; then
 			echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 		fi
 		# TODO: FIXME: need to get these IDs through the API -- values are valid only for OTC Prod
-		if test "$OS_CLOUD_ENV" == "otc"; then
+		if [ "$OS_CLOUD_ENV" == "otc" ]; then
 			if [[ $AZ == 'eu-de-01' ]]; then
 				AZID='bf84aba586ce4e948da0b97d9a7d62fb'
 			elif [[ $AZ == 'eu-de-02' ]]; then
@@ -2110,15 +2084,15 @@ createELB() {
 			AZID="$AZ"
 		fi
 		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'"'
-		if test -n "$SECUGROUP"; then
+		if [ -n "$SECUGROUP" ]; then
 			ELBTYPE="$ELBTYPE, \"security_group_id\": \"$SECUGROUP\""
 		else
 			echo "WARN: Need to specify --security-group-name/id" 1>&2
 		fi
 		DEFNAME="ELB-Int"
 	fi
-	if test -z "$NAME"; then
-		if test -z "$INSTANCE_NAME"; then NAME="$DEFNAME"; else NAME="$INSTANCE_NAME"; fi
+	if [ -z "$NAME" ]; then
+		if [ -z "$INSTANCE_NAME" ]; then NAME="$DEFNAME"; else NAME="$INSTANCE_NAME"; fi
 	fi
 	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	export ELBJOBID
@@ -2147,8 +2121,7 @@ getListenerList() {
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.loadbalancer_id' | tr -d '"'
 }
 
-getListenerDetail()
-{
+getListenerDetail() {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[] | select(.id = "$2")'
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1" | jq '.'
 }
@@ -2162,10 +2135,10 @@ createListener() {
 	ALG="$5"
 	BEPROTO="$6"
 	BEPORT=$7
-	if test -z "$ALG"; then ALG="source"; fi
-	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
-	if test -z "$BEPORT"; then BEPORT=$4; fi
-	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then STICKY="\"session_sticky\": \"true\", "; fi
+	if [ -z "$ALG" ]; then ALG="source"; fi
+	if [ -z "$BEPROTO"  ]; then BEPROTO="$3"; fi
+	if [ -z "$BEPORT" ]; then BEPORT=$4; fi
+	if [ "$3" = "HTTP" -o "$3" = "HTTPS" ]; then STICKY="\"session_sticky\": \"true\", "; fi
 	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
 
 }
@@ -2174,11 +2147,11 @@ createListener() {
 createCheck() {
 	HTHR="$6"
 	UTHR="$7"
-	if test -z "$HTHR"; then HTHR=3; fi
-	if test -z "$UTHR"; then UTHR=$HTHR; fi
+	if [ -z "$HTHR" ]; then HTHR=3; fi
+	if [ -z "$UTHR" ]; then UTHR=$HTHR; fi
 	URI="$8"
-	if test "$2" = "HTTP" -o "$2" = "HTTPS" && test -z "$URI"; then URI="/"; fi
-	if test -n "$URI"; then URI="\"healthcheck_uri\": \"$URI\", "; fi
+	if [ "$2" = "HTTP" -o "$2" = "HTTPS" ] && [ -z "$URI" ]; then URI="/"; fi
+	if [ -n "$URI" ]; then URI="\"healthcheck_uri\": \"$URI\", "; fi
 
 	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
 }
@@ -2215,7 +2188,7 @@ deleteMember() {
 }
 
 getECSJOBList() {
-	if test -z "$1"; then echo
+	if [ -z "$1" ]; then echo
 		echo "ERROR: Need to pass job ID to getECSJOBList" 1>&2
 		exit 1
 	fi
@@ -2230,7 +2203,7 @@ getECSJOBList() {
 
 getFileContentJSON() {
 	INJECTFILE=$1
-	if [ "$INJECTFILE" != "" ];then
+	if [ -n "$INJECTFILE" ]; then
 		IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
 		FILENAME_NAME=${FILE_AR[1]}
 		TARGET_FILENAME=${FILE_AR[0]}
@@ -2242,29 +2215,29 @@ getFileContentJSON() {
 }
 
 getPersonalizationJSON() {
-	if [ "$FILE1" != "" ]; then
+	if [ -n "$FILE1" ]; then
 		getFileContentJSON $FILE1
 		FILECOLLECTIONJSON="$FILEJSONITEM"
 	fi
-	if [ "$FILE2" != "" ]; then
+	if [ -n "$FILE2" ]; then
 		getFileContentJSON $FILE2
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
 	fi
-	if [ "$FILE3" != "" ]; then
+	if [ -n "$FILE3" ]; then
 		getFileContentJSON $FILE3
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
 	fi
-	if [ "$FILE4" != "" ]; then
+	if [ -n "$FILE4" ]; then
 		getFileContentJSON $FILE4
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
 	fi
-	if [ "$FILE5" != "" ]; then
+	if [ -n "$FILE5" ]; then
 		getFileContentJSON $FILE5
 		FILECOLLECTIONJSON="$FILECOLLECTIONJSON,$FILEJSONITEM"
 	fi
 
 	export PERSONALIZATION=""
-	if [ "$FILECOLLECTIONJSON" != "" ]; then
+	if [ -n "$FILECOLLECTIONJSON" ]; then
 		export PERSONALIZATION='"personality": [ '"$FILECOLLECTIONJSON"'],'
 	fi
 }
@@ -2276,7 +2249,7 @@ ECSAttachVolumeListName() {
 		if [ $AZ == ${volume_az//\"/} ]; then
 			ECSAttachVolumeName "$ecs" $dev_vol
 		else
-			echo "WARN: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
+			echo "WARN: Availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING"
 		fi
 	done
 }
@@ -2294,16 +2267,16 @@ ECSAttachVolumeName() {
 ECSAttachVolumeId() {
 	local server_id="$1" dev_vol="$2" dev vol req
 	IFS=: read dev vol <<< "$dev_vol"
-	if test -z "$vol"; then
-		echo "ERROR: wrong usage of ECSAttachVolumeId(): '$dev_vol' should be 'device:VolumeID'" 1>&2
+	if [ -z "$vol" ]; then
+		echo "ERROR: Wrong usage of ECSAttachVolumeId(): '$dev_vol' should be 'device:VolumeID'" 1>&2
 		exit 2
 	fi
 	dev="/dev/${dev#/dev/}"
 	req='{
-            "volumeAttachment": {
-                "volumeId": "'"$vol"'",
-                "device": "'"$dev"'"
-            }
+			"volumeAttachment": {
+				"volumeId": "'"$vol"'",
+				"device": "'"$dev"'"
+			}
 	}'
 	curlpostauth "$TOKEN" "$req" "$AUTH_URL_ECS_CLOUD/$server_id/attachvolume" | jq '.[]'
 }
@@ -2313,7 +2286,7 @@ ECSDetachVolumeListName() {
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
 		if [ $AZ != ${volume_az//\"/} ]; then
-			echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING" 1>&2
+			echo "WARNING: Availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING" 1>&2
 		fi
 		ECSAttachVolumeName "$ecs" $dev_vol
 	done
@@ -2323,25 +2296,24 @@ ECSDetachVolumeName() {
 	local server_name="$1" dev_vol="$2" ecsid volid  ##### dev_vol could be of the form <device>:<volume> or just <volume>
 	ecsid=$(getECSList |  while read id name x; do [ "$name" = "$server_name"  ] && echo $id && break; done)
 	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
-	if test -z "$volid"; then
-		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique" 1>&2
+	if [ -z "$volid" ] ; then
+		echo "ERROR: Could not determine volume id -- perhaps volume is not mounted or ecs name is not unique." 1>&2
 		exit 2
 	fi
 	ECSDetachVolumeId  "$ecsid"  "${dev_vol%:*}:$volid"
 }
 
 ECSDetachVolumeId() {
-	local server_id="$1" dev_vol="$2" volume         ##### dev_vol could be of the form <device>:<volumeid> or just <volumeid>
+	local server_id="$1" dev_vol="$2" volume # dev_vol could be of the form <device>:<volumeid> or just <volumeid>
 	volume="${dev_vol#*:}"
-	if test -z "$volume"; then
-		echo "ERROR: wrong usage of volume detach function: volume is not set" 1>&2
+	if [ -z "$volume" ]; then
+		echo "ERROR: Wrong usage of volume detach function: volume is not set" 1>&2
 		exit 2
 	fi
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_CLOUD/$server_id/detachvolume/$volume" | jq '.[]'
 }
 
-ECSAttachPort()
-{
+ECSAttachPort() {
 	ECS_ID=$1; shift
 	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
 	unset PORTSPEC
@@ -2359,8 +2331,7 @@ ECSAttachPort()
 	curlpostauth "$TOKEN" "$REQ" $AUTH_URL_ECS/$ECS_ID/os-interface | jq -r '.'
 }
 
-ECSDetachPort()
-{
+ECSDetachPort() {
 	ECS_ID=$1; shift
 	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
 	unset PORT
@@ -2373,8 +2344,8 @@ ECSDetachPort()
 }
 
 ECSCreate() {
-	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
-		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -" 1>&2
+	if [ -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')" ]; then
+		echo "ERROR: The value INSTANCE_NAME is set to \"$INSTANCE_NAME\" and may only contain letters, digits, _ and -" 1>&2
 		exit 2
 	fi
 
@@ -2385,15 +2356,15 @@ ECSCreate() {
 	else
 		unset DISKSIZE
 	fi
-	if test -z "$AZ"; then
-		if test -n "$SUBNETAZ"; then
+	if [ -z "$AZ" ]; then
+		if [ -n "$SUBNETAZ" ]; then
 			AZ="$SUBNETAZ"
 		else
 			echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "null" -a "$SUBNETAZ" != "$AZ"; then
+	if [ -n "$SUBNETAZ" ] && [ "$SUBNETAZ" != "$AZ" ]; then
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
@@ -2413,16 +2384,20 @@ ECSCreate() {
 		},"
 	fi
 
-	if test -n "$KEYNAME"; then
+	if [ -n "$KEYNAME" ]; then
 		OPTIONAL="$OPTIONAL
 			\"key_name\": \"$KEYNAME\","
 	fi
-	if test -n "$ADMINPASS"; then
+	if [ -n "$ADMINPASS" ]; then
 		OPTIONAL="$OPTIONAL
 			\"adminPass\": \"$ADMINPASS\","
 	fi
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
-	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
+	if [ -z "$NUMCOUNT" ]; then 
+		NUMCOUNT=1
+	else
+		echo "Indivial Numcount $NUMCOUNT is set."
+	fi
 
 	SECUGROUPIDS=""
 	for id in ${SECUGROUP//,/ }; do
@@ -2431,24 +2406,25 @@ ECSCreate() {
 	SECUGROUPIDS="${SECUGROUPIDS%,}"
 
 	FIXEDIPJSON=""
-	if test -n "$FIXEDIP"; then
+	if [ -n "$FIXEDIP" ]; then
 		FIXEDIPJSON=", \"ip_address\": \"$FIXEDIP\""
 	fi
 	# TODO: Support both/multiple user data pieces
 	USERDATAJSON=""
-	if test -n "$USERDATA"; then
-		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
+	if [ -n "$USERDATA" ]; then
+		if [ "${USERDATA:0:13}" != "#cloud-config" ]; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
 	fi
-	if test -n "$USERDATAFILE"; then
-		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
-		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
+	if [ -n "$USERDATAFILE" ]; then
+		if [ -n "$USERDATAJASON" ]; then echo "WARN: user-data-file overrides string" 1>&2; fi
+		if [ "`head -n1 $USERDATAFILE`" != "#cloud-config" ]; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
-   if test -n "$DATADISKS"; then
-      DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
-   fi
+	if [ -n "$DATADISKS" ]; then
+	DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
+	fi
+	
 	# multi-NIC
 	MORENICS=""
 	if test -n "MORESUBNETS"; then
@@ -2467,7 +2443,7 @@ ECSCreate() {
 		IFS="$OLDIFS"
 		SUBNETID="$SUBNETIDOLD"
 	fi
-
+	
 	REQ_CREATE_VM='{
 		"server": {
 			"availability_zone": "'"$AZ"'",
@@ -2484,7 +2460,7 @@ ECSCreate() {
 			'"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' }'"$MORENICS"' ],
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } ],
 			'"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
@@ -2492,27 +2468,27 @@ ECSCreate() {
 
 	echo "$REQ_CREATE_VM"
 
-	if [ "$IMAGE_ID" == "" ]; then
+	if [ -z "$IMAGE_ID" ]; then
 		echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
 		echo 'otc images list' 1>&2
 		exit 1
 	fi
-	if [ "$INSTANCE_TYPE" == "" ]; then
+	if [ -z "$INSTANCE_TYPE" ]; then
 		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 1>&2
 		echo 'otc ecs flavor-list' 1>&2
 		exit 1
 	fi
-	if [ "$VPCID" == "" ]; then
+	if [ -z "$VPCID" ]; then
 		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 1>&2
 		echo 'otc vpc list' 1>&2
 		exit 1
 	fi
-	if [ "$SECUGROUP" == "" ]; then
+	if [ -z "$SECUGROUP" ]; then
 		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 1>&2
 		echo 'otc security-group list' 1>&2
 		exit 1
 	fi
-	if [ "$SUBNETID" == "" ]; then
+	if [ -z "$SUBNETID" ]; then
 		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 1>&2
 		echo 'otc subnet list' 1>&2
 		exit 1
@@ -2524,7 +2500,7 @@ ECSCreate() {
 }
 
 ECSAction() {
-	if test -z "$ECSACTIONTYPE"; then ECSACTIONTYPE="SOFT"; fi
+	if [ -z "$ECSACTIONTYPE" ]; then ECSACTIONTYPE="SOFT"; fi
 	REQ_ECS_ACTION_VM='
 	{
 		"'"$ECSACTION"'": {
@@ -2545,20 +2521,18 @@ ECSStop() {
 	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
 }
 
-appparm()
-{
-	if test -z "$PARMS"; then
+appparm() {
+	if [ -z "$PARMS" ]; then
 		PARMS="$1"
 	else
 		PARMS="$PARMS, $1"
 	fi
 }
 
-ECSUpdate()
-{
+ECSUpdate() {
 	PARMS=""
-	if test -n "$INSTANCE_NAME"; then appparm "\"name\": \"$INSTANCE_NAME\""; fi
-	if test -n "$IMAGENAME"; then appparm "\"image\": \"$IMAGENAME\""; fi
+	if [ -n "$INSTANCE_NAME" ]; then appparm "\"name\": \"$INSTANCE_NAME\""; fi
+	if [ -n "$IMAGENAME" ]; then appparm "\"image\": \"$IMAGENAME\""; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		appparm "\"${prop%%=*}\": \"${prop#*=}\""
@@ -2601,7 +2575,7 @@ ECSDelete() {
 	#echo $REQ_ECS_DELETE
 	ECSRESP=`curlpostauth "$TOKEN" "$REQ_ECS_DELETE" "$AUTH_URL_ECS_CLOUD_DELETE"`
 	ECSTASKID=`echo "$ECSRESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-	if test -n "$ECSTASKID"; then
+	if [ -n "$ECSTASKID" ]; then
 		echo "Delete task ID: $ECSTASKID"
 	else
 		echo "ERROR:" 1>&2
@@ -2611,38 +2585,38 @@ ECSDelete() {
 }
 
 EVSCreate() {
-	if test -n "$(echo "$VOLUME_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
-		echo "ERROR: VOLUME_NAME may only contain letters, digits, _ and -" 1>&2
+	if [ -n "$(echo "$VOLUME_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')" ]; then
+		echo "ERROR: The value VOLUME_NAME is set to \"$VOLUME_NAME\" and may only contain letters, digits, _ and -" 1>&2
 		exit 2
 	fi
 
-	if test -z "$AZ"; then
-		if test -n "$SUBNETAZ"; then
+	if [ -z "$AZ" ]; then
+		if [ -n "$SUBNETAZ" ]; then
 			AZ="$SUBNETAZ"
 		else
 			echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
+	if [ -n "$SUBNETAZ" ] && [ "$SUBNETAZ" != "$AZ" ]; then
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
 	OPTIONAL=""
-	if test -n "$SHAREABLE"; then
+	if [ -n "$SHAREABLE" ]; then
 		OPTIONAL="$OPTIONAL
 			\"shareable\": \"$SHAREABLE\","
 	fi
-	if test -n "$IMAGEREFID"; then
+	if [ -n "$IMAGEREFID" ]; then
 		OPTIONAL="$OPTIONAL
 			\"imageRef\": \"$IMAGEREFID\","
 	fi
-	if test -n "$BACKUPID"; then
+	if [ -n "$BACKUPID" ]; then
 		OPTIONAL="$OPTIONAL
 			\"backup_id\": \"$BACKUPID\","
 	fi
-	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
-	if test -z "$VOLUME_DESC"; then VOLUME_DESC=$VOLUME_NAME; fi
+	if [ -z "$NUMCOUNT" ]; then NUMCOUNT=1; fi
+	if [ -z "$VOLUME_DESC" ]; then VOLUME_DESC=$VOLUME_NAME; fi
 
 	REQ_CREATE_EVS='{
 		"volume": {
@@ -2658,7 +2632,7 @@ EVSCreate() {
 
 	echo "$REQ_CREATE_EVS"
 
-	if [ "$ROOTDISKSIZE" == "" ]; then
+	if [ -z "$ROOTDISKSIZE" ]; then
 		echo "EVS volume size is not defined! Please define a size with --disk-size" 1>&2
 		exit 1
 	fi
@@ -2703,7 +2677,7 @@ SUBNETCreate() {
 }
 
 PUBLICIPSCreate() {
-	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
+	if [ -z "$BANDWIDTH_NAME" ]; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
 	REQ_CREATE_PUBLICIPS='{
 		"publicip": {
 			"type": "5_bgp"
@@ -2727,7 +2701,7 @@ PUBLICIPSDelete() {
 getPortID() {
 	(  getECSVM $1 | sed -n '/^\[/,/^\]/p' \
 		| jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
-		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
+		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ -n "$ip" ] && echo $port;done)
 }
 
 BindPublicIpToCreatingVM() {
@@ -2738,7 +2712,7 @@ BindPublicIpToCreatingVM() {
           |  while IFS=";" read id eip status iip bid b type;do
                    [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
                    [ "$status" = "DOWN" ] && echo "$id"   && break
-                   echo "ERROR: requested external IP is of wrong status: $status" 1>&2
+                   echo "ERROR: Requested external IP is of wrong status: $status" 1>&2
                 done)
 	[ -n "$EIPID" ] && PUBLICIPSBind "$EIPID" "$PRTID" \
 	|| return 1
@@ -2747,7 +2721,7 @@ BindPublicIpToCreatingVM() {
 PUBLICIPSBind() {
 	ID=$1
 	PORT_ID=$2
-	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to." 1>&2; exit 1; fi
+	if [ -z "$PORT_ID" ]; then echo "Please define port-id to which the public ip should be bound to." 1>&2; exit 1; fi
 	REQ_BIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": "'"$PORT_ID"'"
@@ -2778,7 +2752,7 @@ PUBLICIPSUnbind() {
 # $3 = PollFreq (s), default 2
 # $4 = MaxWait (multiples of PollFreq), default 21
 WaitForTaskField() {
-	if test -z "$1" -o "$1" = "null"; then echo "ERROR" 1>&2; return 1; fi
+	if [ -z "$1" -o "$1" = "null" ]; then echo "ERROR" 1>&2; return 1; fi
 	SEC=${3:-2}
 	MAXW=${4:-21}
 	echo "Waiting for field $2 in job: $AUTH_URL_ECS_JOB/$1" 1>&2
@@ -2788,7 +2762,7 @@ WaitForTaskField() {
 	FIELD=$(echo $ECSJOBSTATUSJSON| jq "$2" 2>/dev/null | tr -d '"')
 	declare -i ctr=0
 	while [ $ctr -le $MAXW ] && [ "$ECSJOBSTATUS" == "RUNNING" ] || [ "$ECSJOBSTATUS" == "INIT" ]; do
-		[ -n "$FIELD" -a "$FIELD" != "null" ] && break
+		[ -n "$FIELD" ] && [ "$FIELD" != "null" ] && break
 		sleep $SEC
 		getECSJOBList $1
 		FIELD=$(echo $ECSJOBSTATUSJSON| jq "$2" 2>/dev/null | tr -d '"')
@@ -2801,7 +2775,7 @@ WaitForTaskField() {
 		let ctr+=1
 	done
 	echo $FIELD
-	test -n "$FIELD" -a "$FIELD" != "null"
+	if [ -n "$FIELD" ] && [ "$FIELD" != "null" ]; then echo "Field set to $FIELD."; else echo "Field not set. Skipping the value ..."; fi
 }
 
 WaitForSubTask() {
@@ -2820,17 +2794,17 @@ WaitForTask() {
 	DEFTOUT=$((1+3600/$SEC))
 	TOUT=$((2*${3:-$DEFTOUT}))
 	unset FIELD
-	if [ "$WAIT_FOR_JOB" == "true" ];then
+	if [ "$WAIT_FOR_JOB" == "true" ]; then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
 		RESP="$ECSJOBSTATUSJSON"
-		if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
+		if [ -n "$4" ]; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 		echo "#$RESP" 1>&2
 		declare -i ctr=0
 		while [ $ctr -le $TOUT ] && [ "$ECSJOBSTATUS" == "RUNNING" -o "$ECSJOBSTATUS" == "INIT" ]; do
 			sleep $SEC
 			getECSJOBList $1
-			if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
+			if [ -n "$4" ]; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 			if [ "$RESP" != "$ECSJOBSTATUSJSON" ]; then
 				RESP="$ECSJOBSTATUSJSON"
 				echo -e "\n#$RESP" 1>&2
@@ -2840,7 +2814,7 @@ WaitForTask() {
 			let ctr+=1
 		done
 		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2;
-		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
+		elif [ -n "$FIELD" ] && [ "$FIELD" != "null" ]; then echo "$FIELD"; fi
 	else
 		getECSJOBList $1
 		echo "#$ECSJOBSTATUSJSON" 1>&2
@@ -2855,7 +2829,7 @@ WaitForTask() {
 # $3 = PollFreq (s), optional
 # $4 = MAXWAIT (multiples of POLLFREQ), optional
 WaitForTaskFieldOpt() {
-	if test -n "$WAIT_FOR_JOB"; then
+	if [ -n "$WAIT_FOR_JOB" ]; then
 		WaitForTask $1 $3 $4 "$2"
 	else
 		WaitForTaskField $1 "$2" $3 $4
@@ -2895,12 +2869,12 @@ showClusterHost() {
 # CES
 listMetrics() {
 	PARM=""
-	if test -n "$1"; then PARM="?namespace=$1"; fi
-	if test -n "$2"; then PARM="$PARM&metric_name=$2"; fi
-	if test -n "$3"; then PARM="$PARM&dim.0=${3/=/,}"; fi
-	if test -n "$4"; then PARM="$PARM&dim.1=${4/=/,}"; fi
-	if test -n "$5"; then PARM="$PARM&dim.2=${5/=/,}"; fi
-	if test "${PARM:0:1}" = "&"; then PARM="?${PARM:1}"; fi
+	if [ -n "$1" ]; then PARM="?namespace=$1" ]; fi
+	if [ -n "$2" ]; then PARM="$PARM&metric_name=$2"; fi
+	if [ -n "$3" ]; then PARM="$PARM&dim.0=${3/=/,}"; fi
+	if [ -n "$4" ]; then PARM="$PARM&dim.1=${4/=/,}"; fi
+	if [ -n "$5" ]; then PARM="$PARM&dim.2=${5/=/,}"; fi
+	if [ "${PARM:0:1}" = "&" ]; then PARM="?${PARM:1}" ; fi
 	#curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq '.'
    # TODO: More than one metric possible
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq -r 'def str(v): v|tostring; .metrics[] | .namespace+"   "+.metric_name+"   "+.unit+"   "+str(.dimensions[].value)' | arraytostr
@@ -2914,9 +2888,9 @@ showMetrics() {
 	NOW=$(date +%s)
 	START=$(echo "scale=0; (${3/NOW/$NOW})*1000" | bc)
 	STOP=$(echo "scale=0; (${4/NOW/$NOW})*1000" | bc)
-	if test -n "$7"; then DIM="&dim.0=${7/=/,}"; else DIM=""; fi
-	if test -n "$8"; then DIM="$DIM&dim.1=${8/=/,}"; fi
-	if test -n "$9"; then DIM="$DIM&dim.2=${9/=/,}"; fi
+	if [ -n "$7" ]; then DIM="&dim.0=${7/=/,}"; else DIM=""; fi
+	if [ -n "$8" ]; then DIM="$DIM&dim.1=${8/=/,}"; fi
+	if [ -n "$9" ]; then DIM="$DIM&dim.2=${9/=/,}"; fi
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metric-data?namespace=$1&metric_name=$2&from=$START&to=$STOP&period=$5&filter=$6$DIM" | jq '.' | sed -e 's/"timestamp": \([0-9]*\)\([0-9]\{3\}\),/"timestamp": \1.\2,/' -e 's/"timestamp": \([0-9]*\)\.000,/"timestamp": \1,/'
 }
 
@@ -2969,28 +2943,23 @@ publishNotification()
 }
 
 # These don't work yet well
-listMRSClusters()
-{
+listMRSClusters() {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/cluster-infos" | jq -r '.'
 }
 
-listMRSJobs()
-{
+listMRSJobs() {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes" | jq -r '.'
 }
 
-showMRSJob()
-{
+showMRSJob() {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes/$1" | jq -r '.'
 }
 
-listAntiDDoS()
-{
+listAntiDDoS() {
 	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
 }
 
-listKMS()
-{
+listKMS() {
 	# POST, bad API design
 	curlpostauth "$TOKEN" "" "$AUTH_URL_KMS/v1.0/$OS_PROJECT_ID/kms/list-keys" | jq -r '.'
 }
@@ -2998,13 +2967,13 @@ listKMS()
 
 getMeta() {
 	DATA=$1; shift
-	if test -z "$1"; then FILT='.'; else FILT="$@"; fi
-	if test ${DATA%.json} != $DATA; then PROCESS="jq $FILT"; else
-		if test "$FILT" != "."; then PROCESS="grep $FILT"; else PROCESS="cat -"; fi
+	if [ -z "$1" ]; then FILT='.'; else FILT="$@"; fi
+	if [ ${DATA%.json} != $DATA ]; then PROCESS="jq $FILT"; else
+		if [ "$FILT" != "." ]; then PROCESS="grep $FILT"; else PROCESS="cat -"; fi
 	fi
 	RESP=$(docurl -sS "http://169.254.169.254/openstack/latest/$DATA")
 	echo "$RESP" | grep "404 Not Found" >/dev/null 2>&1
-	if test $? != 0 -o "$DATA" != "user_data"; then
+	if [ $? != 0 -o "$DATA" != "user_data" ]; then
 		echo "$RESP" | $PROCESS
 	fi
 }
@@ -3028,68 +2997,68 @@ Aborting."; exit 1; }
 # Command Line Parser ####################################################################
 
 # Insecure
-if test "$1" == "--insecure" -o "$1" == "-k"; then
+if [ "$1" == "--insecure" -o "$1" == "-k" ]; then
 	INS=$1; shift
 else
-	if test -n "$OS_CACERT"; then INS="--cacert $OS_CACERT"; else unset INS; fi
+	if [ -n "$OS_CACERT" ]; then INS="--cacert $OS_CACERT"; else unset INS; fi
 fi
 
 # Proxy Auth
 case "$HTTPS_PROXY" in
 	*@*)
-		if test -z "$INS"; then INS="--proxy-anyauth";
+		if [ -z "$INS" ]; then INS="--proxy-anyauth";
 		else INS="--proxy-anyauth $INS"; fi
 		;;
 esac
 
 # Debugging
-if test "$1" = "debug"; then DEBUG=1; shift; fi
-if test "$1" = "debug"; then DEBUG=2; shift; fi
+if [ "$1" = "debug" ]; then DEBUG=1; shift; fi
+if [ "$1" = "debug" ]; then DEBUG=2; shift; fi
 
 # FIXME: Need proper position independent option parser
 
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
+if [ "$1" == "--domainscope" ]; then REQSCOPE="domain"; shift; fi
+if [ "$1" == "--projectscope" ]; then REQSCOPE="project"; shift; fi
 
 # fetch main command
 MAINCOM=$1; shift
 # fetch subcommand
 SUBCOM=$1; shift
 
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
+if [ "$1" == "--domainscope" ]; then REQSCOPE="domain"; shift; fi
+if [ "$1" == "--projectscope" ]; then REQSCOPE="project"; shift; fi
 
-if test "$1" == "--limit"; then
+if [ "$1" == "--limit" ]; then
   APILIMIT=$2; shift; shift
-elif test "${1:0:8}" = "--limit="; then
+elif [ "${1:0:8}" = "--limit=" ]; then
   APILIMIT=${1:8}; shift
 fi
-if test "$1" == "--offset"; then
+if [ "$1" == "--offset" ]; then
   APIOFFSET=$2; shift; shift
-elif test "${1:0:9}" = "--offset="; then
+elif [ "${1:0:9}" = "--offset=" ]; then
   APIOFFSET=${1:9}; shift
 fi
-if test "$1" == "--marker"; then
+if [ "$1" == "--marker" ]; then
   APIMARKER=$2; shift; shift
-elif test "${1:0:9}" = "--marker="; then
+elif [ "${1:0:9}" = "--marker=" ]; then
   APIMARKER=${1:9}; shift
 fi
-if test "$1" == "--limit"; then
+if [ "$1" == "--limit" ]; then
   APILIMIT=$2; shift; shift
-elif test "${1:0:8}" = "--limit="; then
+elif [ "${1:0:8}" = "--limit=" ]; then
   APILIMIT=${1:8}; shift
 fi
 
-if test "$1" == "--maxgetkb"; then
+if [ "$1" == "--maxgetkb" ]; then
   MAXGETKB=$2; shift; shift;
-elif test "${1:0:11}" = "--maxgetkb="; then
+elif [ "${1:0:11}" = "--maxgetkb=" ]; then
   MAXGETKB=${1:11}; shift
 fi
 
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
+if [ "$1" == "--domainscope" ]; then REQSCOPE="domain"; shift; fi
+if [ "$1" == "--projectscope" ]; then REQSCOPE="project"; shift; fi
 
-#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
+#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]
 	do
@@ -3160,10 +3129,6 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			SUBNETNAME="$2"
 			shift # past argument
 			;;
-			--nicsubs)
-			MORESUBNETS="$2"
-			shift # past argument
-			;;
 			-v|--vpc-id)
 			VPCID="$2"
 			shift # past argument
@@ -3203,7 +3168,7 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			-p|--public)   case "$2" in
 										true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
 										[0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
-										*)           echo "ERROR: unsupported value for public IPs" 1>&2; exit 2;;
+										*)           echo "ERROR: Unsupported value for public IPs" 1>&2; exit 2;;
 								esac
 								shift;;     # past argument
 			--volumes)     DEV_VOL="$2"
@@ -3296,7 +3261,7 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			shift
 			;;
 			--property)
-			if test -z "$PROPS"; then PROPS="$2"; else PROPS="$PROPS,$2"; fi
+			if [ -z "$PROPS" ]; then PROPS="$2"; else PROPS="$PROPS,$2"; fi
 			shift
 			;;
 			--description)
@@ -3309,7 +3274,7 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 			;;
 			-*)
 			# unknown option
-			echo "ERROR: unknown option \"$1\"" 1>&2
+			echo "ERROR: Unknown option \"$1\"" 1>&2
 			exit 1
 			;;
 			*)
@@ -3353,21 +3318,21 @@ if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 
 
 
-if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
-if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
-if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
+if [ "$MAINCOM" = "iam" ] && [ "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
+if [ "$MAINCOM" = "iam" ] && [ "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
+if [ "$MAINCOM" = "iam" ] && [ "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
 
-if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
-	if [ "$MAINCOM" == "iam" -a -z "$REQSCOPE" ] && \
-		[  "$SUBCOM" != "token" -a "$SUBCOM" != "project" -a "$SUBCOM" != "catalog" \
-		-a "$SUBCOM" != "services" -a "$SUBCOM" != "endpoints" -a "$SUBCOM" != "roles" \
+if [ -n "$MAINCOM" ] && [ "$MAINCOM" != "help" ] && [ "$MAINCOM" != "mds" ]; then
+	if [ "$MAINCOM" == "iam" ] && [ -z "$REQSCOPE" ] && \
+		[ "$SUBCOM" != "token" ] && [ "$SUBCOM" != "project" ] && [ "$SUBCOM" != "catalog" \
+		-a "$SUBCOM" != "services" ] && [ "$SUBCOM" != "endpoints" ] && [ "$SUBCOM" != "roles" \
 		-a "$SUBCOM" != "domain" ]; then
 		REQSCOPE="domain"
 	fi
 	getIAMToken $REQSCOPE
 fi
 
-#if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
+#if [ "$MAINCOM" = "rds" ] && [ $TROVE_OVERRIDE = 1 ]; then
 #	echo "WARN: Using manually set database endpoint, not advertized in catalog" 1>&2
 #fi
 
@@ -3383,35 +3348,30 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "details" ]; then
 	getECSDetailsNew "$1"
 
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "show" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "vm" ]; then
 	getECSVM $1
 
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "limits" ]; then
 	getLimits
 
 elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
+	if [ -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ -n "$SUBNETNAME" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
+	if [ -n "$IMAGENAME" ]; then convertIMAGENameToId "$IMAGENAME"; fi
 
-	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
-	if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
 	SECUGROUPNAMELIST="$SECUGROUPNAME"
-	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
+	if [ -n "$SECUGROUPNAMELIST" ] && [ -z "$SECUGROUP" ]; then
 		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
 		SECUGROUP="${SECUGROUP#,}"
-	fi
-	if test -z "$INSTANCE_NAME"; then
-		if test -n "$1"; then INSTANCE_NAME="$1"
-		else INSTANCE_NAME="VM-$(date +%s)-$$"
-		fi
 	fi
 
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
 
 	if [ "$NUMCOUNT" = 1 ]; then
-		WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
-		if test -n "$EIP"; then
+		WaitForSubTask $ECSTASKID 5 ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
+		if [ -n "$EIP" ]; then
 			ECSID=null
 			while [ null = "$ECSID" ]; do
 				sleep 5
@@ -3427,15 +3387,15 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 	echo "ECS ID: $ECSID"
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
-	if [ "$ECSJOBSTATUS" != "SUCCESS" ];then
+	if [ "$ECSJOBSTATUS" != "SUCCESS" ]; then
 		exit 1
 	fi
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ]; then
 	export ECSACTION="reboot"
 	export ECSACTIONSERVERID=$1
 
-	if [ "$ECSACTIONSERVERID" == "" ];then
+	if [ -z "$ECSACTIONSERVERID" ]; then
 		echo "ERROR: Must be specify the Instance ID!" 1>&2
 		printHelp
 		exit 1
@@ -3443,10 +3403,10 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ];then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ]; then
 	ECSACTION="os-start"
 	ECSACTIONSERVERID=$1
-	if [ "$ECSACTIONSERVERID" == "" ];then
+	if [ -z "$ECSACTIONSERVERID" ]; then
 		echo "ERROR:: Must be specify the Instance ID!" 1>&2
 		printHelp
 		exit 1
@@ -3454,11 +3414,11 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ];then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ]; then
 	ECSACTION="os-stop"
 	ECSACTIONSERVERID=$1
 
-	if [ "$ECSACTIONSERVERID" == "" ];then
+	if [ -z "$ECSACTIONSERVERID" ]; then
 	echo "ERROR: Must be specify the Instance ID!" 1>&2
 		printHelp
 		exit 1
@@ -3466,88 +3426,84 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ];then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "job" ] ||
-     [ "$MAINCOM" == "task" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "job" ] ||
+	[ "$MAINCOM" == "task" ] && [ "$SUBCOM" == "show" ]; then
 	#ECSTASKID=$1
 	#echo $AUTH_URL_ECS_JOB/$1
 	getECSJOBList $1
 	echo "$ECSJOBSTATUSJSON"
 
-elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "task" ] && [ "$SUBCOM" == "delete" ]; then
 	DeleteTask $1
-elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "wait" ]; then
+elif [ "$MAINCOM" == "task" ] && [ "$SUBCOM" == "wait" ]; then
 	WAIT_FOR_JOB=true
 	WaitForTask "$@"
 
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "delete" ]; then
 	ECSDelete $@
 	WaitForTask $ECSTASKID 5
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "update" ]; then
 	ECSUpdate $1
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listaz" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "az-list" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "listaz" ]; then
 	getAZList
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "showaz" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "az-show" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "showaz" ]; then
 	getAZDetail "$1"
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "attach-nic" ]; then
-	ECSAttachPort "$@"
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "detach-nic" ]; then
-	ECSDetachPort "$@"
 
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ];then
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ]; then
 	getVPCList
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ];then
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ]; then
 	getVPCDetail $1
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ];then
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ]; then
 	VPCDelete $1
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ];then
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
 	VPCCreate
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ];then
+elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ]; then
 	getVPCLimits
 
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ]; then
 	getPUBLICIPSList
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "show" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "show" ]; then
 	getPUBLICIPSDetail $1
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ]; then
 	PUBLICIPSCreate
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ]; then
 	PUBLICIPSDelete $@
-elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
-     [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "associate" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "bind" ] ||
+	[ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "associate" ]; then
 	PUBLICIPSBind $@
-elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
-     [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "disassociate" ];then
+elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "unbind" ] ||
+	[ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "disassociate" ]; then
 	PUBLICIPSUnbind $@
 
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ];then
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ]; then
 	getSUBNETList
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ];then
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ]; then
 	getSUBNETDetail "$1"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ];then
-	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
-	if test "$2" == "--vpc-id"; then VPCID="$3"; fi
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ]; then
+	if [ "$2" == "--vpc-name" ]; then convertVPCNameToId "$3"; fi
+	if [ "$2" == "--vpc-id" ]; then VPCID="$3"; fi
 	SUBNETDelete "$1"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ];then
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ]; then
 	# FIXME -- what should this do?
 	IMAGENAME=$1
 	# convertSUBNETNameToId "$SUBNETNAME" "$VPIC_ID"
 	# convertSECUGROUPNameToId "$SECUGROUPNAME"
 	# convertIMAGENameToId "$IMAGENAME"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ];then
-	if [ "$VPCNAME" != "" ];then convertVPCNameToId "$VPCNAME"; fi
+elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ]; then
+	if [ -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SUBNETCreate
 
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ];then
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ]; then
 	VPCNAME=$1
-	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	getSECGROUPList
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ];then
-	if [ -n "$VPCNAME" -a -z "$VPCID" ]; then convertVPCNameToId "$VPCNAME"; fi
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ]; then
+	if [ -n "$VPCNAME" ] && [ -z "$VPCID" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SECGROUPCreate "$@"
-elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
-     [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "list" ] ||
+	[ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "show" ]; then
 	if [ -z "$1" ]; then
 		echo "ERROR: Must be specify the Security Group ID!" 1>&2
 		printHelp
@@ -3555,20 +3511,20 @@ elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
 	fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
 	getSECGROUPRULESList $1
-elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ];then
-	if [ "$VPCNAME" != "" ];then convertVPCNameToId "$VPCNAME"; fi
-	if [ "$SECUGROUPNAME" != "" ];then convertSECUGROUPNameToId "$SECUGROUPNAME"; fi
+elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ]; then
+	if [ -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ -n "$SECUGROUPNAME" ]; then convertSECUGROUPNameToId "$SECUGROUPNAME"; fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
 	SECGROUPRULECreate
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "delete" ];then
+elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "delete" ]; then
 	SECGROUPDelete "$@"
 
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ];then
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ]; then
 	getIMAGEList "$@"
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ];then
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ]; then
 	getIMAGEDetail $1
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
-	if test -r "$2"; then
+	if [ -r "$2" ]; then
 		uploadIMAGEfile $1 $2
 	else
 		uploadIMAGEobj $1 $2
@@ -3584,313 +3540,310 @@ elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
 elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "listmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "listshare" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "members" ]; then
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "listmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "listshare" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "members" ]; then
 	getImgMemberList "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "showmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "showshare" ]; then
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "showmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "showshare" ]; then
 	getImgMemberDetail "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "addmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "share" ]; then
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "addmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "share" ]; then
 	ImgMemberCreate "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "delmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "unshare" ]; then
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "unshare" ]; then
 	ImgMemberDelete "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "acceptshare" ]; then
+
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "acceptmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "acceptshare" ]; then
 	ImgMemberAccept "$@"
-elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectmember" ] ||
-     [ "$MAINCOM" == "images" -a "$SUBCOM" == "rejectshare" ]; then
+	
+elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "rejectmember" ] ||
+	[ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "rejectshare" ]; then
 	ImgMemberReject "$@"
 
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listflavor" ]  ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]; then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavor-list" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "listflavor" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "flavors" ]; then
 	getFLAVORList
 
-elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listkey" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-list" ]; then
+elif [ "$MAINCOM" == "keypair" ] && [ "$SUBCOM" == "list" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "listkey" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "keyname-list" ]; then
 	getKEYPAIRList
 
-elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "showkey" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-show" ]; then
+elif [ "$MAINCOM" == "keypair" ] && [ "$SUBCOM" == "show" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "showkey" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "keyname-show" ]; then
 	getKEYPAIR "$@"
 
-elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "create" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "createkey" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-create" ]; then
+elif [ "$MAINCOM" == "keypair" ] && [ "$SUBCOM" == "create" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "createkey" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "keyname-create" ]; then
 	createKEYPAIR "$@"
 
-elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delkey" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ]; then
+elif [ "$MAINCOM" == "keypair" ] && [ "$SUBCOM" == "delete" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "delkey" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "keyname-delete" ]; then
 	deleteKEYPAIR "$@"
 
 
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ]; then
 	echo $TOKEN
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
 # These are not (yet) supported on OTC
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ]; then
    echo -n ""
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ]; then
    echo -n ""
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
 # End of unsupported APIs
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ];then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
-     [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "project" ] ||
+	[ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "tenant" ]; then
 	echo $OS_PROJECT_ID
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listidp" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "listidp" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers" | jq -r 'def str(v): v|tostring; .identity_providers[] | .id+"   "+str(.enabled)+"   "+.links.self+"   "+.description'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showidp" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "showidp" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers/$1" | jq -r '.'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listmapping" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "listmapping" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings" | jq -r 'def str(s): s|tostring; .mappings[] | .id+"   "+.links.self+"   "+str(.rules[].local)+"   "+str(.rules[].remote)'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showmapping" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "showmapping" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings/$1" | jq -r '.'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listprotocol" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "listprotocol" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols" | jq -r '.protocols[] | .id+"   "+.mapping_id+"   "+.links.self'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showprotocol" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "showprotocol" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols/$1" | jq -r '.'
-elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "keystonemeta" ]; then
+elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "keystonemeta" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/auth/OS-FEDERATION/SSO/metadata"
-   echo
-
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
-     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ];then
+	#Should not have any use.
+	#echo
+	
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "volume-list" ] ||
+	[ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "list" ]; then
 	getEVSList
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-details" ] ||
-     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "details" ];then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "volume-details" ] ||
+	[ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "details" ]; then
 	getEVSListOTC
-elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
-     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
-     [ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ];then
+elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "volume-show" ] ||
+	[ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "describe-volumes" ] ||
+	[ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "show" ]; then
 	getEVSDetail $1
-elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
 	WaitForTask $EVSTASKID 5
-elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "delete" ];then
+elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "delete" ]; then
 	EVSDelete "$@"
 	echo "Task ID: $EVSTASKID"
 	WaitForTask $EVSTASKID 5
-elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
+elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "attach" ]; then
 	if [ "$1" = -n ] || [ "$1" = --name ]
 	then
 		ECSAttachVolumeName "$2" "$3"
 	else
-		ECSAttachVolumeId   "$1" "$2"
+		ECSAttachVolumeId "$1" "$2"
 	fi
-elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "detach" ]; then
+elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "detach" ]; then
 	if [ "$1" = -n ] || [ "$1" = --name ]
 	then
 		ECSDetachVolumeName "$2" "$3"
 	else
-		ECSDetachVolumeId   "$1" "$2"
+		ECSDetachVolumeId "$1" "$2"
 	fi
-
-elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "backuppolicy" ] && [ "$SUBCOM" == "list" ]; then
 	getBackupPolicyList
-elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "backuppolicy" ] && [ "$SUBCOM" == "show" ]; then
 	getBackupPolicyDetail "$1"
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "list" ]; then
 	getBackupList
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "show" ]; then
 	getBackupDetail "$1"
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteBackupOTC "$1"
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete_" ]; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "delete_" ]; then
 	deleteBackup "$1"
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "create" ] ||
-     [ "$MAINCOM" == "backup" -a "$SUBCOM" == "backup" ] ; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "create" ] ||
+	[ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "backup" ] ; then
 	createBackup "$@"
-elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "restore" ]; then
+elif [ "$MAINCOM" == "backup" ] && [ "$SUBCOM" == "restore" ]; then
 	restoreBackup "$@"
-elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "snapshot" ] && [ "$SUBCOM" == "list" ]; then
 	getSnapshotList
-elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "snapshot" ] && [ "$SUBCOM" == "show" ]; then
 	getSnapshotDetail "$1"
-elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "snapshot" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
-
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "list" ]; then
 	getELBList
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "show" ]; then
 	getELBDetail $1
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteELB $1
 	echo "$ELBJOBID"
 	WaitForTask $ELBJOBID 2
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "create" ]; then
 	createELB "$@"
 	echo "$ELBJOBID"
 	#WaitForTask $ELBJOBID 2
 	WaitForTaskFieldOpt $ELBJOBID .entities.elb.id
-
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "listlistener" ]; then
 	getListenerList "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showlistener" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "showlistener" ]; then
 	getListenerDetail "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
-     [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addlistener" ]; then
-	createListener "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "createlistener" ] ||
+	[ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "addlistener" ]; then
+	createListener "$@"	
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "dellistener" ]; then
 	deleteListener "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "listmember" ]; then
 	getMemberList "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showmember" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "showmember" ]; then
 	getMemberDetail "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addmember" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "addmember" ]; then
 	createMember "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delmember" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "delmember" ]; then
 	deleteMember "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showcheck" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "showcheck" ]; then
 	getCheck "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "addcheck" ]; then
 	createCheck "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
+elif [ "$MAINCOM" == "elb" ] && [ "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
-
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "list" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "listinstances" ]; then
 	getRDSInstanceList
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "show" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showinstances" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "show" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showinstances" ]; then
 	getRDSInstanceDetails "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "apis" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listapis" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "apis" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "listapis" ]; then
 	getRDSAPIVersionList
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showapi" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showapi" ]; then
 	getRDSAPIDetails "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "datastore" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastore" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "datastore" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showdatastore" ]; then
 	getRDSDatastoreDetails "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameters" ]; then
-	getRDSDatastoreParameters "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showdatastoreparameter" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showdatastoreparameters" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showdatastoreparameter" ]; then
 	getRDSDatastoreParameter "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "flavors" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listflavors" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "flavors" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "listflavors" ]; then
 	getRDSFlavorList "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showflavor" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showflavor" ]; then
 	getRDSFlavorDetails "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "create" ]; then
 	createRDSInstance "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteRDSInstance "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showbackuppolicy" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showbackuppolicy" ]; then
 	getRDSInstanceBackupPolicy "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listsnapshots" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listbackups" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "listsnapshots" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "listbackups" ]; then
 	getRDSSnapshots
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showerrors" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showerrors" ]; then
 	getRDSErrorLogs "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowstatements" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "showslowqueries" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showslowstatements" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "showslowqueries" ]; then
 	getRDSSlowStatementLogs "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createsnapshot" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "createbackup" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "createsnapshot" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "createbackup" ]; then
 	createRDSSnapshot "$@"
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletesnapshot" ] ||
-     [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletebackup" ]; then
+elif [ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "deletesnapshot" ] ||
+	[ "$MAINCOM" == "rds" ] && [ "$SUBCOM" == "deletebackup" ]; then
 	deleteRDSSnapshot "$@"
-
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "list" ]; then
 	listDomains
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "create" ]; then
 	createDomain "$@"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "show" ]; then
 	showDomain "$1"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteDomain "$1"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "listrecords" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "listrecords" ]; then
 	listRecords "$1"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "showrecord" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "showrecord" ]; then
 	showRecord "$@"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "delrecord" ]; then
 	deleteRecord "$@"
-elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
+elif [ "$MAINCOM" == "domain" ] && [ "$SUBCOM" == "addrecord" ]; then
 	addRecord "$@"
-
-elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "cluster" ] && [ "$SUBCOM" == "list" ]; then
 	shortlistClusters
-elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ] ||
-     [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "details" ]; then
+elif [ "$MAINCOM" == "cluster" ] && [ "$SUBCOM" == "list-detail" ] ||
+	[ "$MAINCOM" == "cluster" ] && [ "$SUBCOM" == "details" ]; then
 	listClusters
-elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "cluster" ] && [ "$SUBCOM" == "show" ]; then
 	showCluster "$@"
-elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "host" ] && [ "$SUBCOM" == "list" ]; then
 	listClusterHosts "$@"
-elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "host" ] && [ "$SUBCOM" == "show" ]; then
 	showClusterHost "$@"
-
-elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "metrics" ] && [ "$SUBCOM" == "list" ]; then
 	listMetrics "$@"
-elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "favorites" ]; then
+elif [ "$MAINCOM" == "metrics" ] && [ "$SUBCOM" == "favorites" ]; then
 	listFavMetrics
-elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "metrics" ] && [ "$SUBCOM" == "show" ]; then
 	showMetrics "$@"
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "list" ]; then
 	listAlarms
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "show" ]; then
 	showAlarms "$1"
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "limits" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "limits" ]; then
 	showAlarmsQuotas
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "disable" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "disable" ]; then
 	AlarmsAction "false" "$1"
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "enable" ]; then
 	AlarmsAction "true" "$1"
-elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "alarms" ] && [ "$SUBCOM" == "delete" ]; then
 	deleteAlarms "$1"
-
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "list" ]; then
 	listStacks
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "show" ]; then
 	showStack "$1"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "snapshots" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "snapshots" ]; then
 	listStackSnapshots "$1"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resources" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "resources" ]; then
 	listStackResources "$1"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showresource" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "showresource" ]; then
 	showStackResource "$1" "$2"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "events" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "events" ]; then
 	listStackEvents "$1"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "template" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "template" ]; then
 	showStackTemplate "$1"
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "resourcetypes" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "resourcetypes" ]; then
 	listStackResTypes
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "buildinfo" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "buildinfo" ]; then
 	showStackBuildInfo
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "deployments" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "deployments" ]; then
 	listStackDeployments
-elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
+elif [ "$MAINCOM" == "stack" ] && [ "$SUBCOM" == "showdeployment" ]; then
 	showStackDeployment "$1"
-
-elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "trace" ] && [ "$SUBCOM" == "list" ]; then
 	listTrackers
-elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "queues" ] && [ "$SUBCOM" == "list" ]; then
 	listQueues
-elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "notifications" ] && [ "$SUBCOM" == "list" ]; then
 	listTopics
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "publish" ]; then
 	publishNotification "$@"
@@ -3904,18 +3857,16 @@ elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjo
 	listMRSJobs
 elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
 	showMRSJob $1
-
-elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
+elif [ "$MAINCOM" == "mds" ] && [ "$SUBCOM" == "meta_data" ]; then
 	getMeta meta_data.json "$@"
-elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "vendor_data" ]; then
+elif [ "$MAINCOM" == "mds" ] && [ "$SUBCOM" == "vendor_data" ]; then
 	getMeta vendor_data.json "$@"
-elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
+elif [ "$MAINCOM" == "mds" ] && [ "$SUBCOM" == "user_data" ]; then
 	getMeta user_data "$@"
-elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
+elif [ "$MAINCOM" == "mds" ] && [ "$SUBCOM" == "password" ]; then
 	getMeta password "$@"
-
 elif [ "$MAINCOM" == "custom" ]; then
-   handleCustom "$SUBCOM" "$@"
+	handleCustom "$SUBCOM" "$@"
 
 else
 	printHelp
