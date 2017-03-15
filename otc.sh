@@ -968,7 +968,7 @@ setlimit()
 	fi
 
 	while [ -n "$2" ]; do
-		echo $2
+		#echo $2
 		if [ -z "PARAMSTRING" ]; then
 			export PARAMSTRING="?$2"
 		else
@@ -3113,15 +3113,65 @@ listTopics()
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
+showTopic()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1" | jq -r '.'
+}
+
+createTopic()
+{
+	if test -n "$2"; then local DISPLAYNM=", \"display_name\": \"$2\""; fi
+	curlpostauth "$TOKEN" "{ \"name\": \"$1\" $DISPLAYNM }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics" | jq -r '.'
+}
+
+deleteTopic()
+{
+	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/$1" | jq -r '.'
+}
+
+cleansmnmessage()
+{
+	tr -d '\r' | tr '\n' '\r' | sed -re 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' -e 's/\x1B/\\e/g' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r/\\n/g'
+}
+
 publishNotification()
 {
-	TOPIC_URN="$1"
-	SUBJECT="$2"
-	shift; shift
-	# Read message from stdin
-	MESG=$(tr -d '\r' | tr '\n' '\r' | sed -re 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g' -e 's/\x1B/\\e/g' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r/\\n/g')
-	curlpostauth "$TOKEN" "{ \"subject\": \"$SUBJECT\", \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$TOPIC_URN/publish" | jq -r '.'
+	TOPIC_URN="$1"; shift
+	if test -n "$1"; then SUBJECT="\"subject\": \"$1\","; shift; fi
+	# Read message from stdin (or take cmdline)
+	if test -n "$1"; then MESG=$(echo "$@" | cleansmnmessage)
+	else
+		if tty >/dev/null; then echo "Enter your message, finish by ^D" 1>&2; fi
+		MESG=$(cleansmnmessage)
+	fi
+	curlpostauth "$TOKEN" "{ $SUBJECT \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$TOPIC_URN/publish" | jq -r '.'
 }
+
+listSubscriptions()
+{
+	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
+	setlimit 100 "offset=0"
+	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/subscriptions$PARAMSTRING" | jq -r 'def stat(s): ["unconfirmed", "confirmed", "?", "canceled"][s]; .subscriptions[] | .subscription_urn+"   "+.topic_urn+"   "+stat(.status)+"   "+.protocol+"   "+.endpoint+"   "+.remark'
+}
+
+addSubscription()
+{
+	unset REMARK
+	if test -n "$3"; then REMARK=", \"remark\": \"$4\""; fi
+	curlpostauth "$TOKEN" "{ \"protocol\": \"$2\", \"endpoint\": \"$3\" $REMARK }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1/subscriptions" | jq -r '.'
+}
+
+deleteSubscription()
+{
+	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/subscriptions/$1" | jq -r '.'
+}
+
+sendSMS()
+{
+	curlpostauth "$TOKEN" "{ \"endpoint\": \"$1\", \"message\": \"$2\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/sms" | jq -r '.'
+}
+
+
 
 # These don't work yet well
 listMRSClusters()
@@ -4048,8 +4098,23 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "show" ]; then
+	showTopic "$1"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "create" ]; then
+	createTopic "$@"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "delete" ]; then
+	deleteTopic "$1"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "subscriptions" ]; then
+	listSubscriptions "$1"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "subscribe" ]; then
+	addSubscription "$@"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "unsubscribe" ]; then
+	deleteSubscription "$1"
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "publish" ]; then
 	publishNotification "$@"
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "SMS" ]; then
+	sendSMS "$@"
+
 elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
 	listAntiDDoS
 elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
