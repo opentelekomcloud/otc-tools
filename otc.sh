@@ -609,8 +609,8 @@ printHelp() {
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-   echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
-   echo "                                       example: SSD:20,SATA:50"
+	echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
+	echo "                                       example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		 # determined from subnet by default"
 	echo "    --[no]wait"
 	echo
@@ -881,15 +881,16 @@ printHelp() {
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc queues list         # List queues from distr message system"
 	echo "otc notifications list  # List notification topics from messaging service"
+	echo "otc notifications publish URN SUBJECT     # Publish notification (stdin)"
 	echo "otc kms list            # List keys from key management service"
 	echo
 	echo "--- Custom command support ---"
 	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
 	echo "      METHOD=GET/PUT/POST/DELETE, vars with \\\$ are evaluated (not sanitized!)"
-   echo "      example: otc custom GET \\\$BASEURL/v2/\\\$OS_PROJECT_ID/servers"
+	echo "      example: otc custom GET \\\$BASEURL/v2/\\\$OS_PROJECT_ID/servers"
 	echo "      note that \\\$BASEURL gets prepended if URL starts with /"
 	echo "    --jqfilter allows to use a filtering string for jq processing (def=.)"
-   echo "      e.g.: --jqfilter '.servers[] | .id+\\\"   \\\"+.name' GET \\\$NOVA_URL/servers"
+	echo "      e.g.: --jqfilter '.servers[] | .id+\\\"   \\\"+.name' GET \\\$NOVA_URL/servers"
 	echo
 	echo "--- Metadata helper ---"
 	echo "otc mds meta_data [FILT]          # Retrieve and output meta_data"
@@ -2957,6 +2958,16 @@ listTopics() {
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
 }
 
+publishNotification()
+{
+	TOPIC_URN="$1"
+	SUBJECT="$2"
+	shift; shift
+	# Read message from stdin
+	MESG=$(tr -d '\r' | tr '\n' '\r' | sed -re 's/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//' -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\t/\\t/g' -e 's/\r/\\n/g')
+	curlpostauth "$TOKEN" "{ \"subject\": \"$SUBJECT\", \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$TOPIC_URN/publish" | jq -r '.'
+}
+
 # These don't work yet well
 listMRSClusters()
 {
@@ -3881,6 +3892,8 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "publish" ]; then
+	publishNotification "$@"
 elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
 	listAntiDDoS
 elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
