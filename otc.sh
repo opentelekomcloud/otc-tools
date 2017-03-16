@@ -3992,15 +3992,19 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ]; then
 	echo $TOKEN
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 # These are not (yet) supported on OTC
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ]; then
    echo -n ""
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
@@ -4009,30 +4013,41 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ]; then
    echo -n ""
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 # End of unsupported APIs
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
 	echo $OS_PROJECT_ID
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listidp" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers" | jq -r 'def str(v): v|tostring; .identity_providers[] | .id+"   "+str(.enabled)+"   "+.links.self+"   "+.description'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showidp" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/identity_providers/$1" | jq -r '.'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listmapping" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings" | jq -r 'def str(s): s|tostring; .mappings[] | .id+"   "+.links.self+"   "+str(.rules[].local)+"   "+str(.rules[].remote)'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showmapping" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/mappings/$1" | jq -r '.'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "listprotocol" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols" | jq -r '.protocols[] | .id+"   "+.mapping_id+"   "+.links.self'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "showprotocol" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/OS-FEDERATION/protocols/$1" | jq -r '.'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "keystonemeta" ]; then
 	curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/auth/OS-FEDERATION/SSO/metadata"
+	ERR=$?
    echo
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
