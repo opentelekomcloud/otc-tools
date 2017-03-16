@@ -177,11 +177,11 @@ docurl()
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
 		if test "$CODE" == "null"; then CODE=""; fi
 		local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
-		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 42; fi
+		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
 		if test "$CODE" == "null"; then CODE=""; fi
 		local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
-		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 42; fi
+		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 	fi
 	return $RC
 }
