@@ -1355,7 +1355,7 @@ VPCDelete()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID"
 	local RC=$?
-	echo
+	#echo
 	return $RC
 }
 
@@ -2991,6 +2991,7 @@ EVSDelete()
 
 VPCCreate()
 {
+	if test -z "$VPCNAME" -a -n "$1"; then VPCNAME="$1"; fi
 	local REQ_CREATE_VPC='{
 		"vpc": {
 			"name": "'"$VPCNAME"'",
@@ -3480,162 +3481,121 @@ case "$HTTPS_PROXY" in
 		;;
 esac
 
+declare -i DEBUG=0
 # Debugging
-if test "$1" = "debug"; then DEBUG=1; shift; fi
-if test "$1" = "debug"; then DEBUG=2; shift; fi
+while test "$1" = "debug"; do let DEBUG+=1; shift; done
 
-# FIXME: Need proper position independent option parser
+# Global options ...
+while test "${1:0:2}" == '--'; do
+	case "${1:2}" in
+		debug)
+			let DEBUG+=1;;
+		domainscope)
+			REQSCOPE="domain";;
+		projectscope)
+			REQSCOPE="project";;
+		*)
+			echo "ERROR: Unknown option \"$1\"" 1>&2
+			exit 1
+			#break
+			;;
+	esac
+	shift
+done
 
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
+if test $DEBUG = 0; then unset DEBUG; fi
 
 # fetch main command
 MAINCOM=$1; shift
 # fetch subcommand
 SUBCOM=$1; shift
 
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
+# Global options ...
+while test "${1:0:2}" == '--'; do
+	case "${1:2}" in
+		domainscope)
+			REQSCOPE="domain";;
+		projectscope)
+			REQSCOPE="project";;
+		limit)
+			APILIMIT=$2; shift;;
+		limit=*)
+			APILIMIT=${1:8};;
+		offset)
+			APIOFFSET=$2; shift;;
+		offset=*)
+			APIOFFSET=${1:9};;
+		marker)
+			APIMARKER=$2; shift;;
+		marker=*)
+			APIMARKER=${1:9};;
+		maxgetkb)
+			MAXGETKB=$2; shift;;
+		maxgetkb=*)
+			MAXGETKB=${1:11};;
+		*)
+			break;;
+	esac
+	shift
+done
 
-if test "$1" == "--limit"; then
-	APILIMIT=$2; shift; shift
-elif test "${1:0:8}" = "--limit="; then
-	APILIMIT=${1:8}; shift
-fi
-if test "$1" == "--offset"; then
-	APIOFFSET=$2; shift; shift
-elif test "${1:0:9}" = "--offset="; then
-	APIOFFSET=${1:9}; shift
-fi
-if test "$1" == "--marker"; then
-	APIMARKER=$2; shift; shift
-elif test "${1:0:9}" = "--marker="; then
-	APIMARKER=${1:9}; shift
-fi
-if test "$1" == "--limit"; then
-	APILIMIT=$2; shift; shift
-elif test "${1:0:8}" = "--limit="; then
- 	APILIMIT=${1:8}; shift
-fi
-
-if test "$1" == "--maxgetkb"; then
-	MAXGETKB=$2; shift; shift;
-elif test "${1:0:11}" = "--maxgetkb="; then
-	MAXGETKB=${1:11}; shift
-fi
-
-if test "$1" == "--domainscope"; then REQSCOPE="domain"; shift; fi
-if test "$1" == "--projectscope"; then REQSCOPE="project"; shift; fi
-
-#if [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ] || [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
+# Specific options
 if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
 			-a|--admin-pass)
-				ADMINPASS="$2"
-				shift # past argument
-			;;
+				ADMINPASS="$2"; shift;;
 			-n|--instance-name)
-				INSTANCE_NAME="$2"
-				shift # past argument
-			;;
+				INSTANCE_NAME="$2"; shift;;
 			-t|--instance-id)
-				INSTANCE_ID="$2"
-				shift # past argument
-			;;
+				INSTANCE_ID="$2"; shift;;
 			--volume-name)
-				VOLUME_NAME="$2"
-				shift # past argument
-			;;
+				VOLUME_NAME="$2"; shift;;
 			--volume-description)
-				VOLUME_DESC="$2"
-				shift # past argument
-			;;
+				VOLUME_DESC="$2"; shift;;
 			--file1)
-				FILE1="$2"
-				shift # past argument
-			;;
+				FILE1="$2"; shift;;
 			--file2)
-				FILE2="$2"
-				shift # past argument
-			;;
+				FILE2="$2"; shift;;
 			--file3)
-				FILE3="$2"
-				shift # past argument
-			;;
+				FILE3="$2"; shift;;
 			--file4)
-				FILE4="$2"
-				shift # past argument
-			;;
+				FILE4="$2"; shift;;
 			--file5)
-				FILE5="$2"
-				shift # past argument
-			;;
+				FILE5="$2"; shift;;
 			-t|--instance-type)
-				INSTANCE_TYPE="$2"
-				shift # past argument
-			;;
+				INSTANCE_TYPE="$2"; shift;;
 			-i|--image-name)
-				IMAGENAME="$2"
-				shift # past argument
-			;;
+				IMAGENAME="$2"; shift;;
 			--image-id)
-				IMAGE_ID="$2"
-				shift # past argument
-			;;
+				IMAGE_ID="$2"; shift;;
 			-c|--count)
-				NUMCOUNT="$2"
-				shift # past argument
-			;;
+				NUMCOUNT="$2"; shift;;
 			-b|--subnet-id)
-				SUBNETID="$2"
-				shift # past argument
-			;;
+				SUBNETID="$2"; shift;;
 			--subnet-name)
-				SUBNETNAME="$2"
-				shift # past argument
-			;;
+				SUBNETNAME="$2"; shift;;
 			--nicsubs)
-				MORESUBNETS="$2"
-				shift # past argument
-			;;
+				MORESUBNETS="$2"; shift;;
 			-v|--vpc-id)
-				VPCID="$2"
-				shift # past argument
-			;;
+				VPCID="$2"; shift;;
 			--vpc-name)
-				VPCNAME="$2"
-				shift # past argument
-			;;
+				VPCNAME="$2"; shift;;
 			--cidr)
-				CIDR="$2"
-				shift # past argument
-			;;
+				CIDR="$2"; shift;;
 			--gateway-ip)
-				GWIP="$2"
-				shift # past argument
-			;;
+				GWIP="$2"; shift;;
 			--primary-dns)
-				PRIMARYDNS="$2"
-				shift # past argument
-			;;
+				PRIMARYDNS="$2"; shift;;
 			--secondary-dns)
-				SECDNS="$2"
-				shift # past argument
-			;;
+				SECDNS="$2"; shift;;
 			-z|--availability-zone|--az)
-				AZ="$2"
-				shift # past argument
-			;;
+				AZ="$2"; shift;;
 			-s|--security-group-ids)
-				SECUGROUP="$2"
-				shift # past argument
-			;;
+				SECUGROUP="$2"; shift;;
 			-g|--security-group-name)
-				SECUGROUPNAME="$2"
-				shift # past argument
-			;;
+				SECUGROUPNAME="$2"; shift;;
 			-p|--public)
 				case "$2" in
 					true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
@@ -3644,118 +3604,69 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 				esac
 				shift;;     # past argument
 			--volumes)
-				DEV_VOL="$2"
-				shift;;     # past argument
+				DEV_VOL="$2"; shift;;
 			--disktype|--disk-type)
-				VOLUMETYPE="$2"
-				shift # past argument
-			;;
+				VOLUMETYPE="$2"; shift;;
 			--disksize|--disk-size)
-				ROOTDISKSIZE="$2"
-				shift # past argument
-			;;
+				ROOTDISKSIZE="$2"; shift;;
 			--datadisks)
-				DATADISKS="$2"
-				shift # past argument
-			;;
+				DATADISKS="$2"; shift;;
 			--direction)
-				DIRECTION="$2"
-				shift # past argument
-			;;
+				DIRECTION="$2"; shift;;
 			--portmin|--port-min)
-				PORTMIN="$2"
-				shift # past argument
-			;;
+				PORTMIN="$2"; shift;;
 			--portmax|--port-max)
-				PORTMAX="$2"
-				shift # past argument
-			;;
+				PORTMAX="$2"; shift;;
 			--protocol)
-				PROTOCOL="$2"
-				shift # past argument
-			;;
+				PROTOCOL="$2"; shift;;
 			--ethertype|--ether-type)
-				ETHERTYPE="$2"
-				shift # past argument
-			;;
+				ETHERTYPE="$2"; shift;;
 			--key-name)
-				KEYNAME="$2"
-				shift # past argument
-			;;
+				KEYNAME="$2"; shift;;
 			--bandwidth-name)
-				BANDWIDTH_NAME=$2
-				shift # past argument
-			;;
+				BANDWIDTH_NAME=$2; shift;;
 			--bandwidth)
-				BANDWIDTH=$2
-				shift # past argument
-			;;
+				BANDWIDTH=$2; shift;;
 			--wait)
-				WAIT_FOR_JOB="true"
-			;;
+				WAIT_FOR_JOB="true";;
 			--nowait)
-				WAIT_FOR_JOB="false"
-			;;
+				WAIT_FOR_JOB="false";;
 			--hard)
-				ECSACTIONTYPE="HARD"
-			;;
+				ECSACTIONTYPE="HARD";;
 			--soft)
-				ECSACTIONTYPE="SOFT"
-			;;
+				ECSACTIONTYPE="SOFT";;
 			--fixed-ip)
-				FIXEDIP=$2
-				shift
-			;;
+				FIXEDIP=$2; shift;;
 			--user-data)
-				USERDATA=$2
-				shift
-			;;
+				USERDATA=$2; shift;;
 			--user-data-file)
-				USERDATAFILE=$2
-				shift
-			;;
+				USERDATAFILE=$2; shift;;
 			--default)
-				DEFAULT=YES
-			;;
+				DEFAULT=YES;;
 			--min-disk)
-				MINDISK=$2
-				shift
-			;;
+				MINDISK=$2; shift;;
 			--min-ram)
-				MINRAM=$2
-				shift
-			;;
+				MINRAM=$2; shift;;
 			--disk-format|--diskformat)
-				DISKFORMAT=$2
-				shift
-			;;
+				DISKFORMAT=$2; shift;;
 			--os-version)
-				OSVERSION="$2"
-				shift
-			;;
+				OSVERSION="$2"; shift;;
 			--property)
 				if test -z "$PROPS"; then PROPS="$2"; else PROPS="$PROPS,$2"; fi
-				shift
-			;;
+				shift;;
 			--description)
-				DESCRIPTION="$2"
-				shift
-			;;
+				DESCRIPTION="$2"; shift;;
 			--name)
-				NAME="$2"
-				shift
-			;;
+				NAME="$2"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
-				exit 1
-			;;
+				exit 1;;
 			*)
-				break
-			;;
+				break;;
 		esac
 
-		shift # past argument or value
+		shift # next argument or value
 	done
 fi
 
@@ -3949,7 +3860,7 @@ elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ]; then
 	VPCDelete $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
-	VPCCreate
+	VPCCreate $1
 elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ]; then
 	getVPCLimits
 
@@ -4093,6 +4004,7 @@ elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ]; then
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ]; then
    echo -n ""
 elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ]; then
@@ -4384,5 +4296,6 @@ fi
 
 # Collect status for pieces that might have been performed in MAIN
 RC=$?
+if test $RC = 0 -a -n "$ERR"; then RC=$ERR; fi
 if test $RC == 0 -a -n "${PIPESTATUS[0]}"; then RC=${PIPESTATUS[0]}; fi
 exit $RC
