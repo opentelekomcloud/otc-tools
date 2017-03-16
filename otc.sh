@@ -148,10 +148,10 @@ if test -z "$TMPDIR"; then TMPDIR=/dev/shm; fi
 
 # REST call curl wrappers ###########################################################
 
-ECODE=`mktemp $TMPDIR/error.$$.XXXXXXXX`
 # Generic wrapper to facilitate debugging
 docurl()
 {
+	local ANS
 	if test -n "$DEBUG"; then
 		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
@@ -174,10 +174,15 @@ docurl()
 	fi
 	if test $RC != 0; then echo "$ANS" 1>&2
 	else
-		MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
-		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "$MSG" | tr -d '"' 1>&2; RC=42; fi
+		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
+		if test "$CODE" == "null"; then CODE=""; fi
+		local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 42; fi
+		local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
+		if test "$CODE" == "null"; then CODE=""; fi
+		local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
+		if test $? = 0 -a -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 42; fi
 	fi
-	echo "$RC" >> $ECODE
 	return $RC
 }
 
@@ -220,7 +225,7 @@ curlgetauth()
 
 curlgetauth_pag()
 {
-	URL="$2"
+	local URL="$2" HASLIM HASPAR LIM TMPF MARKPAR NOANS LASTNO
 	unset HASLIM
 	echo "$URL" | grep -q  'limit=' && HASLIM=1
 	#echo "$HASLIM $MAXGETKB $RECSZ" 1>&2
@@ -238,17 +243,20 @@ curlgetauth_pag()
 	TMPF=$(mktemp $TMPDIR/otc.sh.$$.XXXXXXXX)
 	MARKPAR=""
 	NOANS=0; LASTNO=1
+	local RC=0
 	while test $NOANS != $LASTNO -a $(($NOANS%$LIM)) == 0; do
 		LASTNO=$NOANS
 		docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
 			-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$URL$LIMPAR$MARKPAR" >>$TMPF
-		ANS=$(cat $TMPF | jq -r ".${ARRNM}[] | .${IDFIELD}")
+		if test $RC == 0; then RC=$?; fi
+		local ANS=$(cat $TMPF | jq -r ".${ARRNM}[] | .${IDFIELD}")
 		NOANS=$(echo "$ANS" | wc -l)
 		LAST=$(echo "$ANS" | tail -n1 | tr -d '"')
 		MARKPAR="&marker=$LAST"
 	done
 	cat $TMPF
 	rm $TMPF
+	return $RC
 }
 
 curldeleteauth()
@@ -317,9 +325,9 @@ curldeleteauthwithjsonparameter()
 	# $3: URI
 	TKN="$1"; shift
 	docurl -sS -X DELETE \
-	-H "Content-Type: application/json" \
-	-H "X-Language: en-us" \
-	-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq '.'
+		-H "Content-Type: application/json" \
+		-H "X-Language: en-us" \
+		-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq '.'
 }
 
 unset SUBNETAZ
@@ -331,7 +339,7 @@ unset SUBNETAZ
 # Arguments CATALOGJSON SERVICETYPE
 getcatendpoint()
 {
-	SERVICE_EP=$(echo "$1" | jq "select(.type == \"$2\") | .endpoints[].url" | tr -d '"')
+	local SERVICE_EP=$(echo "$1" | jq "select(.type == \"$2\") | .endpoints[].url" | tr -d '"')
 	if test "$SERVICE_EP" != "null"; then
 		echo "$SERVICE_EP"
 	fi
@@ -340,16 +348,16 @@ getcatendpoint()
 # Arguments: SERVICESJSON ENDPOINTSJSON SERVICETYPE PROJECTID
 getendpoint()
 {
-	SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
+	local SERVICE_ID=$(echo "$1" | jq ".services[] | select(.type == \"$3\" and .enabled == true) | .id")
 	if test -z "$SERVICE_ID"; then return; fi
-	SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID and .region == \"$OS_REGION_NAME\") | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
+	local SERVICE_EP=$(echo "$2" | jq ".endpoints[] | select(.service_id == $SERVICE_ID and .region == \"$OS_REGION_NAME\") | .url" | tr -d '"' | sed -e "s/\$(tenant_id)s/$4/g")
 	echo "$SERVICE_EP"
 }
 
 # Arguments SERVICEJSON SERVICETYPE
 getv2endpoint()
 {
-	SERVICE_EP=$(echo "$1" | jq ".access.serviceCatalog[] | select(.type == \"$2\") | .endpoints[].publicURL" | tr -d '"')
+	local SERVICE_EP=$(echo "$1" | jq ".access.serviceCatalog[] | select(.type == \"$2\") | .endpoints[].publicURL" | tr -d '"')
 	if test "$SERVICE_EP" != "null"; then
 		echo "$SERVICE_EP"
 	fi
@@ -369,7 +377,7 @@ getIAMToken()
 
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
 	BASEURL=${BASEURL%%/v[23]*}
-   REQSCOPE=${1:-project}
+   local REQSCOPE=${1:-project} TENANT PROJECT USER SCOPE
 
    # Project by ID or by Name
 	if test -n "$OS_PROJECT_ID"; then
@@ -392,7 +400,7 @@ getIAMToken()
 		SCOPE="\"scope\": { $PROJECT }"
    fi
 
-	IAM2_REQ='{
+	local IAM2_REQ='{
 			"auth": {
 				'$TENANT',
 				"passwordCredentials": {
@@ -402,7 +410,7 @@ getIAMToken()
 			}
 		}
 	'
-	IAM3_REQ='{
+	local IAM3_REQ='{
 			"auth": {
 			 "identity": {
 				"methods": [ "password" ],
@@ -418,13 +426,15 @@ getIAMToken()
 			}
 	}
 	'
-   if test -n "$OS_PROJECT_DOMAIN_NAME"; then IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },"); fi
-	export IAM2_REQ IAM3_REQ
+   if test -n "$OS_PROJECT_DOMAIN_NAME"; then 
+		IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
+	fi
 	#if test -n "$DEBUG"; then
 	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 	#fi
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
-		IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
+		local IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
+		if test $? != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP"1 >&2; exit 2; fi
 		TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 		#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
 		if test -z "$OS_PROJECT_ID"; then
@@ -442,8 +452,8 @@ getIAMToken()
 			exit 2
 		fi
 		# Parse IAM RESP catalogue
-		CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.catalog[]')
-		ROLEJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.roles[]')
+		local CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.catalog[]')
+		local ROLEJSON=$(echo "$IAMRESP" | tail -n1 | jq '.token.roles[]')
 		if test -n "$CATJSON" -a "$CATJSON" != "null"; then
 			CINDER_URL=$(getcatendpoint "$CATJSON" volumev2 $OS_PROJECT_ID)
 			NEUTRON_URL=$(getcatendpoint "$CATJSON" network $OS_PROJECT_ID)
@@ -477,8 +487,9 @@ getIAMToken()
 		if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
 		IS_OTC=0
-		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
-		IAMJSON=`echo "$IAMRESP" | tail -n1`
+		local IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
+		if test $? != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP"1 >&2; exit 2; fi
+		local IAMJSON=`echo "$IAMRESP" | tail -n1`
 		TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`
 		if test -z "$OS_PROJECT_ID"; then
 			OS_PROJECT_ID=`echo "$IAMJSON" | tail -n1 | jq -r '.access.token.tenant.id'`
@@ -573,15 +584,14 @@ getIAMToken()
 
 build_data_volumes_json()
 {
-	info_str=$1
+	local info_str=$1
 
-	DATA_VOLUMES=""
+	local DATA_VOLUMES=""
 	disks=(${info_str//,/ })
-	for disk in "${disks[@]}"
-	do
+	for disk in "${disks[@]}"; do
 		info=(${disk//:/ })
 		if test -n "$DATA_VOLUMES"; then
-			DATA_VOLUMES="$DATA_VOLUMES,";
+			DATA_VOLUMES="$DATA_VOLUMES,"
  		fi
 		DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
    	done
@@ -1003,9 +1013,9 @@ find_id()
 # Params: ARRNM Value addattr [match [attr [id]]]
 find_id_ext()
 {
-	ANM=${5:-name}
-	IDN=${6:-id}
-	if test -n "$4"; then FILT=" and .$3 == \"$4\""; fi
+	local ANM=${5:-name}
+	local IDN=${6:-id}
+	if test -n "$4"; then local FILT=" and .$3 == \"$4\""; fi
 	#echo jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" 1>&2
 	jq ".$1[] | select(.$ANM == \"$2\"$FILT) | .$IDN" | tr -d '", '
 }
@@ -1025,7 +1035,8 @@ convertSUBNETNameToId()
 	#SUBNETID=`curlgetauth $TOKEN "$AUTH_URL_SUBNETS" | jq '.subnets[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
 	#setlimit 800
 	setlimit; setapilimit 360 20 subnets
-	SUBNETS=`curlgetauth_pag $TOKEN "$AUTH_URL_SUBNETS$PARAMSTRING"`
+	local SUBNETS=`curlgetauth_pag $TOKEN "$AUTH_URL_SUBNETS$PARAMSTRING"`
+	local RC=$?
 	SUBNETID=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2"`
 	SUBNETAZ=`echo "$SUBNETS" | find_id_ext subnets "$1" "vpc_id" "$2" name availability_zone`
 	if test -z "$SUBNETID"; then
@@ -1033,6 +1044,7 @@ convertSUBNETNameToId()
 		exit 3
 	fi
 	export SUBNETID SUBNETAZ
+	return $RC
 }
 
 convertVPCNameToId()
@@ -1042,12 +1054,14 @@ convertVPCNameToId()
 	#setlimit 500
 	setlimit; setapilimit 320 20 vpcs
 	VPCID=`curlgetauth_pag $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | find_id vpcs "$1"`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$VPCID"; then
 		echo "ERROR: No VPC found by name $1" 1>&2
 		exit 3
 	fi
 	#echo $VPCID
 	export VPCID
+	return $RC
 }
 
 convertSECUGROUPNameToId()
@@ -1058,8 +1072,10 @@ convertSECUGROUPNameToId()
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test `echo "$SECUGROUP" | wc -w` -gt 1; then
 		SECUGROUP=`curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.name == "'"$1"'") | select(.vpc_id == "'"$VPCID"'") | .id' | tr -d '" ,'`
+		RC=${PIPESTATUS[0]}
 	fi
 	if test -z "$SECUGROUP"; then
 		echo "ERROR: No security-group found by name $1" 1>&2
@@ -1070,6 +1086,7 @@ convertSECUGROUPNameToId()
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
+	return $RC
 }
 
 convertIMAGENameToId()
@@ -1078,6 +1095,7 @@ convertIMAGENameToId()
 	#setlimit 800
 	setlimit; setapilimit 1600 100 images
 	IMAGE_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING" | find_id images "$1"`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
 		exit 3
@@ -1087,6 +1105,7 @@ convertIMAGENameToId()
 		echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
 	export IMAGE_ID
+	return $RC
 }
 
 convertECSNameToId()
@@ -1094,6 +1113,7 @@ convertECSNameToId()
 	#setlimit 1600
 	setlimit; setapilimit 420 40 servers id
 	ECS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
 		exit 3
@@ -1103,6 +1123,7 @@ convertECSNameToId()
 		echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
 	fi
 	export ECS_ID
+	return $RC
 }
 
 convertEVSNameToId()
@@ -1110,6 +1131,7 @@ convertEVSNameToId()
 	#setlimit 1600
 	setlimit; setapilimit 400 30 volumes
 	EVS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
 		exit 3
@@ -1119,6 +1141,7 @@ convertEVSNameToId()
 		echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
 	fi
 	export EVS_ID
+	return $RC
 }
 
 convertBackupNameToId()
@@ -1126,6 +1149,7 @@ convertBackupNameToId()
 	#setlimit 1600
 	setlimit; setapilimit 1280 30 backups
 	BACK_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_BACKS$PARAMSTRING" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$BACK_ID"; then
 		echo "ERROR: No backup found by name $1" 1>&2
 		exit 3
@@ -1135,6 +1159,7 @@ convertBackupNameToId()
 		echo "Warn: Multiple backups found by that name; using $BACK_ID" 1>&2
 	fi
 	export BACK_ID
+	return $RC
 }
 
 convertBackupPolicyNameToId()
@@ -1142,6 +1167,7 @@ convertBackupPolicyNameToId()
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
 	BACKPOL_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$BACKPOL_ID"; then
 		echo "ERROR: No backup policy found by name $1" 1>&2
 		exit 3
@@ -1151,6 +1177,7 @@ convertBackupPolicyNameToId()
 		echo "Warn: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
 	fi
 	export BACKPOL_ID
+	return $RC
 }
 
 convertSnapshotNameToId()
@@ -1158,6 +1185,7 @@ convertSnapshotNameToId()
 	#setlimit 1600
 	setlimit; setapilimit 440 30 snapshots
 	SNAP_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'`
+	local RC=${PIPESTATUS[0]}
 	if test -z "$SNAP_ID"; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
 		exit 3
@@ -1167,6 +1195,7 @@ convertSnapshotNameToId()
 		echo "Warn: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
 	fi
 	export SNAP_ID
+	return $RC
 }
 
 handleCustom()
@@ -1210,7 +1239,7 @@ handleCustom()
 			;;
 	esac
 	if test -z "$JQFILTER"; then echo; fi
-	return $RC
+	return ${PIPESTATUS[0]}
 }
 
 
@@ -1218,7 +1247,10 @@ getECSVM()
 {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'
+	local RC=${PIPESTATUS[0]}
+	if test $RC != 0; then return $RC; fi
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getShortECSList()
@@ -1227,6 +1259,7 @@ getShortECSList()
 	#setlimit 1600
 	setlimit; setapilimit 420 40 servers id
 	curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq -r  '.servers[] | .id+"   "+.name'
+	return ${PIPESTATUS[0]}
 }
 
 getECSList()
@@ -1235,6 +1268,7 @@ getECSList()
 	#setlimit 1200
 	setlimit; setapilimit 2000 40 servers id
 	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
+	return ${PIPESTATUS[0]}
 }
 
 getECSDetails()
@@ -1250,35 +1284,41 @@ getECSDetails()
 	else
 		curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[]'
 	fi
+	return ${PIPESTATUS[0]}
 }
 
 getECSDetail()
 {
 	getECSDetails "$1" | jq '{VM: .name, ID: .id, Detail: .}'
+	return ${PIPESTATUS[0]}
 }
 
 getECSDetailsNew()
 {
-	RESP=$(getECSDetails "$1")
+	local RESP=$(getECSDetails "$1")
 	echo "# VMID                                       name          status      AZ      SSHKeyName    Flavor      Image     Volumes   Nets   SGs"
 	echo "$RESP" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; def vol(v): [v[]|{volid:.id}]|[.[].volid]|tostring; def sg(s): [s[]|{sgid:.name}]|[.[].sgid]|tostring; {id: .id, name: .name, status: .status, az: .["OS-EXT-AZ:availability_zone"], flavor: .flavor.id, sshkey: .key_name, addr: .addresses, image: .image.id, volume: .["os-extended-volumes:volumes_attached"], sg: .security_groups } | .id + "   " + .name + "   " + .status + "   " + .az + "   " + .sshkey + "   " + .flavor + "   " + .image + "   " + vol(.volume) + "   " + adr(.addr) + "   " + sg(.sg)' | arraytostr
 	# TODO: Volume IDs into names, SG names
 	# Add FloatingIP info
+	return ${PIPESTATUS[0]}
 }
 
 getLimits()
 {
 	curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/limits" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 getAZList()
 {
 	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone" | jq  '.availabilityZoneInfo[] | {znm: .zoneName, avl: .zoneState.available} | .znm' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getAZDetail()
 {
 	curlgetauth $TOKEN "$NOVA_URL/os-availability-zone/$1" | jq  '.'
+	return ${PIPESTATUS[0]}
 }
 
 
@@ -1288,24 +1328,29 @@ getVPCList()
 	setlimit; setapilimit 320 20 vpcs
 	curlgetauth_pag $TOKEN "$AUTH_URL_VPCS$PARAMSTRING" | jq -r '.vpcs[] | {id: .id, name: .name, status: .status, cidr: .cidr} | .id +"   " +.name    +"   " +.status   +"   " +.cidr  '
 #| python -m json.tool
+	return ${PIPESTATUS[0]}
 }
 
 getVPCDetail()
 {
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_VPCS/$VPCID" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 VPCDelete()
 {
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID"
+	local RC=$?
 	echo
+	return $RC
 }
 
 getVPCLimits()
 {
 	curlgetauth $TOKEN "${AUTH_URL_VPCS%vpcs}quotas" | jq -r 'def str(s): s|tostring; .quotas.resources[] | .type+"   "+str(.used)+"/"+str(.quota)'
+	return ${PIPESTATUS[0]}
 }
 
 getPUBLICIPSList()
@@ -1314,11 +1359,13 @@ getPUBLICIPSList()
 	#setlimit 500
 	setlimit; setapilimit 400 30 publicips
 	curlgetauth_pag $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getPUBLICIPSDetail()
 {
 	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 getSECGROUPListDetail()
@@ -1326,6 +1373,7 @@ getSECGROUPListDetail()
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getSECGROUPList()
@@ -1333,11 +1381,13 @@ getSECGROUPList()
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getSECGROUPRULESListOld()
 {
 	curlgetauth $TOKEN "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getSECGROUPRULESList()
@@ -1346,26 +1396,29 @@ getSECGROUPRULESList()
 	#setlimit 800
 	setlimit; setapilimit 4000 40 security_groups
 	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | select(.id == "'$SECUGROUP'")'
+	return ${PIPESTATUS[0]}
 }
 
 SECGROUPCreate()
 {
 	if test -z "$SECUGROUPNAME" -a -n "$1"; then SECUGROUPNAME="$1"; fi
 	if test -n "$VPCID"; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
-	REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON } }"
+	local REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON } }"
 	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 SECGROUPDelete()
 {
 	if ! is_uuid "$1"; then convertSECUGROUPNameToId "$1"; else SECUGROUP="$1"; fi
 	curldeleteauth "$TOKEN" "$NEUTRON_URL/v2.0/security-groups/$SECUGROUP"
+	#return $?
 }
 
 SECGROUPRULECreate()
 {
-	REQ_CREATE_SECGROUPRULE='{
+	local REQ_CREATE_SECGROUPRULE='{
 		"security_group_rule": {
 			"direction":"'"$DIRECTION"'",
 			"port_range_min":"'"$PORTMIN"'",
@@ -1377,9 +1430,9 @@ SECGROUPRULECreate()
 	}'
 	#{"security_group_rule":{ "direction":"'"$DIRECTION"'", "port_range_min":"'"$PORTMIN"'", "ethertype":"'"$ETHERTYPE"'", "port_range_max":"'"$PORTMAX"'", "protocol":"'"$PROTOCOL"'", "remote_group_id":"'"$REMOTEGROUPID"'", "security_group_id":"'"$SECUGROUPID"'" } }
 	#{"security_group_rule":{ "direction":"ingress", "port_range_min":"80", "ethertype":"IPv4", "port_range_max":"80", "protocol":"tcp", "remote_group_id":"85cc3048-abc3-43cc-89b3-377341426ac5", "security_group_id":"a7734e61-b545-452d-a3cd-0189cbd9747a" } }
-	export REQ_CREATE_SECGROUPRULE
 	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUPRULE 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUPRULE" "$AUTH_URL_SEC_GROUP_RULES" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getEVSListOTC()
@@ -1388,6 +1441,7 @@ getEVSListOTC()
 	#setlimit 1200
 	setlimit; setapilimit 2400 30 volumes
 	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES/detail$PARAMSTRING" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getEVSList()
@@ -1396,6 +1450,7 @@ getEVSList()
 	setlimit; setapilimit 400 30 volumes
 	curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/details?limit=1200" | jq '.volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az ' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getEVSDetail()
@@ -1403,6 +1458,7 @@ getEVSDetail()
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1200" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
+	return ${PIPESTATUS[0]}
 }
 
 getSnapshotList()
@@ -1410,18 +1466,21 @@ getSnapshotList()
 	#setlimit 1200
 	setlimit; setapilimit 440 30 snapshots
 	curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+	return ${PIPESTATUS[0]}
 }
 
 getSnapshotDetail()
 {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot'
+	return ${PIPESTATUS[0]}
 }
 
 deleteSnapshot()
 {
 	if ! is_uuid "$1"; then convertSnapshotNameToId "$1"; else SNAP_ID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 getBackupPolicyList()
@@ -1429,6 +1488,7 @@ getBackupPolicyList()
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
 	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | {id: .backup_policy_id, name: .backup_policy_name, status: .scheduled_policy.status} | .id+"   "+.name+"   "+.status' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getBackupPolicyDetail()
@@ -1437,6 +1497,7 @@ getBackupPolicyDetail()
 	setlimit; setapilimit 320 40 backup_policies
 	if ! is_uuid "$1"; then filter=".name = \"$1\""; else filter=".id = \"$1\""; fi
 	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq ".backup_policies[] | select($filter)"
+	return ${PIPESTATUS[0]}
 }
 # TODO: More backup policy stuff
 
@@ -1446,12 +1507,14 @@ getBackupList()
 	#setlimit 1200
 	setlimit; setapilimit 1280 30 backups
 	curlgetauth_pag $TOKEN "$AUTH_URL_BACKS/detail$PARAMSTRING" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+	return ${PIPESTATUS[0]}
 }
 
 getBackupDetail()
 {
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup'
+	return ${PIPESTATUS[0]}
 }
 
 deleteBackupOTC()
@@ -1460,8 +1523,8 @@ deleteBackupOTC()
 	#curldeleteauth $TOKEN "$AUTH_URL_CBACKUPS/$BACK_ID" | jq '.'
 	BACKUP=$(curlpostauth $TOKEN "" "$AUTH_URL_CBACKUPS/$BACK_ID")
 	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
-        if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
-        WaitForTask $TASKID
+	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
+	WaitForTask $TASKID
 }
 
 deleteBackup()
@@ -1469,9 +1532,9 @@ deleteBackup()
 	# TODO: Should we delete an associated snapshot as well that might have been
 	# created via the cloudbackups OTC service API along with the backup?
 	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
-	SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup.container' | tr -d '"')
+	local SNAP_ID=$(curlgetauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.backup.container' | tr -d '"')
 	if test -n "$SNAP_ID" -a "$SNAP_ID" != "null"; then
-		SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot.name' | tr -d '"')
+		local SNAP_NAME=$(curlgetauth $TOKEN "$AUTH_URL_SNAPS/$SNAP_ID" | jq '.snapshot.name' | tr -d '"')
 		if test -n "$SNAP_NAME" -a "$SNAP_NAME" != "null"; then
 			if test "${SNAP_NAME:0:17}" = "autobk_snapshot_2"; then
 				echo "Also deleting autogenerated container/snapshot $SNAP_ID ($SNAP_NAME)" 1>&2
@@ -1482,6 +1545,7 @@ deleteBackup()
 		fi
 	fi
 	curldeleteauth $TOKEN "$AUTH_URL_BACKS/$BACK_ID" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 createBackup()
@@ -1489,9 +1553,9 @@ createBackup()
 	if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
 	if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
 	if test -z "$NAME"; then NAME="Backup-$1"; fi
-	REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
+	local REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
 	if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
-	BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
+	local BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
 	TASKID=$(echo "$BACKUP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" ')
 	if test -z "$TASKID" -o "$TASKID" = "null"; then echo "ERROR: $BACKUP" 2>&1; exit 2; fi
 	echo "Not waiting for backup, use otc task show $TASKID to monitor (but wait for backup_id)"
@@ -1501,9 +1565,10 @@ createBackup()
 restoreBackup()
 {
 	if test -z "$2"; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
-	REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
+	local REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
 	#echo
+	return ${PIPESTATUS[0]}
 }
 
 getSUBNETList()
@@ -1512,12 +1577,14 @@ getSUBNETList()
 	#setlimit 800
 	setlimit; setapilimit 360 20 subnets
 	curlgetauth_pag $TOKEN  "$AUTH_URL_SUBNETS$PARAMSTRING" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getSUBNETDetail()
 {
 	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 SUBNETDelete()
@@ -1525,30 +1592,34 @@ SUBNETDelete()
 	if test -z "$VPCID"; then echo "ERROR: Need to specify --vpc-name/-id" 1>&2; exit 2; fi
 	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_VPCS/$VPCID/subnets/$SUBNETID"
+	local RC=$?
 	echo
+	return $RC
 }
 
 getRDSInstanceList()
 {
 	#setlimit 500
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSAllInstanceDetailsImpl()
 {
 	#setlimit 500
 	curlgetauth $TOKEN "${AUTH_URL_RDS_DOMAIN}/instances" | jq -r '.instances[]'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSInstanceDetailsImpl()
 {
 	local instanceid
-	for instanceid in $*
-	do
+	for instanceid in $*; do
 		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.instance'
 	done
+	return ${PIPESTATUS[0]}
 }
 
 getRDSInstanceDetails()
@@ -1560,23 +1631,23 @@ getRDSInstanceDetails()
 getRDSDatastoreDetails()
 {
 	local datastore_name
-	for datastore_name in $*
-	do
+	for datastore_name in $*; do
 		local URI="${AUTH_URL_RDS_DOMAIN}/datastores/${datastore_name}/versions"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.dataStores[]'
 	done
+	return ${PIPESTATUS[0]}
 }
 
 getRDSDatastoreParameters()
 {
 	local datastore_version_id
-	for datastore_version_id in $*
-	do
+	for datastore_version_id in $*; do
 		local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
+	return ${PIPESTATUS[0]}
 }
 
 getRDSDatastoreParameterImpl()
@@ -1586,6 +1657,7 @@ getRDSDatastoreParameterImpl()
 	local URI="${AUTH_URL_RDS_PROJECT}/datastores/versions/${datastore_version_id}/parameters/${parameter_name}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSDatastoreParameter()
@@ -1598,15 +1670,16 @@ getRDSAPIVersionList()
 {
 	curlgetauth $TOKEN "${AUTH_URL_RDS}/" | \
 		jq -r  '.versions[] | {id: .id, status: .status, updated: .updated} | .id+" "+.status+" "+.updated'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSAPIDetails()
 {
 	local api_id
-	for api_id in $*
-	do
+	for api_id in $*; do
 		curlgetauth $TOKEN "${AUTH_URL_RDS}/${api_id}" | jq .versions[]
 	done
+	return ${PIPESTATUS[0]}
 }
 
 getRDSFlavorList()
@@ -1618,16 +1691,17 @@ getRDSFlavorList()
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
 	#\ jq -r  '.instances[] | {id: .id, name: .name, type: .type} | .id + "   " + .name + " " + .type'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSFlavorDetails()
 {
-	for flavorid in $*
-	do
+	for flavorid in $*; do
 		local URI="${AUTH_URL_RDS_DOMAIN}/flavors/${flavorid}"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.flavor'
 	done
+	return ${PIPESTATUS[0]}
 }
 
 createRDSInstanceImpl()
@@ -1639,6 +1713,7 @@ createRDSInstanceImpl()
 	#echo "Parameter: $*"
 	#echo "URI: $URI"
 	curlpostauth $TOKEN "$*" "$URI" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 createRDSInstance()
@@ -1646,8 +1721,7 @@ createRDSInstance()
 	local rds_parameters="",zwerg;
 	if [ $# -eq 0 ]; then
 		# no parameter file given, read from stdin
-		while read zwerg
-		do
+		while read zwerg; do
 			rds_parameters.="$zwerg"
 		done
 	else
@@ -1680,12 +1754,12 @@ deleteRDSInstance()
 getRDSInstanceBackupPolicy()
 {
 	local instanceid
-	for instanceid in $*
-	do
+	for instanceid in $*; do
 		local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}/backups/policy"
 		#echo "URI: $URI"
 		curlgetauth $TOKEN "$URI" | jq -r '.[]'
 	done
+	return ${PIPESTATUS[0]}
 }
 
 getRDSSnapshots()
@@ -1693,6 +1767,7 @@ getRDSSnapshots()
 	local URI="${AUTH_URL_RDS_PROJECT}/backups"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 printHelpQueryRDSErrorLogs()
@@ -1733,6 +1808,7 @@ getRDSErrorLogsImpl()
 	URI+="&perPage=${perPage}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.errorLogList[]| "\(.datetime) \(.content)"'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSErrorLogs()
@@ -1751,6 +1827,7 @@ getRDSSlowStatementLogsImpl()
 	URI+="&top=${top}"
 	#echo "URI: $URI"
 	curlgetauth $TOKEN "$URI" | jq -r '.slowLogList[]'
+	return ${PIPESTATUS[0]}
 }
 
 getRDSSlowStatementLogs()
@@ -1776,6 +1853,7 @@ createRDSSnapshotImpl()
 	#echo "URI: $URI"
 	#echo "REQ: $REQ"
 	curlpostauth $TOKEN "$REQ" "$URI" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 createRDSSnapshot()
@@ -1790,9 +1868,11 @@ deleteRDSSnapshot()
 		local backupId=$1
 		local URI="${AUTH_URL_RDS_PROJECT}/backups/${backupId}"
 		curldeleteauth_language $TOKEN $URI | jq .
+		RC=${PIPESTATUS[0]}
 	else
 		echo "ERROR: Please specify snapshot/backup id to delete" 1>&2
 	fi
+	return $RC
 }
 
 listDomains()
@@ -1801,6 +1881,7 @@ listDomains()
 	#setlimit; setapilimit 500 100 zones
 	#curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r '.'
 	curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r 'def str(s): s|tostring; .zones[] | .id+"   "+.name+"   "+.status+"   "+.zone_type+"   "+str(.ttl)+"   "+str(.record_num)+"   "+.description'
+	return ${PIPESTATUS[0]}
 }
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
@@ -1809,23 +1890,26 @@ createDomain()
 	if test "${1: -1:1}" != "."; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
-	REQ="{ \"name\": \"$1\""
+	local REQ="{ \"name\": \"$1\""
 	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
 	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
 	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
 	if test -n "$5"; then REQ="$REQ, \"ttl\": $5"; fi
 	REQ="$REQ }"
 	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS | jq .
+	return ${PIPESTATUS[0]}
 }
 
 showDomain()
 {
 	curlgetauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+	return ${PIPESTATUS[0]}
 }
 
 deleteDomain()
 {
 	curldeleteauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+	return ${PIPESTATUS[0]}
 }
 
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
@@ -1845,20 +1929,22 @@ addRecord()
 	if test "${2: -1:1}" != "."; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
-	REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
+	local REQ="{ \"name\": \"$2\", \"type\": \"$3\", \"ttl\": $4"
 	if test -n "$6"; then REQ="$REQ, \"description\": \"$6\""; fi
-	OLDIFS="$IFS"
-	VLAS=""
+	local OLDIFS="$IFS"
+	local VALS=""
 	IFS=","
 	for val in $5; do VALS="$VALS \"$val\","; done
 	IFS="$OLDIFS"
 	REQ="$REQ, \"records\": [ ${VALS%,} ] }"
 	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$1/recordsets | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 showRecord()
 {
 	curlgetauth $TOKEN $AUTH_URL_DNS/$1/recordsets/$2 | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 listRecords()
@@ -1869,18 +1955,20 @@ listRecords()
 	else
 		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	fi
+	return ${PIPESTATUS[0]}
 }
 
 deleteRecord()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
+	return ${PIPESTATUS[0]}
 }
 
 # concatenate array using $1 as concatenation token
 concatarr()
 {
-	ans=""
-	delim="$1"
+	local ans=""
+	local delim="$1"
 	shift
 	for str in "$@"; do
 		ans="$ans$delim$str"
@@ -1890,12 +1978,13 @@ concatarr()
 
 getIMAGEList()
 {
-	IMAGE_FILTER=$(concatarr "&" "$@")
+	local IMAGE_FILTER=$(concatarr "&" "$@")
 	IMAGE_FILTER="${IMAGE_FILTER// /%20}"
 	#setlimit 800
 	setlimit; setapilimit 1600 100 images
    if test -z "$PARAMSTRING" -a -n "$IMAGE_FILTER"; then IMAGE_FILTER="?${IMAGE_FILTER:1}"; fi
 	curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getIMAGEDetail()
@@ -1903,6 +1992,7 @@ getIMAGEDetail()
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"| jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 registerIMAGE()
@@ -1913,11 +2003,11 @@ registerIMAGE()
 	if test -z "$MINRAM"; then MINRAM=1024; fi
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
 	if test -z "$DISKFORMAT" -o "$DISKFORMAT" = "zvhd"; then DISKFORMAT="vhd"; fi
-	unset OSVJSON
+	local OSVJSON=""
 	if test -n "$OSVERSION"; then OSVJSON="\"os_version\": \"$OSVERSION\","; fi
-	OLDIFS="$IFS"; IFS=","
+	local OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
-		val="${prop##*=}"
+		local val="${prop##*=}"
 		case $val in
 			[0-9]*|false|False|true|True)
 				pstr=`echo "$prop" | sed 's/^_*\([^=]*\)=\(.*\)$/"\1": \2/'`
@@ -1929,7 +2019,7 @@ registerIMAGE()
 		OSVJSON="$OSVJSON $pstr,"
 	done < <( echo "$PROPS")
 	IFS="$OLDIFS"
-	REQ="{ $OSVJSON  \"min_disk\": $MINDISK, \"min_ram\": $MINRAM,
+	local REQ="{ $OSVJSON  \"min_disk\": $MINDISK, \"min_ram\": $MINRAM,
 		\"disk_format\": \"$DISKFORMAT\", \"name\": \"$1\", \"image_url\": \"$2\" }"
 	IMGTASKID=`curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 150
@@ -1942,11 +2032,11 @@ createIMAGE()
 	if test -z "$MINRAM"; then MINRAM=1024; fi
 	if test -n "$1"; then IMAGENAME="$1"; fi
 	if test -z "$IMAGENAME"; then echo "ERROR: Need to specify NAME with --image-name" 1>&2; exit 2; fi
-	unset OSVJSON
+	local OSVJSON=""
 	if test -n "$OSVERSION"; then OSVJSON="\"__os_version\": \"$OSVERSION\","; fi
-	OLDIFS="$IFS"; IFS=","
+	local OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
-		val="${prop##*=}"
+		local val="${prop##*=}"
 		case $val in
 			[0-9]*|false|False|true|True)
 				pstr=`echo "$prop" | sed 's/^\([^=]*\)=\(.*\)$/"\1": \2/'`
@@ -1960,21 +2050,24 @@ createIMAGE()
 	IFS="$OLDIFS"
 	if test -z "$INSTANCE_ID"; then
 		# Create fresh image
-		REQ="{ $OSVJSON  \"container_format\": \"bare\",
+		local REQ="{ $OSVJSON  \"container_format\": \"bare\",
 			\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 			\"min_ram\": $MINRAM, \"name\": \"$IMAGENAME\",
 			\"visibility\": \"private\", \"protected\": false }"
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
+		return ${PIPESTATUS[0]}
 	else
 		# Create VM snapshot image
-		REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
+		local REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
-		RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.')
+		local RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.')
+		RC=${PIPESTATUS[0]}
 		echo "$RESP"
 		IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 		IMGID=`WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 120 | tail -n1`
 		if is_uuid "$IMGID"; then getIMAGEDetail $IMGID; fi
+		return $RC
 	fi
 }
 
@@ -1982,12 +2075,13 @@ deleteIMAGE()
 {
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"
+	#return $?
 }
 
 uploadIMAGEobj()
 {
 	# The image upload via s3 bucket has been moved to v1 endpoint
-	ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
+	local ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
 	# Fall back to intermediate solution which abused the v2 OpenStack API
 	case "$ANS" in
 	*"Api does not exist"*)
@@ -1997,28 +2091,32 @@ uploadIMAGEobj()
 		echo "$ANS"
 		;;
 	esac
+	#return $?
 }
 
 uploadIMAGEfile()
 {
-	sz=$(stat -c "%s" "$2")
+	local sz=$(stat -c "%s" "$2")
 	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
 	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file"
+	#return $?
 }
 
 IMGJOBID=""
 downloadIMAGE()
 {
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
-	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
+	local IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
+	RC=$?
 	echo "$IMSANS"
 	IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	return $RC
 }
 
 updateIMAGE()
 {
 	# FIXME: This only updates one single value at a time, could be optimized a lot
-	OLDIFS="$IFS"; IFS=","
+	local OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "${prop%%=*}" "${prop#*=}" "application/openstack-images-v2.1-json-patch"
 	done
@@ -2033,40 +2131,46 @@ updateIMAGE()
 	if test -n "$IMAGENAME"; then
 		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
 	fi
+	#return $?
 }
 
 getImgMemberList()
 {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
+	return ${PIPESTATUS[0]}
 }
 
 getImgMemberDetail()
 {
 	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 ImgMemberCreate()
 {
 	curlpostauth $TOKEN "{ \"member\": \"$2\" }" "$AUTH_URL_IMAGES/$1/members" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 ImgMemberDelete()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2"
+	#return $?
 }
 
 ImgMemberAccept()
 {
-	PRJ=${2:-$OS_PROJECT_ID}
+	local PRJ=${2:-$OS_PROJECT_ID}
 	curlputauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 ImgMemberReject()
 {
-	PRJ=${2:-$OS_PROJECT_ID}
+	local PRJ=${2:-$OS_PROJECT_ID}
 	curlputauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
-
 
 
 getFLAVORListOld()
@@ -2074,6 +2178,7 @@ getFLAVORListOld()
 	#setlimit 500
 	setlimit; setapilimit 720 30 flavors
 	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getFLAVORList()
@@ -2082,6 +2187,7 @@ getFLAVORList()
 	#setlimit 500
 	setlimit; setapilimit 720 30 flavors
 	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getKEYPAIRList()
@@ -2090,48 +2196,59 @@ getKEYPAIRList()
 	#setlimit 800
 	setlimit; setapilimit 1080 40 keypairs
 	curlgetauth_pag $TOKEN "$AUTH_URL_KEYNAMES$PARAMSTRING" | jq '.keypairs[] | .keypair | .name+"   "+.fingerprint' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getKEYPAIR()
 {
 	curlgetauth $TOKEN "$AUTH_URL_KEYNAMES/$1" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 createKEYPAIR()
 {
+	local PKEY=""
 	if test -n "$2"; then PKEY="\"public_key\": \"$2\", "; fi
 	curlpostauth $TOKEN "{ \"keypair\": { $PKEY \"name\": \"$1\" } }" "$AUTH_URL_KEYNAMES" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteKEYPAIR()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_KEYNAMES/$1"
+	#return $?
 }
 
 det_StackID()
 {
 	if [[ "$1" = */* ]]; then STACK=$1
 	elif is_uuid "$1"; then
-		NAME=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.id == \"$1\") | .stack_name")
+		local NAME=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.id == \"$1\") | .stack_name")
+		RC=${PIPESTATUS[0]}
 		if test -z "$NAME" -o "$NAME" = "null"; then echo "ERROR: No stack found by this ID $1" 1>&2; exit 1; fi
 		STACK="$NAME/$1"
 	else
-		ID=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.stack_name == \"$1\") | .id")
+		local ID=$(curlgetauth $TOKEN $HEAT_URL/stacks | jq -r ".stacks[] | select(.stack_name == \"$1\") | .id")
+		RC=${PIPESTATUS[0]}
 		if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No stack found by this NAME $1" 1>&2; exit 1; fi
 		STACK="$1/$ID"
 	fi
+	export STACK
+	return $RC
 }
 
 # HEAT
 listStacks()
 {
 	curlgetauth $TOKEN $HEAT_URL/stacks | jq -r '.stacks[] | .id+"   "+.stack_name+"   "+.stack_status+"   "+.description' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 showStack()
 {
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listStackSnapshots()
@@ -2139,51 +2256,60 @@ listStackSnapshots()
 	# Not supported on OTC 2.0
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/snapshots | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listStackResources()
 {
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources | jq -r 'def str(s): s|tostring; .resources[] | .physical_resource_id+"   "+.resource_name+"   "+.resource_status+"   "+.resource_type+"   "+.logical_resource_id+"   "+str(.required_by)'
+	return ${PIPESTATUS[0]}
 }
 
 showStackResource()
 {
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/resources/$2 | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listStackEvents()
 {
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/events | jq -r 'def str(s): s|tostring; .events[] | .id+"   "+.resource_name+"   "+.resource_status+"   "+.event_time+"   "+.logical_resource_id+"   "+.physical_resource_id'
+	return ${PIPESTATUS[0]}
 }
 
 showStackTemplate()
 {
 	det_StackID $1
 	curlgetauth $TOKEN $HEAT_URL/stacks/$STACK/template | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listStackResTypes()
 {
 	curlgetauth $TOKEN $HEAT_URL/resource_types | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 showStackBuildInfo()
 {
 	curlgetauth $TOKEN $HEAT_URL/build_info | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listStackDeployments()
 {
 	# TODO: Add parsing ....
 	curlgetauth $TOKEN $HEAT_URL/software_deployments | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 showStackDeployment()
 {
 	curlgetauth $TOKEN $HEAT_URL/software_deployments/$1 | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 createELB()
@@ -2193,8 +2319,8 @@ createELB()
 	if test -n "$1"; then VPCID=$1; fi
 	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
-	ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
-	DEFNAME="ELB-$BANDWIDTH"
+	local ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
+	local DEFNAME="ELB-$BANDWIDTH"
 	if  test -n "$SUBNETID" -o -n "$SUBNETNAME"; then
 		if [ -n "$SUBNETNAME" -a -z "$SUBNETID" ]; then
 			convertSUBNETNameToId $SUBNETNAME $VPCID
@@ -2238,8 +2364,8 @@ createELB()
 	if test -z "$NAME"; then
 		if test -z "$INSTANCE_NAME"; then NAME="$DEFNAME"; else NAME="$INSTANCE_NAME"; fi
 	fi
-	ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-	export ELBJOBID
+	export ELBJOBID=`curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"description\": \"LB\", \"vpc_id\": \"$VPCID\", $ELBTYPE, \"admin_state_up\": 1 }" "$AUTH_URL_ELB_LB" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	return ${PIPESTATUS[0]}
 }
 
 getELBList()
@@ -2248,18 +2374,19 @@ getELBList()
 	#setlimit 500
 	setlimit; setapilimit 500 40 loadbalancers
 	curlgetauth_pag $TOKEN "$AUTH_URL_ELB_LB$PARAMSTRING" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+.vip_address+"   "+.vpc_id' | tr -d '"'
-
+	return ${PIPESTATUS[0]}
 }
 
 getELBDetail()
 {
 	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteELB()
 {
-	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
-	export ELBJOBID
+	export ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	return ${PIPESTATUS[0]}
 }
 
 getListenerList()
@@ -2267,55 +2394,61 @@ getListenerList()
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
 	# TODO limits?
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.loadbalancer_id' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getListenerDetail()
 {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[] | select(.id = "$2")'
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteListener()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/listeners/$1"
+	#return $?
 }
 
 # echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
 createListener()
 {
-	ALG="$5"
-	BEPROTO="$6"
-	BEPORT=$7
+	local ALG="$5"
+	local BEPROTO="$6"
+	local BEPORT=$7
 	if test -z "$ALG"; then ALG="source"; fi
 	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
 	if test -z "$BEPORT"; then BEPORT=$4; fi
 	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then STICKY="\"session_sticky\": \"true\", "; fi
 	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
-
+	return ${PIPESTATUS[0]}
 }
 
 #echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
 createCheck()
 {
-	HTHR="$6"
-	UTHR="$7"
+	local HTHR="$6"
+	local UTHR="$7"
 	if test -z "$HTHR"; then HTHR=3; fi
 	if test -z "$UTHR"; then UTHR=$HTHR; fi
-	URI="$8"
+	local URI="$8"
 	if test "$2" = "HTTP" -o "$2" = "HTTPS" && test -z "$URI"; then URI="/"; fi
 	if test -n "$URI"; then URI="\"healthcheck_uri\": \"$URI\", "; fi
 
 	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 deleteCheck()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1"
+	#return $?
 }
 
 getCheck()
 {
 	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 #   echo "otc elb listmember <lid>"
@@ -2324,11 +2457,13 @@ getMemberList()
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq '.'
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status+"   "+str(.listeners)' | tr -d '"'
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status' | tr -d '"'
+	return ${PIPESTATUS[0]}
 }
 
 getMemberDetail()
 {
 	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq ".[] | select(.id == \"$2\")"
+	return ${PIPESTATUS[0]}
 }
 
 #   echo "otc elb addmember <lid> <vmid> <vmip>"
@@ -2336,6 +2471,7 @@ createMember()
 {
 	curlpostauth $TOKEN "[ { \"server_id\": \"$2\", \"address\": \"$3\" } ]" "$AUTH_URL_ELB/listeners/$1/members"
 	#TODO JOB_ID ...
+	#return $?
 }
 
 #   echo "otc elb delmember <lid> <mid> <addr>"
@@ -2343,6 +2479,7 @@ deleteMember()
 {
 	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$2\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$1/members/action"
 	#TODO JOB_ID ...
+	#return $?
 }
 
 getECSJOBList()
@@ -2353,22 +2490,23 @@ getECSJOBList()
 	fi
 	#curlgetauth $TOKEN "$AUTH_URL_ECS_JOB/$1"
 
-	ECSJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
+	export ECSJOBSTATUSJSON=`curlgetauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"`
+	RC=$?
 	#echo $ECSJOBSTATUSJSON
-	ECSJOBSTATUS=`echo $ECSJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
+	export ECSJOBSTATUS=`echo $ECSJOBSTATUSJSON| jq '.status'|head -n 1 |cut -d':' -f 2 | tr -d '"'| tr -d ' '`
 
-	export ECSJOBSTATUS
+	return $RC
 }
 
 getFileContentJSON()
 {
-	INJECTFILE=$1
+	local INJECTFILE=$1
 	if [ "$INJECTFILE" != "" ]; then
 		IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
-		FILENAME_NAME=${FILE_AR[1]}
-		TARGET_FILENAME=${FILE_AR[0]}
-		FILECONTENT=$( base64 "$FILENAME_NAME" )
-		FILE_TEMPLATE='{ "path": "'"$TARGET_FILENAME"'", "contents": "'"$FILECONTENT"'" }'
+		local FILENAME_NAME=${FILE_AR[1]}
+		local TARGET_FILENAME=${FILE_AR[0]}
+		local FILECONTENT=$( base64 "$FILENAME_NAME" )
+		local FILE_TEMPLATE='{ "path": "'"$TARGET_FILENAME"'", "contents": "'"$FILECONTENT"'" }'
 
 		export FILEJSONITEM="$FILE_TEMPLATE"
 	fi
@@ -2376,6 +2514,7 @@ getFileContentJSON()
 
 getPersonalizationJSON()
 {
+	local FILECOLLECTJSON=""
 	if [ "$FILE1" != "" ]; then
 		getFileContentJSON $FILE1
 		FILECOLLECTIONJSON="$FILEJSONITEM"
@@ -2443,6 +2582,7 @@ ECSAttachVolumeId()
             }
 	}'
 	curlpostauth "$TOKEN" "$req" "$AUTH_URL_ECS_CLOUD/$server_id/attachvolume" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 ECSDetachVolumeListName()
@@ -2478,13 +2618,14 @@ ECSDetachVolumeId()
 		exit 2
 	fi
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_CLOUD/$server_id/detachvolume/$volume" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 ECSAttachPort()
 {
 	ECS_ID=$1; shift
 	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
-	unset PORTSPEC
+	local PORTSPEC=""
 	if test "$1" == "--port-id"; then PORTSPEC="\"port_id\": \"$2\""; shift; shift
 	elif test "${1:0:10}" == "--port-id="; then PORTSPEC="\"port_id\": \"${1:10}\""; shift
 	elif is_uuid "$1"; then PORTSPEC="\"port_id\": \"$1\""; shift
@@ -2495,21 +2636,23 @@ ECSAttachPort()
 	if test "$1" == "--fixed-ip"; then PORTSPEC="$PORTSPEC, \"fixed_ips\": { [ \"ip_address\": \"$2\" ] }"; shift; shift
 	elif test "${1:0:11}" == "--fixed-ip="; then PORTSPEC="$PORTSEPC, \"fixed_ips\": { [ \"ip_address\": \"${1:11}\" ] }"; shift
 	fi
-	REQ="{ \"interfaceAttachment\": { $PORTSPEC } }"
+	local REQ="{ \"interfaceAttachment\": { $PORTSPEC } }"
 	curlpostauth "$TOKEN" "$REQ" $AUTH_URL_ECS/$ECS_ID/os-interface | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 ECSDetachPort()
 {
 	ECS_ID=$1; shift
 	if ! is_uuid "$ECS_ID"; then convertECSNameToId "$ECS_ID"; fi
-	unset PORT
+	local PORT=""
 	if test "$1" == "--port-id"; then PORT=$2; shift; shift
 	elif test "${1:0:10}" == "--port-id="; then PORT=${1:10}; shift
 	elif is_uuid "$1"; then PORT=$1; shift
 	else echo "WARN: Need --port-id, got \"$@\"" 1>&2
 	fi
 	curldeleteauth "$TOKEN" $AUTH_URL_ECS/$ECS_ID/os-interface/$PORT | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 ECSCreate()
@@ -2538,7 +2681,7 @@ ECSCreate()
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
-	OPTIONAL=""
+	local OPTIONAL=""
 	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
 		# TODO: have to got from param
 		OPTIONAL="$OPTIONAL
@@ -2565,18 +2708,18 @@ ECSCreate()
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
-	SECUGROUPIDS=""
+	local SECUGROUPIDS=""
 	for id in ${SECUGROUP//,/ }; do
 		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
 	done
 	SECUGROUPIDS="${SECUGROUPIDS%,}"
 
-	FIXEDIPJSON=""
+	local FIXEDIPJSON=""
 	if test -n "$FIXEDIP"; then
 		FIXEDIPJSON=", \"ip_address\": \"$FIXEDIP\""
 	fi
 	# TODO: Support both/multiple user data pieces
-	USERDATAJSON=""
+	local USERDATAJSON=""
 	if test -n "$USERDATA"; then
 		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
@@ -2591,7 +2734,7 @@ ECSCreate()
 		DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
 	fi
 	# multi-NIC
-	MORENICS=""
+	local MORENICS=""
 	if test -n "MORESUBNETS"; then
 		SUBNETIDOLD="$SUBNETID"
 		OLDIFS="$IFS"; IFS=","
@@ -2609,7 +2752,7 @@ ECSCreate()
 		SUBNETID="$SUBNETIDOLD"
 	fi
 
-	REQ_CREATE_VM='{
+	local REQ_CREATE_VM='{
 		"server": {
 			"availability_zone": "'"$AZ"'",
 			"name": "'"$INSTANCE_NAME"'",
@@ -2655,33 +2798,34 @@ ECSCreate()
 		exit 1
 	fi
 
-	ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	export ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	# this lines for DEBUG
-	export ECSTASKID
+	return ${PIPESTATUS[0]}
 }
 
 ECSAction()
 {
 	if test -z "$ECSACTIONTYPE"; then ECSACTIONTYPE="SOFT"; fi
-	REQ_ECS_ACTION_VM='
+	local REQ_ECS_ACTION_VM='
 	{
 		"'"$ECSACTION"'": {
 			"type":"'"$ECSACTIONTYPE"'",
 			"servers": [ { "id": "'"$ECSACTIONSERVERID"'" } ]
 		}
 	}'
-	export REQ_ECS_ACTION_VM
 	#echo $REQ_ECS_ACTION_VM
 	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
+	#return $?
 }
 
 # OpenStack API (unused)
 ECSStop()
 {
-	REQ="{\"os-stop\":{}}"
-	ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
-	echo $ECS_ACTION_STOP
+	local REQ="{\"os-stop\":{}}"
+	local ECS_ACTION_STOP="$NOVA_URL/servers/$ECSACTIONSERVERID/action"
+	#echo $ECS_ACTION_STOP
 	curlpostauth "$TOKEN" "$REQ" "$ECS_ACTION_STOP"
+	#return $?
 }
 
 appparm()
@@ -2695,7 +2839,7 @@ appparm()
 
 ECSUpdate()
 {
-	PARMS=""
+	local PARMS=""
 	if test -n "$INSTANCE_NAME"; then appparm "\"name\": \"$INSTANCE_NAME\""; fi
 	if test -n "$IMAGENAME"; then appparm "\"image\": \"$IMAGENAME\""; fi
 	OLDIFS="$IFS"; IFS=","
@@ -2704,12 +2848,13 @@ ECSUpdate()
 	done
 	IFS="$OLDIFS"
 	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$1"
+	#return $?
 }
 
 ECSDelete()
 {
 	local DEV_VOL="" delete_publicip="true" delete_volume="false" id ecs
-	IDS=""
+	local IDS=""
 	while [ $# -gt 0 ]; do
 		case "$1" in
 			--umount)    DEV_VOL="$2"           ; shift 2;;##### works only if $ecs is a name, not an id
@@ -2729,14 +2874,14 @@ ECSDelete()
 	done
 	##### TODO: we have to wait here until detachments were finished -- otherwize we run into a deadlock!
 	IDS="${IDS%,}"
-	REQ_ECS_DELETE='{
+	local REQ_ECS_DELETE='{
 		"servers": [ '$IDS' ],
 		"delete_publicip": '$delete_publicip',
 		"delete_volume": '$delete_volume'
 	}'
-	export REQ_ECS_DELETE
 	#echo $REQ_ECS_DELETE
-	ECSRESP=`curlpostauth "$TOKEN" "$REQ_ECS_DELETE" "$AUTH_URL_ECS_CLOUD_DELETE"`
+	local ECSRESP=`curlpostauth "$TOKEN" "$REQ_ECS_DELETE" "$AUTH_URL_ECS_CLOUD_DELETE"`
+	RC=$?
 	ECSTASKID=`echo "$ECSRESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	if test -n "$ECSTASKID"; then
 		echo "Delete task ID: $ECSTASKID"
@@ -2745,6 +2890,7 @@ ECSDelete()
 		echo "$ECSRESP" | jq '.[]' 1>&2
 		return 1
 	fi
+	return $RC
 }
 
 EVSCreate()
@@ -2766,7 +2912,7 @@ EVSCreate()
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
-	OPTIONAL=""
+	local OPTIONAL=""
 	if test -n "$SHAREABLE"; then
 		OPTIONAL="$OPTIONAL
 			\"shareable\": \"$SHAREABLE\","
@@ -2782,7 +2928,7 @@ EVSCreate()
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 	if test -z "$VOLUME_DESC"; then VOLUME_DESC=$VOLUME_NAME; fi
 
-	REQ_CREATE_EVS='{
+	local REQ_CREATE_EVS='{
 		"volume": {
 			"count": '$NUMCOUNT',
 			"availability_zone": "'$AZ'",
@@ -2801,20 +2947,20 @@ EVSCreate()
 		exit 1
 	fi
 
-	EVSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_EVS" "$AUTH_URL_CVOLUMES" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
+	export EVSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_EVS" "$AUTH_URL_CVOLUMES" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
 	# this lines for DEBUG
-	export EVSTASKID
+	return ${PIPESTATUS[0]}
 }
 
 EVSDelete()
 {
-	EVSTASKID=`curldeleteauth "$TOKEN" "$AUTH_URL_CVOLUMES/$@" | jq '.[]' | tr -d '" '`
-	export EVSTASKID
+	export EVSTASKID=`curldeleteauth "$TOKEN" "$AUTH_URL_CVOLUMES/$@" | jq '.[]' | tr -d '" '`
+	return ${PIPESTATUS[0]}
 }
 
 VPCCreate()
 {
-	REQ_CREATE_VPC='{
+	local REQ_CREATE_VPC='{
 		"vpc": {
 			"name": "'"$VPCNAME"'",
 			"cidr": "'"$CIDR"'"
@@ -2823,11 +2969,12 @@ VPCCreate()
 	export REQ_CREATE_VPC
 	#echo $REQ_CREATE_VPC
 	curlpostauth "$TOKEN" "$REQ_CREATE_VPC" "$AUTH_URL_VPCS" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 SUBNETCreate()
 {
-	REQ_CREATE_SUBNET='{
+	local REQ_CREATE_SUBNET='{
 		"subnet": {
 			"name": "'"$SUBNETNAME"'",
 			"cidr": "'"$CIDR"'",
@@ -2841,12 +2988,13 @@ SUBNETCreate()
 	}'
 	#echo $REQ_CREATE_SUBNET
 	curlpostauth "$TOKEN" "$REQ_CREATE_SUBNET" "$AUTH_URL_SUBNETS" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 PUBLICIPSCreate()
 {
 	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
-	REQ_CREATE_PUBLICIPS='{
+	local REQ_CREATE_PUBLICIPS='{
 		"publicip": {
 			"type": "5_bgp"
 		},
@@ -2857,25 +3005,28 @@ PUBLICIPSCreate()
 		}
 	}'
 
-	export REQ_CREATE_PUBLICIPS
 	echo $REQ_CREATE_PUBLICIPS
 	curlpostauth "$TOKEN" "$REQ_CREATE_PUBLICIPS" "$AUTH_URL_PUBLICIPS" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 PUBLICIPSDelete()
 {
 	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$@" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 getPortID()
 {
 	(  getECSVM $1 | sed -n '/^\[/,/^\]/p' \
 		| jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
-		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port;done)
+		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port; done )
+	#return ${PIPESTATUS[0]}
 }
 
 BindPublicIpToCreatingVM()
 {
+	local EIPID PRTID
 	##### use ecs server id to attach volumes, external ip_addresses, ...
 	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID);done
 	##### input: $EIP
@@ -2891,32 +3042,32 @@ BindPublicIpToCreatingVM()
 
 PUBLICIPSBind()
 {
-	ID=$1
-	PORT_ID=$2
+	local ID=$1
+	local PORT_ID=$2
 	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to." 1>&2; exit 1; fi
-	REQ_BIND_PUBLICIPS='{
+	local REQ_BIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": "'"$PORT_ID"'"
 		}
 	}'
 
-	export REQ_BIND_PUBLICIPS
 	echo $REQ_BIND_PUBLICIPS
 	curlputauth "$TOKEN" "$REQ_BIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 PUBLICIPSUnbind()
 {
-	ID=$1
-	REQ_UNBIND_PUBLICIPS='{
+	local ID=$1
+	local REQ_UNBIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": ""
 		}
 	}'
 
-	export REQ_UNBIND_PUBLICIPS
 	echo $REQ_UNBIND_PUBLICIPS
 	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
+	return ${PIPESTATUS[0]}
 }
 
 
@@ -2927,11 +3078,11 @@ PUBLICIPSUnbind()
 WaitForTaskField()
 {
 	if test -z "$1" -o "$1" = "null"; then echo "ERROR" 1>&2; return 1; fi
-	SEC=${3:-2}
-	MAXW=${4:-21}
+	local SEC=${3:-2}
+	local MAXW=${4:-21}
 	echo "Waiting for field $2 in job: $AUTH_URL_ECS_JOB/$1" 1>&2
 	getECSJOBList $1
-	RESP="$ECSJOBSTATUSJSON"
+	local RESP="$ECSJOBSTATUSJSON"
 	echo "#$RESP" 1>&2
 	FIELD=$(echo $ECSJOBSTATUSJSON| jq "$2" 2>/dev/null | tr -d '"')
 	declare -i ctr=0
@@ -2965,16 +3116,16 @@ WaitForSubTask()
 # $4 = Field to output (optional)
 WaitForTask()
 {
-	SEC=${2:-2}
+	local SEC=${2:-2}
 	# Timeout after 2hrs
-	DEFTOUT=$((1+3600/$SEC))
-	TOUT=$((2*${3:-$DEFTOUT}))
+	local DEFTOUT=$((1+3600/$SEC))
+	local TOUT=$((2*${3:-$DEFTOUT}))
 	unset FIELD
 	if [ "$WAIT_FOR_JOB" == "true" ]; then
 		echo "Waiting for Job:   $AUTH_URL_ECS_JOB/$1" 1>&2
 		getECSJOBList $1
 
-		RESP="$ECSJOBSTATUSJSON"
+		local RESP="$ECSJOBSTATUSJSON"
 		if test -n "$4"; then FIELD=$(echo $ECSJOBSTATUSJSON| jq "$4" 2>/dev/null | tr -d '"'); fi
 		echo "#$RESP" 1>&2
 		declare -i ctr=0
@@ -3018,6 +3169,7 @@ WaitForTaskFieldOpt()
 DeleteTask()
 {
 	curldeleteauth "$TOKEN" "$AUTH_URL_ECS_JOB/$1"
+	#return $?
 }
 
 getUserDomainIdFromIamResponse()
@@ -3028,33 +3180,38 @@ getUserDomainIdFromIamResponse()
 shortlistClusters()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.az'
+	return ${PIPESTATUS[0]}
 }
 
 listClusters()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 showCluster()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 listClusterHosts()
 {
 	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq '.'
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
+	return ${PIPESTATUS[0]}
 }
 
 showClusterHost()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts/$2" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 # CES
 listMetrics()
 {
-	PARM=""
+	local PARM=""
 	if test -n "$1"; then PARM="?namespace=$1"; fi
 	if test -n "$2"; then PARM="$PARM&metric_name=$2"; fi
 	if test -n "$3"; then PARM="$PARM&dim.0=${3/=/,}"; fi
@@ -3064,22 +3221,25 @@ listMetrics()
 	#curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq '.'
 	# TODO: More than one metric possible
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metrics$PARM" | jq -r 'def str(v): v|tostring; .metrics[] | .namespace+"   "+.metric_name+"   "+.unit+"   "+str(.dimensions[].value)' | arraytostr
+	return ${PIPESTATUS[0]}
 }
 
 listFavMetrics()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/favorite-metrics" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 showMetrics()
 {
-	NOW=$(date +%s)
-	START=$(echo "scale=0; (${3/NOW/$NOW})*1000" | bc)
-	STOP=$(echo "scale=0; (${4/NOW/$NOW})*1000" | bc)
+	local NOW=$(date +%s)
+	local START=$(echo "scale=0; (${3/NOW/$NOW})*1000" | bc)
+	local STOP=$(echo "scale=0; (${4/NOW/$NOW})*1000" | bc)
 	if test -n "$7"; then DIM="&dim.0=${7/=/,}"; else DIM=""; fi
 	if test -n "$8"; then DIM="$DIM&dim.1=${8/=/,}"; fi
 	if test -n "$9"; then DIM="$DIM&dim.2=${9/=/,}"; fi
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/metric-data?namespace=$1&metric_name=$2&from=$START&to=$STOP&period=$5&filter=$6$DIM" | jq '.' | sed -e 's/"timestamp": \([0-9]*\)\([0-9]\{3\}\),/"timestamp": \1.\2,/' -e 's/"timestamp": \([0-9]*\)\.000,/"timestamp": \1,/'
+	return ${PIPESTATUS[0]}
 }
 
 listAlarms()
@@ -3087,38 +3247,45 @@ listAlarms()
 	#curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms" | jq '.'
 	#TODO: Show multiple dimensions if available
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms" | jq -r 'def str(v): v|tostring; .metric_alarms[] | .alarm_id+"   "+.alarm_name+"   "+str(.alarm_enabled)+"   "+str(.metric.dimensions[].value)+"   "+.metric.namespace+" "+.metric.metric_name+" "+.condition.comparison_operator+" "+str(.condition.value)+" "+.condition.unit ' | arraytostr
+	return ${PIPESTATUS[0]}
 }
 
 showAlarms()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 showAlarmsQuotas()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/quotas" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteAlarms()
 {
 	curldeleteauth "$TOKEN" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$1" | jq '.'
+	return ${PIPESTATUS[0]}
 }
 
 AlarmsAction()
 {
 	curlputauth "$TOKEN" "{ \"alarm_enabled\": $1 }" "$AUTH_URL_CES/V1.0/$OS_PROJECT_ID/alarms/$2/action"
+	#return $?
 }
 
 listTrackers()
 {
 	#curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
 	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq -r '.[] | .tracker_name+"   "+.bucket_name+"   "+.status+"   "+.file_prefix_name'
+	return ${PIPESTATUS[0]}
 }
 
 listQueues()
 {
 	#curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq '.'
 	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq -r 'def str(v): v|tostring; .queues[] | .id+"   "+.name+"   "+str(.produced_messages)'
+	return ${PIPESTATUS[0]}
 }
 
 listTopics()
@@ -3126,22 +3293,26 @@ listTopics()
 	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
 	setlimit 100 "offset=0"
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics$PARAMSTRING" | jq -r '.topics[] | .topic_urn+"   "+.name+"   "+.display_name'
+	return ${PIPESTATUS[0]}
 }
 
 showTopic()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 createTopic()
 {
 	if test -n "$2"; then local DISPLAYNM=", \"display_name\": \"$2\""; fi
 	curlpostauth "$TOKEN" "{ \"name\": \"$1\" $DISPLAYNM }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteTopic()
 {
 	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/$1" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 cleansmnmessage()
@@ -3151,15 +3322,16 @@ cleansmnmessage()
 
 publishNotification()
 {
-	TOPIC_URN="$1"; shift
-	if test -n "$1"; then SUBJECT="\"subject\": \"$1\","; shift; fi
+	local TOPIC_URN="$1"; shift
+	if test -n "$1"; then local SUBJECT="\"subject\": \"$1\","; shift; fi
 	# Read message from stdin (or take cmdline)
-	if test -n "$1"; then MESG=$(echo "$@" | cleansmnmessage)
+	if test -n "$1"; then local MESG=$(echo "$@" | cleansmnmessage)
 	else
 		if tty >/dev/null; then echo "Enter your message, finish by ^D" 1>&2; fi
-		MESG=$(cleansmnmessage)
+		local MESG=$(cleansmnmessage)
 	fi
 	curlpostauth "$TOKEN" "{ $SUBJECT \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$TOPIC_URN/publish" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listSubscriptions()
@@ -3167,25 +3339,29 @@ listSubscriptions()
 	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
 	setlimit 100 "offset=0"
 	curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/subscriptions$PARAMSTRING" | jq -r 'def stat(s): ["unconfirmed", "confirmed", "?", "canceled"][s]; .subscriptions[] | .subscription_urn+"   "+.topic_urn+"   "+stat(.status)+"   "+.protocol+"   "+.endpoint+"   "+.remark'
+	return ${PIPESTATUS[0]}
 }
 
 addSubscription()
 {
-	unset REMARK
+	local REMARK=""
 	if test -n "$3"; then REMARK=", \"remark\": \"$4\""; fi
 	curlpostauth "$TOKEN" "{ \"protocol\": \"$2\", \"endpoint\": \"$3\" $REMARK }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1/subscriptions" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 deleteSubscription()
 {
 	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/subscriptions/$1" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 sendSMS()
 {
-	EP=$1; shift
-	MESG=$(echo "$@" | cleansmnmessage)
+	local EP=$1; shift
+	local MESG=$(echo "$@" | cleansmnmessage)
 	curlpostauth "$TOKEN" "{ \"endpoint\": \"$EP\", \"message\": \"$MESG\" }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/sms" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 
@@ -3194,42 +3370,50 @@ sendSMS()
 listMRSClusters()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/cluster-infos" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listMRSJobs()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 showMRSJob()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_MRS/v1.1/$OS_PROJECT_ID/jobs-exes/$1" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listAntiDDoS()
 {
 	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 listKMS()
 {
 	# POST, bad API design
 	curlpostauth "$TOKEN" "" "$AUTH_URL_KMS/v1.0/$OS_PROJECT_ID/kms/list-keys" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 
 getMeta()
 {
-	DATA=$1; shift
-	if test -z "$1"; then FILT='.'; else FILT="$@"; fi
+	local DATA=$1; shift
+	local FILT="."
+	if test -n "$1"; then FILT="$@"; fi
 	if test ${DATA%.json} != $DATA; then PROCESS="jq $FILT"; else
 		if test "$FILT" != "."; then PROCESS="grep $FILT"; else PROCESS="cat -"; fi
 	fi
-	RESP=$(docurl -sS "http://169.254.169.254/openstack/latest/$DATA")
-	echo "$RESP" | grep "404 Not Found" >/dev/null 2>&1
+	local RESP=$(docurl -sS "http://169.254.169.254/openstack/latest/$DATA")
+	RC=$?
+	echo "$RESP" | grep -q "404 Not Found" >/dev/null 2>&1
 	if test $? != 0 -o "$DATA" != "user_data"; then
 		echo "$RESP" | $PROCESS
 	fi
+	return $RC
 }
 
 ##########################################################################################
@@ -4167,10 +4351,7 @@ else
 	printHelp
 fi
 
-ERR=$?
-while read RC; do
-	if test "$RC" != "0"; then break; fi
-done < $ECODE
-if test "$RC" = "0"; then RC=$ERR; fi
-rm -f $ECODE
+# Collect status for pieces that might have been performed in MAIN
+RC=$?
+if test $RC == 0 -a -n "${PIPESTATUS[0]}"; then RC=${PIPESTATUS[0]}; fi
 exit $RC
