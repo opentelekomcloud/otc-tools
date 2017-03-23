@@ -1265,10 +1265,13 @@ handleCustom()
 getECSVM()
 {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
+	echo -n "{ \"server\": "
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'
 	local RC=${PIPESTATUS[0]}
-	if test $RC != 0; then return $RC; fi
+	if test $RC != 0; then echo "}"; return $RC; fi
+	echo -n ", \"interfaceAttachments\": "
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
+	echo "}"
 	return ${PIPESTATUS[0]}
 }
 
