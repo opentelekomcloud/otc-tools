@@ -180,12 +180,14 @@ docurl()
 	else
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
 		if test "$CODE" == "null"; then CODE=""; fi
-		local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
-		if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
 		if test "$CODE" == "null"; then CODE=""; fi
+		if test "$INDMS" != 1; then
+		local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+		if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 		if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+		fi
 	fi
 	return $RC
 }
@@ -3359,6 +3361,99 @@ deleteQueue()
 	curldeleteauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID"
 }
 
+createConsumerGroup()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	if test -z "$NAME" -a -n "$2"; then NAME="$2"; fi
+	curlpostauth "$TOKEN" "{ \"groups\": [ { \"name\": \"$NAME\" } ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+listConsumerGroups()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | jq -r 'def str(s): s|tostring; .groups[] | .id+"   "+.name+"   "+str(.consumed_messages)+"   "+str(.available_messages)+"   "+str(.produced_messages)'
+	return ${PIPESTATUS[0]}
+}
+
+deleteConsumerGroup()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	GID=$2
+	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $2); fi
+	curldeleteauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID"
+}
+
+if false; then
+cleanqmessage()
+{
+	sed -re 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+else
+cleanqmessage()
+{
+	cat -
+}
+fi
+
+queueMessage()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	shift
+	ATTR=""
+	if test "$1" == "--attributes"; then ATTR=", \"attributes\": $2"; shift; shift; fi
+	# Read message from stdin (or take cmdline)
+	if test -n "$1"; then local MESG=$(echo "$@" | cleanqmessage)
+	else
+		if tty >/dev/null; then echo "Enter your message, finish by ^D" 1>&2; fi
+		local MESG=$(cleanqmessage)
+	fi
+	curlpostauth "$TOKEN" "{ \"messages\": [ { \"body\": $MESG$ATTR } ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/messages"
+}
+
+getMessage()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	GID=$2
+	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $2); fi
+	MAXMSG=1
+	if test "$3" = "--maxmsg"; then MAXMSG=$4; shift; shift; fi
+	if test "$3" = "--wait"; then WAIT=$4; shift; shift; fi
+	INDMS=1
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/messages?max_msgs=$MAXMSG" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+ackMessage()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	shift
+	GID=$1
+	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $1); fi
+	shift
+	SUCCESS="success"
+	if test "$1" == "--success"; then SUCCESS="fail"; shift; fi
+	HANDLES=""
+	for hand in "$@"; do
+		HANDLES="$HANDLES, { \"handler\": \"$hand\", \"status\": \"$SUCCESS\" }"
+	done
+	HANDLES="${HANDLES#, }"
+	curlpostauth "$TOKEN" "{ \"message\": [ $HANDLES ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/ack" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+queueLimits()
+{
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/quotas/dms" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 listTopics()
 {
 	#curlgetauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics?offset=0&limit=100" | jq '.'
@@ -4310,6 +4405,24 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "create" ]; then
 	createQueue "$@"
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "delete" ]; then
 	deleteQueue $1
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "limits" ]; then
+	queueLimits
+
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "consumers" ]; then
+	listConsumerGroups $1
+#elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "showconsumer" ]; then
+#	showQueue $1
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "createconsumer" ]; then
+	createConsumerGroup "$@"
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "deleteconsumer" ]; then
+	deleteConsumerGroup "$@"
+
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "queuemsg" ]; then
+	queueMessage "$@"
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "getmsg" ]; then
+	getMessage "$@"
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "ackmsg" ]; then
+	ackMessage "$@"
 
 
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
