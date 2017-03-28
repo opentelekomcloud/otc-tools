@@ -3328,8 +3328,35 @@ listTrackers()
 listQueues()
 {
 	#curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq '.'
-	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq -r 'def str(v): v|tostring; .queues[] | .id+"   "+.name+"   "+str(.produced_messages)'
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq -r 'def str(v): v|tostring; .queues[] | .id+"   "+.name+"   "+str(.produced_messages)+"   "+.description'
 	return ${PIPESTATUS[0]}
+}
+
+showQueue()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+createQueue()
+{
+	if test -n "$1" -a -z "$NAME"; then NAME=$1; fi
+	shift
+	if test -z "$DESCRIPTION"; then
+		if test -n "$1"; then DESCRIPTION="$@"; else
+		DESCRIPTION="Message queue $NAME"; fi
+	fi
+	curlpostauth "$TOKEN" "{ \"name\": \"$NAME\", \"description\": \"$DESCRIPTION\" }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deleteQueue()
+{
+	QID=$1
+	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	curldeleteauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID"
 }
 
 listTopics()
@@ -3711,7 +3738,8 @@ if [ "$MAINCOM" = "metric" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "alarm" ]; then MAINCOM="alarms"; fi
 if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
 if [ "$MAINCOM" = "cts" ]; then MAINCOM="trace"; fi
-if [ "$MAINCOM" = "snm" ]; then MAINCOM="notifications"; fi
+#if [ "$MAINCOM" = "snm" ]; then MAINCOM="notifications"; fi
+if [ "$MAINCOM" = "smn" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "notification" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "topics" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "topic" ]; then MAINCOM="notifications"; fi
@@ -3720,7 +3748,6 @@ if [ "$MAINCOM" = "queue" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
-
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -4274,8 +4301,17 @@ elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
 
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
+
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "show" ]; then
+	showQueue $1
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "create" ]; then
+	createQueue "$@"
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "delete" ]; then
+	deleteQueue $1
+
+
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "show" ]; then
