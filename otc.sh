@@ -609,7 +609,7 @@ build_data_volumes_json()
 }
 
 # Usage
-escHelp()
+ecsHelp()
 {
 	echo "--- Elastic Cloud Server (VM management) ---"
 	echo "otc ecs list               # list ecs instances"
@@ -4014,6 +4014,7 @@ if [ "$MAINCOM" = "identity" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "ces" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "metric" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "alarm" ]; then MAINCOM="alarms"; fi
+if [ "$MAINCOM" = "cce" ]; then MAINCOM="cluster"; fi
 if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
 if [ "$MAINCOM" = "cts" ]; then MAINCOM="trace"; fi
 #if [ "$MAINCOM" = "snm" ]; then MAINCOM="notifications"; fi
@@ -4205,7 +4206,7 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
      [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "disassociate" ]; then
 	PUBLICIPSUnbind $@
 
-elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "" ]; then
+elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "help" ]; then
 	subnetHelp
 elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "list" ]; then
 	getSUBNETList
@@ -4486,7 +4487,7 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
 
-elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "help" ]; then
 	rdsHelp
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
@@ -4612,11 +4613,11 @@ elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
 	showStackDeployment "$1"
 
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "help" ]; then
-	newotcHelp
+	otcnewHelp
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
 
-elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "help" ]; then
 	dmsHelp
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
@@ -4676,7 +4677,7 @@ elif [ "$MAINCOM" == "antiddos"  -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
-	newotcHelp
+	otcnewHelp
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
 	listMRSClusters
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs" ]; then
