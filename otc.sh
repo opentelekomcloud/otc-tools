@@ -43,7 +43,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.9
+VERSION=0.7.10
 
 # Get Config ####################################################################
 warn_too_open()
@@ -3403,60 +3403,51 @@ quoteval()
 	echo "\"$@\""
 }
 
+# Set KVIFS
+# Build JSON dict from key=value list
+buildkv()
+{
+	local VAL=""
+	for arg in "$@"; do
+		local VALS="$arg"
+		while test -n "$VALS"; do
+			IFS="$KVIFS" read this VALS < <(echo "$VALS")
+			IFS="=" read key val < <(echo $this)
+			VAL="$VAL, \"$key\": $(quoteval $val)"
+		done
+	done
+	echo "{ ${VAL#, } }"
+}
 
 queueMessage()
 {
-	QID=$1
-	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
-	shift
-	ATTR=""
+	QID=$1; shift
+	if ! is_uuid "$QID"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $QID); fi
+	if test -z "$QID" -o "$QID" = "null"; then echo "ERROR: No such queue $QID" 1>&2; exit 3; fi
+	local ATTR=""
 	if test "$1" == "--attributes"; then ATTR=", \"attributes\": $2"; shift; shift; fi
-	# TODO Handle --attrkv and --attrarr
-	# Read message from stdin (or take cmdline)
-	# TODO Handle --kv
-	local MESG=""
-	while test -n "$1"; do
-		IFS="=" read KEY VAL < <(echo "$1")
-		MESG="$MESG, \"$KEY\": $(quoteval $VAL)"
-		shift
-	done
-	MESG=${MESG#, }
-	if test -z "$MESG"; then
+	if test "$1" == "--attrkv"; then KVIFS=","; ATTR=", \"attributes\": $(buildkv $2)"; unset KVIFS; shift; shift; fi
+	# Read message from stdin (or take cmdline as key=value list)
+	unset KVIFS
+	if test -n "$1"; then
+		local MESG=$(buildkv "$@")
+	else
 		if tty >/dev/null; then echo "Enter your message, finish by ^D" 1>&2; fi
 		MESG=$(cleanqmessage)
-	else
-		MESG="{ $MESG }"
 	fi
 	curlpostauth "$TOKEN" "{ \"messages\": [ { \"body\": $MESG$ATTR } ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/messages"
 }
 
-getMessage()
-{
-	QID=$1
-	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
-	GID=$2
-	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $2); fi
-	MAXMSG=1
-	if test "$3" = "--maxmsg"; then MAXMSG=$4; shift; shift; fi
-	if test "$3" = "--wait"; then WAIT=$4; shift; shift; fi
-	INDMS=1
-	MSG=$(curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/messages?max_msgs=$MAXMSG")
-	RC=$?
-	# TODO: Handle --kv and --kvarr
-	echo "$MSG" | jq -r '.'
-	return $RC
-}
-
 ackMessage()
 {
-	QID=$1
-	if ! is_uuid "$1"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
-	shift
-	GID=$1
-	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $1); fi
-	shift
+	QID=$1; shift
+	if ! is_uuid "$QID"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $QID); fi
+	if test -z "$QID" -o "$QID" = "null"; then echo "ERROR: No such queue $QID" 1>&2; exit 3; fi
+	GID=$1; shift
+	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $GID); fi
+	if test -z "$GID" -o "$GID" = "null"; then echo "ERROR: No such consumer group $GID" 1>&2; exit 3; fi
 	SUCCESS="success"
-	if test "$1" == "--success"; then SUCCESS="fail"; shift; fi
+	if test "$1" == "--fail"; then SUCCESS="fail"; shift; fi
 	HANDLES=""
 	for hand in "$@"; do
 		HANDLES="$HANDLES, { \"handler\": \"$hand\", \"status\": \"$SUCCESS\" }"
@@ -3464,6 +3455,44 @@ ackMessage()
 	HANDLES="${HANDLES#, }"
 	curlpostauth "$TOKEN" "{ \"message\": [ $HANDLES ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/ack" | jq -r '.'
 	return ${PIPESTATUS[0]}
+}
+
+getMessage()
+{
+	if test "$1" = "--ack"; then DOACK=1; shift; fi
+	if test "$1" = "--maxmsg"; then MAXMSG=$2; shift; shift; fi
+	if test "$1" = "--kv"; then DOKV=1; shift; fi
+	QID=$1
+	if ! is_uuid "$QID"; then QID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues" | find_id queues $1); fi
+	if test -z "$QID" -o "$QID" = "null"; then echo "ERROR: No such queue $1" 1>&2; exit 3; fi
+	shift; GID=$1
+	if ! is_uuid "${GID#g-}"; then GID=$(curlgetauth  "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups" | find_id groups $GID); fi
+	if test -z "$GID" -o "$GID" = "null"; then echo "ERROR: No such consumer group $1" 1>&2; exit 3; fi
+	shift; MAXMSG=1
+	if test "$1" = "--ack"; then DOACK=1; shift; fi
+	if test "$1" = "--kv"; then DOKV=1; shift; fi
+	if test "$1" = "--maxmsg"; then MAXMSG=$2; shift; shift; fi
+	if test "$1" = "--kv"; then DOKV=1; shift; fi
+	#if test "$1" = "--wait"; then WAIT=$2; shift; shift; fi
+	INDMS=1
+	MSG=$(curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/messages?max_msgs=$MAXMSG")
+	RC=$?
+	HANDLES=$(echo "$MSG" | jq -r '.[].handler')
+	if test "$DOKV" = "1"; then
+		echo "HANDLES=($HANDLES)"
+		declare -i ctr=0
+		for hand in $HANDLES; do
+			local smsg=$(echo "$MSG" | jq -r ".[] | select(.handler == \"$hand\")")
+			echo $smsg | jq -r '.message.body' | sed "s@^ *\"\([^\"]*\)\": \(\"[^\"]*\"\|[^,]*\)\(,\|\)\$@\1[$ctr]=\2@" | grep -v '^{$' | grep -v '^}$'
+			#echo "BODY[$ctr]=$(echo $smsg | jq -r '.message.body')"
+			echo $smsg | jq -r '.message.attributes' | sed "s@^ *\"\([^\"]*\)\": \(\"[^\"]*\"\|[^,]*\)\(,\|\)\$@ATTR_\1[$ctr]=\2@" | grep -v '^{$' | grep -v '^}$' | grep -v '^null$'
+			let ctr+=1
+		done
+	else
+		echo "$MSG" | jq -r '.'
+	fi
+	if test "$DOACK" = "1"; then ackMessage $QID $GID $HANDLES; fi
+	return $RC
 }
 
 queueLimits()
