@@ -3387,17 +3387,22 @@ deleteConsumerGroup()
 	curldeleteauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID"
 }
 
-if false; then
 cleanqmessage()
 {
-	sed -re 's/\\/\\\\/g' -e 's/"/\\"/g'
-}
-else
-cleanqmessage()
-{
+	#sed -re 's/\\/\\\\/g' -e 's/"/\\"/g'
 	cat -
 }
-fi
+
+quoteval()
+{
+	# null or bool
+	if test "$1" == "null" -o "$1" == "true" -o "$1" == false; then echo "$1"; return; fi
+	# NUMBER
+	echo "$@" | grep -q '^[0-9-][0-9.]*\([eE][+-]*[0-9]*\|\)'
+	if test $? = 0; then echo "$@"; return; fi
+	echo "\"$@\""
+}
+
 
 queueMessage()
 {
@@ -3406,11 +3411,21 @@ queueMessage()
 	shift
 	ATTR=""
 	if test "$1" == "--attributes"; then ATTR=", \"attributes\": $2"; shift; shift; fi
+	# TODO Handle --attrkv and --attrarr
 	# Read message from stdin (or take cmdline)
-	if test -n "$1"; then local MESG=$(echo "$@" | cleanqmessage)
-	else
+	# TODO Handle --kv
+	local MESG=""
+	while test -n "$1"; do
+		IFS="=" read KEY VAL < <(echo "$1")
+		MESG="$MESG, \"$KEY\": $(quoteval $VAL)"
+		shift
+	done
+	MESG=${MESG#, }
+	if test -z "$MESG"; then
 		if tty >/dev/null; then echo "Enter your message, finish by ^D" 1>&2; fi
-		local MESG=$(cleanqmessage)
+		MESG=$(cleanqmessage)
+	else
+		MESG="{ $MESG }"
 	fi
 	curlpostauth "$TOKEN" "{ \"messages\": [ { \"body\": $MESG$ATTR } ] }" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/messages"
 }
@@ -3425,8 +3440,11 @@ getMessage()
 	if test "$3" = "--maxmsg"; then MAXMSG=$4; shift; shift; fi
 	if test "$3" = "--wait"; then WAIT=$4; shift; shift; fi
 	INDMS=1
-	curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/messages?max_msgs=$MAXMSG" | jq -r '.'
-	return ${PIPESTATUS[0]}
+	MSG=$(curlgetauth "$TOKEN" "$AUTH_URL_DMS/v1.0/$OS_PROJECT_ID/queues/$QID/groups/$GID/messages?max_msgs=$MAXMSG")
+	RC=$?
+	# TODO: Handle --kv and --kvarr
+	echo "$MSG" | jq -r '.'
+	return $RC
 }
 
 ackMessage()
