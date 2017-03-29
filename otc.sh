@@ -4115,8 +4115,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ]; then
 	export ECSACTIONSERVERID=$1
 
 	if [ "$ECSACTIONSERVERID" == "" ]; then
-		echo "ERROR: Must be specify the Instance ID!" 1>&2
-		printHelp
+		echo "ERROR: Must specify the Instance ID!" 1>&2
+		ecsHelp
 		exit 1
 	fi
 
@@ -4126,8 +4126,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start-instances" ]; then
 	ECSACTION="os-start"
 	ECSACTIONSERVERID=$1
 	if [ "$ECSACTIONSERVERID" == "" ]; then
-		echo "ERROR:: Must be specify the Instance ID!" 1>&2
-		printHelp
+		echo "ERROR: Must specify the Instance ID!" 1>&2
+		ecsHelp
 		exit 1
 	fi
 
@@ -4138,8 +4138,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "stop-instances" ]; then
 	ECSACTIONSERVERID=$1
 
 	if [ "$ECSACTIONSERVERID" == "" ]; then
-	echo "ERROR: Must be specify the Instance ID!" 1>&2
-		printHelp
+	echo "ERROR: Must specify the Instance ID!" 1>&2
+		ecsHelp
 		exit 1
 	fi
 
@@ -4238,8 +4238,8 @@ elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "create" ]; then
 elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "show" ]; then
 	if [ -z "$1" ]; then
-		echo "ERROR: Must be specify the Security Group ID!" 1>&2
-		printHelp
+		echo "ERROR: Must specify the Security Group ID!" 1>&2
+		sgHelp
 		exit 1
 	fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
