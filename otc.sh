@@ -609,10 +609,8 @@ build_data_volumes_json()
 }
 
 # Usage
-printHelp()
+escHelp()
 {
-	echo "otc-tools version $VERSION: OTC API tool"
-	echo "Usage: otc.sh service action [options]"
 	echo "--- Elastic Cloud Server (VM management) ---"
 	echo "otc ecs list               # list ecs instances"
 	echo "    --limit NNN            # limit records (works for most list functions)"
@@ -673,18 +671,27 @@ printHelp()
 	echo "     --port-id PORTID           # Specify port-id"
 	echo "     --net-id NETID [--fixed-ip IP]  # Specify net [and fixed-ip]"
 	echo "otc ecs detach-nic ECSID PORT   # detach vNIC from VM"
-	echo
+}
+
+taskHelp()
+{
 	echo "--- Task/Job management ---"
 	echo "otc task show <id>              # show status of job <id> (same as ecs job)"
 	echo "otc task delete <id>            # cancel job <id> (not yet supported)"
 	echo "otc task wait <id> [sec]        # wait for job <id>, poll every sec sec (def: 2)"
-	echo
+}
+
+keypairHelp()
+{
 	echo "--- SSH Keys ---"
 	echo "otc keypair list                # list ssh key pairs"
 	echo "otc keypair show <KPNAME>       # show ssh key pair"
 	echo "otc keypair create <NAME> [<PUBKEY>]      # create ssh key pair"
 	echo "otc keypair delete <KPNAME>     # delete ssh key pair"
-	echo
+}
+
+evsHelp()
+{
 	echo "--- Elastic Volume Service (EVS) ---"
 	echo "otc evs list                    # list all volumes (only id and name)"
 	echo "otc evs details                 # list all volumes (more details)"
@@ -701,6 +708,10 @@ printHelp()
 	echo "otc evs detach        ecsid   [device:]volumeid   # detach volume-id from ecs"
 	echo "otc evs detach --name ecsname [device:]volume     # use names instead of ids"
 	#TODO volume change ...
+}
+
+backupHelp()
+{
 	echo "--- Elastic Volume Backups ---"
 	echo "otc backup list"
 	echo "otc backup show backupid"
@@ -712,7 +723,10 @@ printHelp()
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
 	echo "otc backuppolicy list                  # list backup policies"
 	echo "otc backuppolicy show NAME|ID          # details of backup policy"
-	echo
+}
+
+vpcHelp()
+{
 	echo "--- Virtual Private Network (VPC) ---"
 	echo "otc vpc list                    # list all vpc"
 	echo "otc vpc show VPCID              # display VPC (Router) details"
@@ -721,7 +735,11 @@ printHelp()
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
 	echo "otc vpc limits                  # list VPC related quota"
-	echo
+}
+
+subnetHelp()
+{
+	echo "--- Subnets ---"
 	echo "otc subnet list                 # list all subnet"
 	echo "otc subnet show <SID>           # show details for subnet <SID>"
 	echo "otc subnet delete <SID>         # delete subnet <SID>"
@@ -734,17 +752,23 @@ printHelp()
 	echo "    --secondary-dns     <sec-dns>"
 	echo "    --availability-zone <avalibility zone>"
 	echo "    --vpc-name          <vpcname>"
-	echo
+}
+
+eipHelp()
+{
+	echo "--- Public IPs ---"
 	echo "otc publicip list               # list all publicips"
-	echo
 	echo "otc publicip create             # create a publicip"
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
-	echo
 	echo "otc publicip delete <id>        # delete a publicip (EIP)"
 	echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
 	echo "otc publicip unbind <publicip-id>         # unbind a publicip"
-	echo
+}
+
+sgHelp()
+{
+	echo "--- Security Groups ---"
 	echo "otc security-group list                   # list all sec. group"
 	echo "otc security-group-rules list <group-id>  # list rules of sec. group <group-id>"
 	echo "otc security-group create                 # create security group"
@@ -758,7 +782,10 @@ printHelp()
 	echo "    --ethertype           <ethtype: IPv4,IPv6>"
 	echo "    --portmin             <port range lower end>"
 	echo "    --portmax             <port range upper end>"
-	echo
+}
+
+imageHelp()
+{
 	echo "--- Image Management Service (IMS) ---"
 	echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
 	echo "otc images show <id>    # show image details"
@@ -786,7 +813,10 @@ printHelp()
 	echo "otc images unshare <id> <prj>   # stop sharing img id with prj"
 	echo "otc images acceptshare <id> [<prj>]       # accept image id shared into prj (default to self)"
 	echo "otc images rejectshare <id> [<prj>]       # reject image id shared into prj"
-	echo
+}
+
+elbHelp()
+{
 	echo "--- Elastic Load Balancer (ELB) ---"
 	echo "otc elb list            # list all load balancer"
 	echo "otc elb show <id>       # show elb details"
@@ -810,7 +840,10 @@ printHelp()
 	echo "otc elb showcheck <cid>"
 	echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
 	echo "otc elb delcheck <cid>"
-	echo
+}
+
+rdsHelp()
+{
 	echo "--- Relational Database Service (RDS) ---"
 	echo "otc rds list"
 	echo "otc rds listinstances                                # list database instances"
@@ -843,7 +876,10 @@ printHelp()
 	echo "otc rds createbackup ...                             # alias for 'createsnapshot'"
 	echo "otc rds deletesnapshot <id>                          # deletes a snapshot of an instance"
 	echo "otc rds deletebackup ...                             # alias for 'deletesnapshot'"
-	echo
+}
+
+dnsHelp()
+{
 	echo "--- DNS ---"
 	echo "otc domain list         # show all zones/domains"
 	echo "otc domain show zid     # show details of zone/domain <zid>"
@@ -859,14 +895,20 @@ printHelp()
 	echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
 	echo "otc domain listrecords [zid]      # list records for zone <zid>"
 	echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
-	echo
+}
+
+cceHelp()
+{
 	echo "--- Cloud Container Engine (CCE) ---"
 	echo "otc cluster list                  # list container clusters (short)"
 	echo "otc cluster list-detail           # list container clusters (detailed)"
 	echo "otc cluster show <cid>            # show container cluster details of cid"
 	echo "otc host list <cid>               # list container hosts of cluster cid"
 	echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
-	echo
+}
+
+iamHelp()
+{
 	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
 	echo "    --domainscope       # generate a domain scoped token (can be used globally)"
@@ -885,7 +927,10 @@ printHelp()
 	echo "otc iam listprotocol    # list of federation protocols"
 	echo "otc iam showprotocol PR # show details of federation protocal"
 	echo "otc iam keystonemeta    # show keystone metadata"
-	echo
+}
+
+cesHelp()
+{
 	echo "--- Monitoring & Alarms (Cloud Eye) ---"
 	echo "otc metrics list [NS [MET [SELECTORS]]]  # display list of avail metrics"
 	echo "otc metrics favorites                    # display list of favorite metrics"
@@ -904,7 +949,10 @@ printHelp()
 	echo "otc alarms show ALID    # display details of alarm ALID"
 	echo "otc alarms delete ALID  # delete alarm ALID"
 	echo "otc alarms en/disable ALID        # enable/disable ALID"
-	echo
+}
+
+heatHelp()
+{
 	echo "--- HEAT ---"
 	echo "otc stack list          # List heat stacks"
 	echo "otc stack show SID      # Show stack SID (Name or ID)"
@@ -916,13 +964,11 @@ printHelp()
 	echo "otc stack buildinfo     # Show build information"
 	echo "otc stack deployments   # List deployed stacks"
 	echo "otc stack showdeployment DID      # Show deployment details"
-	echo
-	echo "--- OTC2.0 new services ---"
-	echo "otc trace list          # List trackers from cloud trace"
-	echo "otc queues list         # List queues from distr message system"
-	echo "otc kms list            # List keys from key management service"
-	echo
-	echo "--- OTC2.0 Simple Notifications/Messaging ---"
+}
+
+smnHelp()
+{
+	echo "--- OTC2.0 Simple Message Notification ---"
 	echo "otc notifications list            # List notification topics"
 	echo "otc notifications show URN        # Show details of topic URN"
 	echo "otc notifications create TOP [DESC]       # New notification topic"
@@ -932,7 +978,29 @@ printHelp()
 	echo "otc notifications unsubscribe SUB # Unsubscribe from topic URN"
 	echo "otc notifications publish URN SUBJECT     # Publish notification (stdin)"
 	echo "otc notifications SMS NUM TEXT    # Send SMS message"
-	echo
+}
+
+#elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "getmsg" ]; then
+#	getMessage "$@"
+#elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "ackmsg" ]; then
+#	ackMessage "$@"
+dmsHelp()
+{
+	echo "--- OTC2.0 Distributed Messaging Service ---"
+	echo "otc queues list         # List DMS queues"
+	echo "otc queues show QID     # Show queue QID"
+	echo "otc queues create NAME [DESC]     # Create queue with NAME (opt: DESCription)"
+	echo "otc queues delete QID   # Delete queue QID"
+	echo "otc queues limits       # Show queuing quota"
+	echo "otc queues consumers QID          # Show consumer groups for queue QID" 
+	echo "otc queues createconsumer QID NM  # Create consumer group with name NM for queue QID"
+	echo "otc queues deleteconsumer QID NM  # Delete consumer group with name NM for queue QID"
+	echo "otc queues queuemsg QID [VALS]    # Send message to queue QID (read from stdin or pass key-value pairs"
+	echo "    --..."
+}
+
+customHelp()
+{
 	echo "--- Custom command support ---"
 	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
 	echo "      METHOD=GET/PUT/POST/DELETE, vars with \\\$ are evaluated (not sanitized!)"
@@ -940,17 +1008,78 @@ printHelp()
 	echo "      note that \\\$BASEURL gets prepended if URL starts with /"
 	echo "    --jqfilter allows to use a filtering string for jq processing (def=.)"
 	echo "      e.g.: --jqfilter '.servers[] | .id+\\\"   \\\"+.name' GET \\\$NOVA_URL/servers"
-	echo
+}
+
+otcnewHelp()
+{
+	echo "--- OTC2.0 new services ---"
+	echo "otc trace list          # List trackers from cloud trace"
+	echo "otc kms list            # List keys from key management service"
+	echo "otc antiddos list       # List AntiDDOS policies"
+}
+
+mdsHelp()
+{
 	echo "--- Metadata helper ---"
 	echo "otc mds meta_data [FILT]          # Retrieve and output meta_data"
 	echo "otc mds vendor_data [FILT]        # Retrieve and output vendor_data"
 	echo "      FILT is an optional jq string to process the data"
 	echo "otc mds user_data                 # Retrieve and output user_data"
 	echo "otc mds password                  # Retrieve and output password (unused)"
-	echo
+}
+
+printHelp()
+{
+	echo "otc-tools version $VERSION: OTC API tool"
+	echo "Usage: otc.sh service action [options]"
 	echo "--- Global flags ---"
-	echo "otc debug CMD1 CMD2 PARAMS        # for debugging REST calls ..."
+	echo "otc --debug CMD1 CMD2 PARAMS      # for debugging REST calls ..."
 	echo "otc --insecure CMD1 CMD2 PARAMS   # for ignoring SSL security ..."
+	echo
+	ecsHelp
+	echo
+	taskHelp
+	echo
+	keypairHelp
+	echo
+	evsHelp
+	#echo
+	backupHelp
+	echo
+	vpcHelp
+	echo
+	subnetHelp
+	echo
+	eipHelp
+	echo
+	sgHelp
+	echo
+	imageHelp
+	echo
+	elbHelp
+	echo
+	rdsHelp
+	echo
+	dnsHelp
+	echo
+	cceHelp
+	echo
+	iamHelp
+	echo
+	cesHelp
+	echo
+	heatHelp
+	echo
+	smnHelp
+	echo
+	dmsHelp
+	echo
+	otcnewHelp
+	echo
+	customHelp
+	echo
+	mdsHelp
+	#echo
 }
 
 
@@ -3887,6 +4016,7 @@ if [ "$MAINCOM" = "topics" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "topic" ]; then MAINCOM="notifications"; fi
 if [ "$MAINCOM" = "dms" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "queue" ]; then MAINCOM="queues"; fi
+if [ "$MAINCOM" = "consumers" ]; then MAINCOM="consumer"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
@@ -4455,13 +4585,17 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "delete" ]; then
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "limits" ]; then
 	queueLimits
 
-elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "consumers" ]; then
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "consumers" ] ||
+     [ "$MAINCOM" == "queues" -a "$SUBCOM" == "listconsumer" ] ||
+     [ "$MAINCOM" == "consumer" -a "$SUBCOM" == "list" ]; then
 	listConsumerGroups $1
 #elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "showconsumer" ]; then
 #	showQueue $1
-elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "createconsumer" ]; then
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "createconsumer" ] ||
+     [ "$MAINCOM" == "consumer" -a "$SUBCOM" == "create" ]; then
 	createConsumerGroup "$@"
-elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "deleteconsumer" ]; then
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "deleteconsumer" ] ||
+     [ "$MAINCOM" == "consumer" -a "$SUBCOM" == "delete" ]; then
 	deleteConsumerGroup "$@"
 
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "queuemsg" ]; then
