@@ -953,7 +953,7 @@ cesHelp()
 
 heatHelp()
 {
-	echo "--- HEAT ---"
+	echo "--- HEAT (RTS) ---"
 	echo "otc stack list          # List heat stacks"
 	echo "otc stack show SID      # Show stack SID (Name or ID)"
 	echo "otc stack resources SID # List stack resources"
@@ -994,9 +994,15 @@ dmsHelp()
 	echo "otc queues limits       # Show queuing quota"
 	echo "otc queues consumers QID          # Show consumer groups for queue QID" 
 	echo "otc queues createconsumer QID NM  # Create consumer group with name NM for queue QID"
-	echo "otc queues deleteconsumer QID NM  # Delete consumer group with name NM for queue QID"
-	echo "otc queues queuemsg QID [VALS]    # Send message to queue QID (read from stdin or pass key-value pairs"
-	echo "    --..."
+	echo "otc queues deleteconsumer QID GID # Delete consumer group with ID GIM for queue QID"
+	echo "otc queues queuemsg QID [K=V [..]]# Send message to queue QID (read JSON from stdin"
+	echo "    --attributes JSON             # or pass key-value pairs). Attributes are optional"
+	echo "    --attrkv K=V[,K=V[,..]]       # and can be passed as JSON or KEY=VALUE pairs"
+	echo "otc queues getmsg QID GID         # Read message from queue QID for cons group GID (JSON)"
+	echo "    --kv                          # Output as key[N]=value statements (be aware of sec!)"
+   echo "    --maxmsg N                    # Return at most N messages"
+   echo "    --ack                         # Acknowledge message receipt(s)"
+	echo "otc queues ackmsg QID NM H1 [..]  # Acknowledge message receipt by handles H1 ..."
 }
 
 customHelp()
@@ -4005,6 +4011,7 @@ if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
 if [ "$MAINCOM" = "auth" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "identity" ]; then MAINCOM="iam"; fi
+if [ "$MAINCOM" = "ces" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "metric" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "alarm" ]; then MAINCOM="alarms"; fi
 if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
@@ -4043,13 +4050,15 @@ fi
 if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; then
 	printHelp
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-short" ]; then
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "help" ]; then
+	ecsHelp
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-short" ]; then
 	getShortECSList
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list" ]; then
 	getECSList
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "list-detail" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-detail" ]; then
 	getECSDetail "$1"
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "details" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "details" ]; then
 	getECSDetailsNew "$1"
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
@@ -4059,7 +4068,7 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 	getLimits
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
@@ -4100,7 +4109,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "create" ]; then
 		exit 1
 	fi
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ]; then
 	export ECSACTION="reboot"
 	export ECSACTIONSERVERID=$1
 
@@ -4112,7 +4121,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "reboot-instances" ]; then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start-instances" ]; then
 	ECSACTION="os-start"
 	ECSACTIONSERVERID=$1
 	if [ "$ECSACTIONSERVERID" == "" ]; then
@@ -4123,7 +4132,7 @@ elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "start-instances" ]; then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs" ] && [ "$SUBCOM" == "stop-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "stop-instances" ]; then
 	ECSACTION="os-stop"
 	ECSACTIONSERVERID=$1
 
@@ -4147,6 +4156,8 @@ elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "delete" ]; then
 elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "wait" ]; then
 	WAIT_FOR_JOB=true
 	WaitForTask "$@"
+elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "help" ]; then
+	taskHelp
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
 	ECSDelete $@
@@ -4164,24 +4175,28 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "attach-nic" ]; then
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "detach-nic" ]; then
 	ECSDetachPort "$@"
 
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "vpc" -a "$SUBCOM" == "help" ]; then
+	vpcHelp
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "list" ]; then
 	getVPCList
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "show" ]; then
 	getVPCDetail $1
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "delete" ]; then
 	VPCDelete $1
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "create" ]; then
 	VPCCreate $1
-elif [ "$MAINCOM" == "vpc" ] && [ "$SUBCOM" == "limits" ]; then
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "limits" ]; then
 	getVPCLimits
 
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "help" ]; then
+	eipHelp
+elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "list" ]; then
 	getPUBLICIPSList
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "show" ]; then
 	getPUBLICIPSDetail $1
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "create" ]; then
 	PUBLICIPSCreate
-elif [ "$MAINCOM" == "publicip" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "delete" ]; then
 	PUBLICIPSDelete $@
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
      [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "associate" ]; then
@@ -4190,29 +4205,33 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
      [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "disassociate" ]; then
 	PUBLICIPSUnbind $@
 
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "" ]; then
+	subnetHelp
+elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "list" ]; then
 	getSUBNETList
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "show" ]; then
 	getSUBNETDetail "$1"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "delete" ]; then
 	if test "$2" == "--vpc-name"; then convertVPCNameToId "$3"; fi
 	if test "$2" == "--vpc-id"; then VPCID="$3"; fi
 	SUBNETDelete "$1"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "namelist" ]; then
+elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "namelist" ]; then
 	# FIXME -- what should this do?
 	IMAGENAME=$1
 	# convertSUBNETNameToId "$SUBNETNAME" "$VPIC_ID"
 	# convertSECUGROUPNameToId "$SECUGROUPNAME"
 	# convertIMAGENameToId "$IMAGENAME"
-elif [ "$MAINCOM" == "subnet" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "create" ]; then
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SUBNETCreate
 
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "help" ]; then
+	sgHelp
+elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "list" ]; then
 	VPCNAME=$1
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	getSECGROUPList
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "create" ]; then
 	if [ -n "$VPCNAME" -a -z "$VPCID" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SECGROUPCreate "$@"
 elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
@@ -4224,33 +4243,35 @@ elif [ "$MAINCOM" == "security-group-rules" -a "$SUBCOM" == "list" ] ||
 	fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules/$SECUGROUP"
 	getSECGROUPRULESList $1
-elif [ "$MAINCOM" == "security-group-rules" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "security-group-rules"  -a "$SUBCOM" == "create" ]; then
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if [ "$SECUGROUPNAME" != "" ]; then convertSECUGROUPNameToId "$SECUGROUPNAME"; fi
 	#AUTH_URL_SEC_GROUP_RULES="${BASEURL/iam/vpc}/v1/$OS_PROJECT_ID/security-group-rules"
 	SECGROUPRULECreate
-elif [ "$MAINCOM" == "security-group" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "delete" ]; then
 	SECGROUPDelete "$@"
 
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "help" ]; then
+	imageHelp
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "list" ]; then
 	getIMAGEList "$@"
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "show" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "show" ]; then
 	getIMAGEDetail $1
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "upload" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "upload" ]; then
 	if test -r "$2"; then
 		uploadIMAGEfile $1 $2
 	else
 		uploadIMAGEobj $1 $2
 	fi
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "create" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "create" ]; then
 	createIMAGE "$1"
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "register" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "register" ]; then
 	registerIMAGE "$1" "$2"
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "delete" ]; then
 	for img in "$@"; do deleteIMAGE $img; done
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "update" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "update" ]; then
 	updateIMAGE "$1"
-elif [ "$MAINCOM" == "images" ] && [ "$SUBCOM" == "download" ]; then
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "download" ]; then
 	downloadIMAGE "$@"
 	WaitForTask $IMGJOBID 5
 elif [ "$MAINCOM" == "images" -a "$SUBCOM" == "listmember" ] ||
@@ -4297,42 +4318,45 @@ elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "delete" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delkey" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "keyname-delete" ]; then
 	deleteKEYPAIR "$@"
+elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "help" ]; then
+	keypairHelp
 
-
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "token" ]; then
+elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "help" ]; then
+	iamHelp
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "token" ]; then
 	echo $TOKEN
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "endpoints" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "services" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "services" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 # These are not (yet) supported on OTC
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "regions" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "regions" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/regions" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "catalog" -o "$SUBCOM" == "domain" ]; then
    echo -n ""
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "catalog2" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "catalog2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "users" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "users" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
    echo -n ""
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "roles2" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "policies" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "groups" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 # End of unsupported APIs
-elif [ "$MAINCOM" == "iam" ] && [ "$SUBCOM" == "projects" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
@@ -4361,6 +4385,8 @@ elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "keystonemeta" ]; then
 	ERR=$?
    echo
 
+elif  [ "$MAINCOM" == "evs" -a "$SUBCOM" == "help" ]; then
+	evsHelp
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ]; then
 	getEVSList
@@ -4375,7 +4401,7 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
 	WaitForTask $EVSTASKID 5
-elif [ "$MAINCOM" == "evs" ] && [ "$SUBCOM" == "delete" ]; then
+elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "delete" ]; then
 	EVSDelete "$@"
 	echo "Task ID: $EVSTASKID"
 	WaitForTask $EVSTASKID 5
@@ -4398,6 +4424,8 @@ elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "list" ]; then
 	getBackupPolicyList
 elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "show" ]; then
 	getBackupPolicyDetail "$1"
+elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "help" ]; then
+	backupHelp
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
 	getBackupList
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
@@ -4418,6 +4446,8 @@ elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
 
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ]; then
+	elbHelp
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
 	getELBList
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "show" ]; then
@@ -4456,6 +4486,8 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
 
+elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ]; then
+	rdsHelp
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "listinstances" ]; then
 	getRDSInstanceList
@@ -4500,6 +4532,8 @@ elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletesnapshot" ] ||
      [ "$MAINCOM" == "rds" -a "$SUBCOM" == "deletebackup" ]; then
 	deleteRDSSnapshot "$@"
 
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "help" ]; then
+	dnsHelp
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "list" ]; then
 	listDomains
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "create" ]; then
@@ -4517,6 +4551,8 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
 	addRecord "$@"
 
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "help" ]; then
+	cceHelp
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list" ]; then
 	shortlistClusters
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ] ||
@@ -4529,6 +4565,8 @@ elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
 	showClusterHost "$@"
 
+elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "help" ]; then
+	cesHelp
 elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "list" ]; then
 	listMetrics "$@"
 elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "favorites" ]; then
@@ -4548,6 +4586,8 @@ elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "enable" ]; then
 elif [ "$MAINCOM" == "alarms" -a "$SUBCOM" == "delete" ]; then
 	deleteAlarms "$1"
 
+elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "help" ]; then
+	heatHelp
 elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "list" ]; then
 	listStacks
 elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "show" ]; then
@@ -4571,9 +4611,13 @@ elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "deployments" ]; then
 elif [ "$MAINCOM" == "stack" -a "$SUBCOM" == "showdeployment" ]; then
 	showStackDeployment "$1"
 
+elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "help" ]; then
+	newotcHelp
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
 
+elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
+	dmsHelp
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "list" ]; then
 	listQueues
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "show" ]; then
@@ -4606,6 +4650,8 @@ elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "ackmsg" ]; then
 	ackMessage "$@"
 
 
+elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "help" ]; then
+	smnHelp
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "list" ]; then
 	listTopics
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "show" ]; then
@@ -4625,17 +4671,21 @@ elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "publish" ]; then
 elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "SMS" ]; then
 	sendSMS "$@"
 
-elif [ "$MAINCOM" == "antiddos" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "antiddos"  -a "$SUBCOM" == "list" ]; then
 	listAntiDDoS
-elif [ "$MAINCOM" == "kms" ] && [ "$SUBCOM" == "list" ]; then
+elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
-elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
+elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
+	newotcHelp
+elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
 	listMRSClusters
-elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs" ]; then
+elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs" ]; then
 	listMRSJobs
-elif [ "$MAINCOM" == "mrs" ] && [ "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
+elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
 	showMRSJob $1
 
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
+	mdsHelp
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
 	getMeta meta_data.json "$@"
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "vendor_data" ]; then
@@ -4645,6 +4695,8 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
 	getMeta password "$@"
 
+elif [ "$MAINCOM" == "custom" -a "$SUBCOM" == "help" ]; then
+	customHelp
 elif [ "$MAINCOM" == "custom" ]; then
 	handleCustom "$SUBCOM" "$@"
 else
