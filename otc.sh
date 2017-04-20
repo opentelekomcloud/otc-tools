@@ -1352,6 +1352,23 @@ convertSnapshotNameToId()
 	return $RC
 }
 
+convertEipToId()
+{
+
+	if test -n "$1"; then EIP="$1"; fi
+	if is_uuid "$EIP"; then FILTER=".id == \"$EIP\""; else FILTER=".public_ip_address == \"$EIP\""; fi
+	setlimit; setapilimit 400 30 publicips
+	EIP_JSON=$(curlgetauth_pag $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq ".publicips[] | select($FILTER)"; return ${PIPESTATUS[0]})
+	if test $? != 0 -o -z "EIP_JSON" -o "$EIP_JSON" = "null"; then
+		echo "ERROR: No Floating IP $EIP found" 1>&2
+		exit 3
+	fi
+	EIP_ID=$(echo "$EIP_JSON" | jq '.id' | tr -d '"')
+	EIP_STATUS=$(echo "$EIP_JSON" | jq '.status' | tr -d '"')
+	export EIP_ID EIP_STATUS
+	return 0
+}
+
 handleCustom()
 {
 	if test "$1" == "--jqfilter"; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
@@ -3207,18 +3224,14 @@ getPortID()
 
 BindPublicIpToCreatingVM()
 {
-	local EIPID PRTID
+	local PRTID
+	convertEipToId "$EIP"
+	if test "$EIP_STATUS" != "DONW"; then
+		echo "ERROR: Requested EIP $EIP_ID has wrong status $EIP_STATUS" 1>&2
+	fi
 	##### use ecs server id to attach volumes, external ip_addresses, ...
-	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID);done
-	##### input: $EIP
-	EIPID=$(getPUBLICIPSList | sed 's/   /;/g' \
-          |  while IFS=";" read id eip status iip bid b type;do
-                   [ "$eip" = "$EIP" ]||[ "$id" = "$EIP" ]|| continue
-                   [ "$status" = "DOWN" ] && echo "$id"   && break
-                   echo "ERROR: requested external IP is of wrong status: $status" 1>&2
-                done)
-	[ -n "$EIPID" ] && PUBLICIPSBind "$EIPID" "$PRTID" \
-	|| return 1
+	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID); done
+	PUBLICIPSBind "$EIP_ID" "$PRTID"
 }
 
 PUBLICIPSBind()
@@ -4205,6 +4218,9 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
      [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "disassociate" ]; then
 	PUBLICIPSUnbind $@
+elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == find ]; then
+	convertEipToId $1
+	echo "$EIP_ID   $EIP_STATUS"
 
 elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "help" ]; then
 	subnetHelp
