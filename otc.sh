@@ -1364,6 +1364,7 @@ convertEipToId()
 		exit 3
 	fi
 	EIP_ID=$(echo "$EIP_JSON" | jq '.id' | tr -d '"')
+	EIP_IP=$(echo "$EIP_JSON" | jq '.public_ip_address' | tr -d '"')
 	EIP_STATUS=$(echo "$EIP_JSON" | jq '.status' | tr -d '"')
 	export EIP_ID EIP_STATUS
 	return 0
@@ -4220,7 +4221,7 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
 	PUBLICIPSUnbind $@
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == find ]; then
 	convertEipToId $1
-	echo "$EIP_ID   $EIP_STATUS"
+	echo "$EIP_ID   $EIP_IP   $EIP_STATUS"
 
 elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "help" ]; then
 	subnetHelp
