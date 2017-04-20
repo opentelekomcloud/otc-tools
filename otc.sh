@@ -4034,7 +4034,7 @@ if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
 
-if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" ]; then
+if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" -a "$SUBCOM" != "help" ]; then
 	if [ "$MAINCOM" == "iam" -a -z "$REQSCOPE" ] && \
 		[  "$SUBCOM" != "token" -a "$SUBCOM" != "project" -a "$SUBCOM" != "catalog" \
 		-a "$SUBCOM" != "services" -a "$SUBCOM" != "endpoints" -a "$SUBCOM" != "roles" \
