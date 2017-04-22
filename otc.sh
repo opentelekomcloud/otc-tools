@@ -149,6 +149,7 @@ else
 fi
 
 if test -z "$TMPDIR"; then TMPDIR=/dev/shm; fi
+if test ! -d "$TMPDIR"; then TMPDIR=/tmp; fi
 
 # REST call curl wrappers ###########################################################
 
@@ -179,14 +180,15 @@ docurl()
 	if test $RC != 0; then echo "$ANS" 1>&2
 	else
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
-		if test "$CODE" == "null"; then CODE=""; fi
-		local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
-		if test "$CODE" == "null"; then CODE=""; fi
+		if test "$CODE" == "null"; then
+			local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
+			if test "$CODE" == "null"; then CODE=""; fi
+		fi
 		if test "$INDMS" != 1; then
-		local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
-		if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
-		local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
-		if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
+			if test -n "$MSG" -a "$MSG" != "null" -a "$MSG" != "[]"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		fi
 	fi
 	return $RC
