@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.10
+VERSION=0.7.11
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1365,7 +1365,7 @@ convertEipToId()
 	if is_uuid "$EIP"; then FILTER=".id == \"$EIP\""; else FILTER=".public_ip_address == \"$EIP\""; fi
 	setlimit; setapilimit 400 30 publicips
 	EIP_JSON=$(curlgetauth_pag $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq ".publicips[] | select($FILTER)"; return ${PIPESTATUS[0]})
-	if test $? != 0 -o -z "EIP_JSON" -o "$EIP_JSON" = "null"; then
+	if test $? != 0 -o -z "$EIP_JSON" -o "$EIP_JSON" = "null"; then
 		echo "ERROR: No Floating IP $EIP found" 1>&2
 		exit 3
 	fi
@@ -3223,17 +3223,22 @@ PUBLICIPSDelete()
 
 getPortID()
 {
-	(  getECSVM $1 | sed -n '/^\[/,/^\]/p' \
-		| jq '.[] | .port_state + ";" + .fixed_ips[0].ip_address + ";" + .port_id' | tr -d \" \
-		| while IFS=\; read state ip port; do [ "$state" = ACTIVE ] && [ "$ip" != "" ] && echo $port; done )
-	#return ${PIPESTATUS[0]}
+	local OSIF OSIP
+	OSIF=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$1/os-interface" | jq '.interfaceAttachments[]'; exit ${PIPESTATUS[0]})
+	RC=$?; if test $RC != 0; then return $RC; fi
+	if test "$(echo $OSIF | jq '.port_state' | tr -d '"')" == ACTIVE; then
+		OSIP=$(echo $OSIF | jq '.fixed_ips[0].ip_address' | tr -d '"')
+		if test -n "$OSIP" -a "$OSIP" != "null"; then
+			echo "$OSIF" | jq '.port_id' | tr -d '"'
+		fi
+	fi
 }
 
 BindPublicIpToCreatingVM()
 {
 	local PRTID
 	convertEipToId "$EIP"
-	if test "$EIP_STATUS" != "DONW"; then
+	if test "$EIP_STATUS" != "DOWN"; then
 		echo "ERROR: Requested EIP $EIP_ID has wrong status $EIP_STATUS" 1>&2
 	fi
 	##### use ecs server id to attach volumes, external ip_addresses, ...
@@ -4108,10 +4113,10 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
 
+	ECSID=null
 	if [ "$NUMCOUNT" = 1 ]; then
 		WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
 		if test -n "$EIP"; then
-			ECSID=null
 			while [ null = "$ECSID" ]; do
 				sleep 5
 				getECSJOBList $ECSSUBTASKID
@@ -4122,7 +4127,9 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	fi
 
 	WaitForTask $ECSTASKID 5
-	ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	if [ null = "$ECSID" ]; then
+		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	fi
 	echo "ECS ID: $ECSID"
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
