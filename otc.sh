@@ -2738,7 +2738,8 @@ getPersonalizationJSON()
 
 	export PERSONALIZATION=""
 	if [ "$FILECOLLECTIONJSON" != "" ]; then
-		export PERSONALIZATION='"personality": [ '"$FILECOLLECTIONJSON"'],'
+		export PERSONALIZATION='
+			"personality": [ '"$FILECOLLECTIONJSON"'],'
 	fi
 }
 
@@ -2885,16 +2886,20 @@ ECSCreate()
 	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
 		# TODO: have to got from param
 		OPTIONAL="$OPTIONAL
-		\"publicip\": {
-			\"eip\": {
+			\"publicip\": {
+			 \"eip\": {
 				\"iptype\": \"5_bgp\",
-				\"bandwidth\": {
-					\"size\": $BANDWIDTH,
-					\"sharetype\": \"PER\",
-					\"chargemode\": \"traffic\"
-				}
-			}
-		},"
+				\"bandwidth\": { \"size\": $BANDWIDTH, \"sharetype\": \"PER\", \"chargemode\": \"traffic\" }
+			 }
+			},"
+	elif [ -n "$EIP" ]; then
+		convertEipToId $EIP
+		if [ "$EIP_STATUS" != "DOWN" ]; then
+			echo "ERROR: Status of EIP $EIP_ID ($EIP_IP) must be DOWN, is $EIP_STATUS" 1>&2
+			exit 2
+		fi
+		OPTIONAL="$OPTIONAL
+			\"publicip\": { \"id\": \"$EIP_ID\" },"
 	fi
 
 	if test -n "$KEYNAME"; then
@@ -2922,16 +2927,19 @@ ECSCreate()
 	local USERDATAJSON=""
 	if test -n "$USERDATA"; then
 		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
-		USERDATAJSON="\"user_data\": \""$(echo "$USERDATA" | base64)"\","
+		USERDATAJSON="
+			\"user_data\": \""$(echo "$USERDATA" | base64)"\","
 	fi
 	if test -n "$USERDATAFILE"; then
 		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
 		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
-		USERDATAJSON="\"user_data\": \""$(base64 "$USERDATAFILE")"\","
+		USERDATAJSON="
+			\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
 	if test -n "$DATADISKS"; then
-		DATA_VOLUMES=$(build_data_volumes_json $DATADISKS)
+		DATA_VOLUMES="
+			\"data_volumes\": [ $(build_data_volumes_json $DATADISKS) ],"
 	fi
 	# multi-NIC
 	local MORENICS=""
@@ -2952,20 +2960,16 @@ ECSCreate()
 		SUBNETID="$SUBNETIDOLD"
 	fi
 
-	local REQ_CREATE_VM='{
+	local REQ_CREATE_VM='	{
 		"server": {
 			"availability_zone": "'"$AZ"'",
 			"name": "'"$INSTANCE_NAME"'",
 			"imageRef": "'"$IMAGE_ID"'",
-			"root_volume": { "volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE' },
-			"data_volumes": ['" $DATA_VOLUMES "'],
-			"flavorRef": "'"$INSTANCE_TYPE"'",
-			'"$PERSONALIZATION"'
-			'"$USERDATAJSON"'
+			"root_volume": { "volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE' }, '$DATA_VOLUMES'
+			"flavorRef": "'"$INSTANCE_TYPE"'", '"$PERSONALIZATION"' '"$USERDATAJSON"'
 			"vpcid": "'"$VPCID"'",
 			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' }'"$MORENICS"' ],
-			'"$OPTIONAL"'
+			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } '"$MORENICS"' ], '"$OPTIONAL"'
 			"count": '$NUMCOUNT'
 		}
 	}'
@@ -4113,24 +4117,29 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
 
-	ECSID=null
-	if [ "$NUMCOUNT" = 1 ]; then
+	ECSID="null"
+	if [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" -o "$WAIT_FOR_JOB" != "false" ]; then
 		WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
-		if test -n "$EIP"; then
-			while [ null = "$ECSID" ]; do
-				sleep 5
-				getECSJOBList $ECSSUBTASKID
-				ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | sed 's/"//g')
-			done
+		declare -i ctr=0
+		while [ null = "$ECSID" -a $ctr -le 400 ]; do
+			echo -n "."
+			let ctr+=1
+			sleep 5
+			getECSJOBList $ECSSUBTASKID
+			ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | tr -d '"')
+		done
+		if test $ctr -ge 400; then echo "TIMEOUT"; else echo; fi
+		#FIXME: Old code, disabled
+		if false && test -n "$EIP" -a "$ECSID" != "null"; then
 			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
 		fi
 	fi
 
 	WaitForTask $ECSTASKID 5
-	if [ null = "$ECSID" ]; then
-		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | sed 's/"//g')
+	if [ "null" == "$ECSID" ]; then
+		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | tr -d '"')
 	fi
-	echo "ECS ID: $ECSID"
+	[ -n "$ECSID" -a "null" != "$ECSID" ] && echo "ECS ID: $ECSID"
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
 	if [ "$ECSJOBSTATUS" != "SUCCESS" ]; then
