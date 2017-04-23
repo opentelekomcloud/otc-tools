@@ -1,8 +1,12 @@
 #!/bin/bash
 # vi:set ts=3 sw=3:
-# == Module: Open Telekom Cloud Cli Interface 0.7.x
+# == Module: Open Telekom Cloud CLI 0.7.x
 #
 # Manage OTC via Command Line
+#
+# Provides a shell/curl/jq based alternative to the
+# python-openstackclient tools, exposing a lot o standard OpenStack functions
+# as well as some custom OTC interfaces.
 #
 # === Parameters
 #
@@ -23,7 +27,7 @@
 #
 # ... and the standard OS_ variables that you also need for the OpenStack python tools
 # If unset, these are looked for in standard places
-# ~/.ostackrc$OTC_TENANT, ~/.ostackrc, ~/novarc, ~/openrc
+# ~/.ostackrc.$OTC_TENANT, ~/.ostackrc, ~/novarc, ~/openrc
 #
 # === Examples
 #
@@ -182,13 +186,13 @@ docurl()
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
 		if test "$CODE" == "null"; then
 			local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
-			if test "$CODE" == "null"; then CODE=""; fi
+			if test "$CODE" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
-			if test -n "$MSG" -a "$MSG" != "null" -a "$MSG" != "[]"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			if test -n "$MSG" -a "$MSG" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		fi
 	fi
 	return $RC
