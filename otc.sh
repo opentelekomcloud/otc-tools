@@ -186,13 +186,13 @@ docurl()
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
 		if test "$CODE" == "null"; then
 			local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
-			if test "$CODE" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
+			if test "${CODE:0:4}" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
-			if test -n "$MSG" -a "$MSG" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		fi
 	fi
 	return $RC
