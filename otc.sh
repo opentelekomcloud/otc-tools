@@ -556,6 +556,7 @@ getIAMToken()
 	AUTH_URL_KEYNAMES="$NOVA_URL/os-keypairs"
 
 	AUTH_URL_VPCS="$NEUTRON_URL/v1/$OS_PROJECT_ID/vpcs"
+	AUTH_URL_ROUTER="$NEUTRON_URL/v2.0/routers"
 	AUTH_URL_PUBLICIPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/publicips"
 	AUTH_URL_SEC_GROUPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/security-groups"
 	AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2/$OS_PROJECT_ID/security-group-rules"
@@ -735,11 +736,13 @@ vpcHelp()
 {
 	echo "--- Virtual Private Network (VPC) ---"
 	echo "otc vpc list                    # list all vpc"
-	echo "otc vpc show VPCID              # display VPC (Router) details"
-	echo "otc vpc delete VPCID            # delete VPC"
+	echo "otc vpc show VPC                # display VPC (Router) details"
+	echo "otc vpc delete VPC              # delete VPC"
 	echo "otc vpc create                  # create vpc"
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
+	echo "otc vpc listroutes VPC          # list VPC routes"
+	echo "otc vpc en/disable-snat VPC     # list VPC related quota"
 	echo "otc vpc limits                  # list VPC related quota"
 }
 
@@ -1521,6 +1524,47 @@ getVPCDetail()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_VPCS/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
+}
+
+getVPCDetail2()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+getVPCRoutes()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.router.routes[]'
+	return ${PIPESTATUS[0]}
+}
+
+switchVPCSNAT()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	EGW=$(curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.router.external_gateway_info.network_id')
+   RC=${PIPESTATUS[0]}
+	if test $RC != 0; then return $RC; fi
+   SNAT="{ \"router\": {
+		\"external_gateway_info\": {
+			\"network_id\": \"$EGW\",
+			\"enable_snat\": $2
+		}
+	}
+}"
+   curlputauth $TOKEN "$SNAT" "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+enableVPCSNAT()
+{
+	switchVPCSNAT $1 true
+}
+
+disableVPCSNAT()
+{
+	switchVPCSNAT $1 false
 }
 
 VPCDelete()
@@ -4218,10 +4262,18 @@ elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "list" ]; then
 	getVPCList
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "show" ]; then
 	getVPCDetail $1
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "show2" ]; then
+	getVPCDetail2 $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "delete" ]; then
 	VPCDelete $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "create" ]; then
 	VPCCreate $1
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "listroutes" ]; then
+	getVPCRoutes $1
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "enable-snat" ]; then
+	enableVPCSNAT $1
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "disable-snat" ]; then
+	disableVPCSNAT $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "limits" ]; then
 	getVPCLimits
 
