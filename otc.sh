@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.11
+VERSION=0.7.12
 
 # Get Config ####################################################################
 warn_too_open()
@@ -742,6 +742,8 @@ vpcHelp()
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
 	echo "otc vpc listroutes VPC          # list VPC routes"
+	echo "otc vpc addroute VPC DEST NHOP  # add a route to VPC router with dest and nexthop"
+	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
 	echo "otc vpc en/disable-snat VPC     # list VPC related quota"
 	echo "otc vpc limits                  # list VPC related quota"
 }
@@ -1535,8 +1537,41 @@ getVPCDetail2()
 
 getVPCRoutes()
 {
+	local SEP="   "
+	if test "$1" == "--via"; then SEP=" via "; shift; fi
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
-	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.router.routes[]'
+	if test "$2" == "--via"; then SEP=" via "; fi
+	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r ".router.routes[] | .destination+\"$SEP\"+.nexthop"
+	return ${PIPESTATUS[0]}
+}
+
+addVPCRoute()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	if test "$2" == "0/0"; then DEST="0.0.0.0/0"; else DEST="$2"; fi
+	if test "$3" == "via"; then shift; fi
+	if test -z "$3"; then echo "ERROR: Need to specify dest and nexthop" 1>&2; exit 2; fi
+	ROUTE="{ \"router\": {
+	\"routes\": [ {
+		\"destination\": \"$DEST\",
+		\"nexthop\": \"$3\"
+	} ] } }"
+	curlputauth $TOKEN "$ROUTE" "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deleteVPCRoute()
+{
+	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
+	if test "$2" == "0/0"; then DEST="0.0.0.0/0"; else DEST="$2"; fi
+	#if test -z "$3"; then echo "ERROR: Need to specify dest and nexthop" 1>&2; exit 2; fi
+	# FIXME: We currently assume that we can just delete all routes ...
+	# As of 2017-05, only one 0/0 route is supported by OTC, so it's fine
+	# As soon as more routes can be configured, we would have to query all routes,
+	# look for the one matching the to be deleted route and then put the remaining
+	ROUTE="{ \"router\": {
+	\"routes\": [ ] } }"
+	curlputauth $TOKEN "$ROUTE" "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4268,8 +4303,18 @@ elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "delete" ]; then
 	VPCDelete $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "create" ]; then
 	VPCCreate $1
-elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "listroutes" ]; then
-	getVPCRoutes $1
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "listroutes" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-list" ]; then
+	getVPCRoutes "$@"
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "addroute" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-add" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-create" ]; then
+	addVPCRoute "$@"
+elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "deleteroute" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-delete" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "route-del" ] ||
+     [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "delroute" ]; then
+	deleteVPCRoute "$@"
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "enable-snat" ]; then
 	enableVPCSNAT $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "disable-snat" ]; then
