@@ -514,6 +514,8 @@ getIAMToken()
 			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
 		fi
+		local CATJSON=$(echo "$IAMRESP" | tail -n1 | jq '.access.serviceCatalog[]')
+		local ROLEJSON=$(echo "$IAMRESP" | tail -n1 | jq '.access')
 		CINDER_URL=$(getv2endpoint "$IAMJSON" volumev2 $OS_PROJECT_ID)
 		NEUTRON_URL=$(getv2endpoint "$IAMJSON" network $OS_PROJECT_ID)
 		GLANCE_URL=$(getv2endpoint "$IAMJSON" image $OS_PROJECT_ID)
@@ -523,6 +525,8 @@ getIAMToken()
 		TROVE_URL=$(getv2endpoint "$IAMJSON" database $OS_PROJECT_ID)
 		KEYSTONE_URL=$(getv2endpoint "$IAMJSON" identity $OS_PROJECT_ID)
 		CEILOMETER_URL=$(getv2endpoint "$IAMJSON" metering $OS_PROJECT_ID)
+		if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.endpoints[].id+"   "+.type+"   "+.name+"   "+.endpoints[].publicURL+"   "+.endpoints[].region+"   public"' | tr -d '"'; fi
+		if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.metadata.roles[]+"   "+.user.roles[].name' | tr -d '"'; fi
 	fi
 	# FIXME: Delete this
 	# For now fall back to hardcoded URLs
