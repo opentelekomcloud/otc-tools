@@ -748,7 +748,7 @@ vpcHelp()
 	echo "otc vpc listroutes VPC          # list VPC routes"
 	echo "otc vpc addroute VPC DEST NHOP  # add a route to VPC router with dest and nexthop"
 	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
-	echo "otc vpc en/disable-snat VPC     # list VPC related quota"
+	echo "otc vpc en/disable-snat VPC     # enable/disable snat"
 	echo "otc vpc limits                  # list VPC related quota"
 }
 
