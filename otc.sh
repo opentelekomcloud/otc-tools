@@ -439,7 +439,7 @@ getIAMToken()
 			}
 	}
 	'
-   if test -n "$OS_PROJECT_DOMAIN_NAME"; then 
+	if test -n "$OS_PROJECT_DOMAIN_NAME"; then
 		IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
 	fi
 	#if test -n "$DEBUG"; then
@@ -1007,7 +1007,7 @@ dmsHelp()
 	echo "otc queues create NAME [DESC]     # Create queue with NAME (opt: DESCription)"
 	echo "otc queues delete QID   # Delete queue QID"
 	echo "otc queues limits       # Show queuing quota"
-	echo "otc queues consumers QID          # Show consumer groups for queue QID" 
+	echo "otc queues consumers QID          # Show consumer groups for queue QID"
 	echo "otc queues createconsumer QID NM  # Create consumer group with name NM for queue QID"
 	echo "otc queues deleteconsumer QID GID # Delete consumer group with ID GIM for queue QID"
 	echo "otc queues queuemsg QID [K=V [..]]# Send message to queue QID (read JSON from stdin"
@@ -1015,8 +1015,8 @@ dmsHelp()
 	echo "    --attrkv K=V[,K=V[,..]]       # and can be passed as JSON or KEY=VALUE pairs"
 	echo "otc queues getmsg QID GID         # Read message from queue QID for cons group GID (JSON)"
 	echo "    --kv                          # Output as key[N]=value statements (be aware of sec!)"
-   echo "    --maxmsg N                    # Return at most N messages"
-   echo "    --ack                         # Acknowledge message receipt(s)"
+	echo "    --maxmsg N                    # Return at most N messages"
+	echo "    --ack                         # Acknowledge message receipt(s)"
 	echo "otc queues ackmsg QID NM H1 [..]  # Acknowledge message receipt by handles H1 ..."
 }
 
