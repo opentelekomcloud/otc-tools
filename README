@@ -18,7 +18,7 @@ Usage
 Set your OpenStack environment (OS_ variables) just like you do for the native
 OpenStack clients (typically by sourcing a ~/.ostackrc or ~/novarc or ~/.openrc
 file). The minimum set is OS_USERNAME, OS_USER_DOMAIN_NAME (could be derived from
-OS__USERNAME for MyWorkplace users), OS_PASSWORD, OS_PROJECT_NAME (eu-de), and
+OS_USERNAME for MyWorkplace users), OS_PASSWORD, OS_PROJECT_NAME (eu-de), and
 OS_AUTH_URL (https://iam.eu-de.otc.t-systems.com/v3).
 
 Optionally, you can also set some additional defaults on otc_env.sh by editing
@@ -39,19 +39,15 @@ so feel free to use it here and contribute to fill gaps you care about. There
 is a small, but active community on github.com/OpenTelekomCloud/.
 
 The OpenStack REST API has a paginated interfaces to allow the consumer to
-control how large a response may get. otc-tools currently just always tries
-to get everything in one go; it increases the default limits to at least
-500 (higher, up to 1600 in some categories). These limits should be more than
-large enough to avoid you running into them if you move within the default
-quotas. However, if you have very large environments, keep in mind that
-otc-tools might not show you the whole truth any more. Please talk to us
-or submit a PR if you need further increases in the limits.
-You can control API limits using --limit= and --marker= options.
+control how large a response may get. Since 0.7.6, otc-tools ist using this
+feature to avoid exceeding the maximum response sizes on OTC (a few hundred
+kB).  So otc-tools ends up doing a few REST calls in case you request large
+amounts of data, such as otc.sh ecs list when you have hundreds of VMs.
 
-Note that the OTC API Gateway has also limits on the response size; otc.sh
-does try to automatically paginate to avoid answers that have been cut off
-(and thus fail due to SSL decryption failure). Use --maxgetkb= to override
-default (250kiB).
+You can control API limits using --limit= and --marker= options if you want
+to manually control the amount of information. You can also use --maxgetkb=
+to override the default API response limit (250kiB) when relying on
+autopagination.
 
 Output formatting
 -----------------
