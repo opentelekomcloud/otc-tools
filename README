@@ -38,11 +38,12 @@ where the OTC API is extended or different from the standard OpenStack API,
 so feel free to use it here and contribute to fill gaps you care about. There
 is a small, but active community on github.com/OpenTelekomCloud/.
 
-The OpenStack REST API has a paginated interfaces to allow the consumer to
+The OpenStack REST API has paginated interfaces to allow the consumers to
 control how large a response may get. Since 0.7.6, otc-tools ist using this
-feature to avoid exceeding the maximum response sizes on OTC (a few hundred
-kB).  So otc-tools ends up doing a few REST calls in case you request large
-amounts of data, such as otc.sh ecs list when you have hundreds of VMs.
+feature to avoid exceeding the maximum response sizes on OTC. (Tha API gateway
+limits responses to a few hundred kB).
+So otc-tools ends up doing a few REST calls in case you request large amounts
+of data, such as otc.sh ecs list when you have hundreds of VMs.
 
 You can control API limits using --limit= and --marker= options if you want
 to manually control the amount of information. You can also use --maxgetkb=

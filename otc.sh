@@ -819,7 +819,7 @@ imageHelp()
 	echo "    --description  <description># optional"
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
 	echo "    --property, --min-disk, --os-version and --wait supported"
-	echo "otc images update <id>          # change properties, --image-name, min-*"
+	echo "otc images update <id>          # change properties, --image-name, --min-*"
 	echo "otc images delete <id>          # delete (private) image by ID"
 	echo
 	echo "otc images listshare <id>       # list projects image id is shared with"
