@@ -714,7 +714,7 @@ evsHelp()
 	echo "    --az                  <AZ>"
 	echo "    --shareable                 # create shareable volume"
 	echo "    --crypt CRYPTKEYID          # encryption"
-	echo "    --scsi                      # SCSI passthrough disk attachment"
+	echo "    --scsi/--vbd                # SCSI passthrough or plain VBD attachment"
 	echo "otc evs delete                  # delete volume"
 	echo
 	echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
@@ -3220,6 +3220,7 @@ EVSCreate()
 	fi
    if test -n "$CYPTKEYID"; then META="\"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
    if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
+   if test -n "$VBD"; then META="$META \"hw:passthrough\": \"false\","; fi
    META="${META%,}"
 	if test -n "$META"; then OPTIONAL="$OPTIONAL \"metadata\": { $META },"; fi
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
@@ -4051,6 +4052,8 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 				CRYPTKEYID=$2; shift;;
 			--scsi)
 				SCSI=1;;
+			--vbd)
+				VBD=1;;
 			--datadisks)
 				DATADISKS="$2"; shift;;
 			--direction)
@@ -4845,6 +4848,8 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
 	getMeta meta_data.json "$@"
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "vendor_data" ]; then
 	getMeta vendor_data.json "$@"
+elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "network_data" ]; then
+	getMeta network_data.json "$@"
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
 	getMeta user_data "$@"
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
