@@ -4137,6 +4137,7 @@ if [ "$MAINCOM" = "floatingip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "eip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "image" ]; then MAINCOM="images"; fi
 if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
+if [ "$MAINCOM" = "securitygroup" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
 if [ "$MAINCOM" = "auth" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "identity" ]; then MAINCOM="iam"; fi
