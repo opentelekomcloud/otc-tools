@@ -481,6 +481,7 @@ getIAMToken()
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
 			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
+			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq 'def str(s): s|tostring; .id+"   "+.type+"   "+.name+"   "+str(.endpoints[])' | sed 's/\\"url\\"://' | tr -d '"'; fi
 			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
@@ -4559,7 +4560,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
-	WaitForTask $EVSTASKID 5
+	#WaitForTask $EVSTASKID 5
+	WaitForTaskFieldOpt $EVSTASKID '.entities.volume_id' 5
 elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "delete" ]; then
 	EVSDelete "$@"
 	echo "Task ID: $EVSTASKID"
