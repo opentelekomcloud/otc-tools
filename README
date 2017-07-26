@@ -67,14 +67,16 @@ formats:
 * The JSON format: The REST calls return JSON objects of course and jq is used
   to present a nicely formatted represntation of the object. The JSON can be
   further passed.
-* The long running requests report the TASKID as last output, unless we wait
-  for further progress. In the latter case, the ID of the created resource
-  is output last.
+* The long running requests report the TASKID. With --nowait, this is the
+  last output. Otherwise, the resource ID will be output last. By default the 
+  task status will onlybe queried until the resource ID is known; with --wait,
+  otc.sh will wait for the task to complete. There are some intermediate
+  task status updates and waiting dots in between.
 
 This has been tidied up for otc-tools-0.7 and should be more usable and less
 fragile now. Nevertheless, this tool is not yet mature enough that we commit
-to not break things here yet -- a future version might well provide switches
-to control the output. Pull requests are welcome :-)
+to not break the output format here yet -- a future version might well provide
+switches to control the output. Pull requests are welcome :-)
 
 Custom commands
 ---------------
