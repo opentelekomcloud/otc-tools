@@ -1180,6 +1180,7 @@ find_id()
 {
 	ANM=${3:-name}
 	IDN=${4:-id}
+	#if test -n "$DEBUG"; then echo "jq '.'$1'[] | select(.'$ANM' == \"'$2'\") | .'$IDN | tr -d '\", '" 1>&2; fi
 	jq '.'$1'[] | select(.'$ANM' == "'$2'") | .'$IDN | tr -d '", '
 }
 
@@ -1268,7 +1269,7 @@ convertIMAGENameToId()
 	#setlimit 800
 	#setlimit; setapilimit 1600 100 images
 	NAME="${1// /%20}"
-	IMAGE_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES?name=$NAME" | find_id images "$1"; return ${PIPESTATUS[0]}`
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?name=$NAME" | find_id images "$1"; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
@@ -1278,6 +1279,7 @@ convertIMAGENameToId()
 		IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
 		echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
+	#if test -n "$DEBUG"; then echo "Image ID: $IMAGE_ID" 1>&2; fi
 	export IMAGE_ID
 	return $RC
 }
@@ -1287,7 +1289,7 @@ convertECSNameToId()
 	#setlimit 1600
 	#setlimit; setapilimit 420 40 servers id
 	NAME="${1// /%20}"
-	ECS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
@@ -1306,7 +1308,7 @@ convertEVSNameToId()
 	#setlimit 1600
 	#setlimit; setapilimit 400 30 volumes
 	NAME="${1// /%20}"
-	EVS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_VOLS?name=$NAME" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$NAME" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
@@ -1325,7 +1327,7 @@ convertBackupNameToId()
 	#setlimit 1600
 	#setlimit; setapilimit 1280 30 backups
 	NAME="${1// /%20}"
-	BACK_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_BACKS?name=$NAME" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS?name=$NAME" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$BACK_ID"; then
 		echo "ERROR: No backup found by name $1" 1>&2
@@ -1362,7 +1364,7 @@ convertSnapshotNameToId()
 	#setlimit 1600
 	#setlimit; setapilimit 440 30 snapshots
 	NAME="${1// /%20}"
-	SNAP_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS?name=$NAME" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS?name=$NAME" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$SNAP_ID"; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
@@ -4251,6 +4253,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		fi
 	fi
 
+	#if test -n "$DEBUG"; then echo ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"; fi
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
 
