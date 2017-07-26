@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.13
+VERSION=0.7.14
 
 # Get Config ####################################################################
 warn_too_open()
@@ -624,7 +624,7 @@ build_data_volumes_json()
 ecsHelp()
 {
 	echo "--- Elastic Cloud Server (VM management) ---"
-	echo "otc ecs list               # list ecs instances"
+	echo "otc ecs list [FILTERS]     # list ecs instances (optional key=value filters)"
 	echo "    --limit NNN            # limit records (works for most list functions)"
 	echo "    --marker ID            # start with record after marker (UUID) (dito)"
 	echo "    --maxgetkb NN          # auto-paginate (limiting responses to NN KiB max, def 250)"
@@ -705,8 +705,8 @@ keypairHelp()
 evsHelp()
 {
 	echo "--- Elastic Volume Service (EVS) ---"
-	echo "otc evs list                    # list all volumes (only id and name)"
-	echo "otc evs details                 # list all volumes (more details)"
+	echo "otc evs list [FILTERS]          # list all volumes (only id and name)"
+	echo "otc evs details [FILTERS]       # detailed list all volumes (opt. key=value filters)"
 	echo "otc evs show <id>               # show details of volume <id>"
 	echo "otc evs create                  # create a volume"
 	echo "    --volume-name         <NAME>"
@@ -728,12 +728,12 @@ evsHelp()
 backupHelp()
 {
 	echo "--- Elastic Volume Backups ---"
-	echo "otc backup list"
+	echo "otc backup list [FILTERS]              # List all backups (opt. key=value filters)"
 	echo "otc backup show backupid"
 	echo "otc backup create --name NAME volumeid # Create backup from volume"
 	echo "otc backup restore backupid volumeid   # restore backup to volume"
 	echo "otc backup delete backupid"
-	echo "otc snapshot list                      # list snapshots"
+	echo "otc snapshot list [FILTERS]            # list snapshots"
 	echo "otc snapshot show snapid               # details of snapshot snapid"
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
 	echo "otc backuppolicy list                  # list backup policies"
@@ -807,7 +807,7 @@ imageHelp()
 {
 	echo "--- Image Management Service (IMS) ---"
 	echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
-	echo "otc images show <id>    # show image details"
+	echo "otc images show <id>            # show image details"
 	echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
 	echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
 	echo "otc images download <id> bucket:objname   # export priv image into s3 object"
@@ -1266,8 +1266,9 @@ convertIMAGENameToId()
 {
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	#setlimit 800
-	setlimit; setapilimit 1600 100 images
-	IMAGE_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING" | find_id images "$1"; return ${PIPESTATUS[0]}`
+	#setlimit; setapilimit 1600 100 images
+	NAME="${1// /%20}"
+	IMAGE_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES?name=$NAME" | find_id images "$1"; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
@@ -1284,8 +1285,9 @@ convertIMAGENameToId()
 convertECSNameToId()
 {
 	#setlimit 1600
-	setlimit; setapilimit 420 40 servers id
-	ECS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	#setlimit; setapilimit 420 40 servers id
+	NAME="${1// /%20}"
+	ECS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$ECS_ID"; then
 		echo "ERROR: No VM found by name $1" 1>&2
@@ -1302,8 +1304,9 @@ convertECSNameToId()
 convertEVSNameToId()
 {
 	#setlimit 1600
-	setlimit; setapilimit 400 30 volumes
-	EVS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	#setlimit; setapilimit 400 30 volumes
+	NAME="${1// /%20}"
+	EVS_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_VOLS?name=$NAME" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$EVS_ID"; then
 		echo "ERROR: No volume found by name $1" 1>&2
@@ -1320,8 +1323,9 @@ convertEVSNameToId()
 convertBackupNameToId()
 {
 	#setlimit 1600
-	setlimit; setapilimit 1280 30 backups
-	BACK_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_BACKS$PARAMSTRING" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	#setlimit; setapilimit 1280 30 backups
+	NAME="${1// /%20}"
+	BACK_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_BACKS?name=$NAME" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$BACK_ID"; then
 		echo "ERROR: No backup found by name $1" 1>&2
@@ -1356,8 +1360,9 @@ convertBackupPolicyNameToId()
 convertSnapshotNameToId()
 {
 	#setlimit 1600
-	setlimit; setapilimit 440 30 snapshots
-	SNAP_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	#setlimit; setapilimit 440 30 snapshots
+	NAME="${1// /%20}"
+	SNAP_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS?name=$NAME" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$SNAP_ID"; then
 		echo "ERROR: No snapshot found by name $1" 1>&2
@@ -1451,19 +1456,25 @@ getECSVM()
 
 getShortECSList()
 {
+	local VM_FILTER=$(concatarr "&" "$@")
+	VM_FILTER="${VM_FILTER// /%20}"
 	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1600" | jq -r  '.servers[] | .id+"   "+.name'
 	#setlimit 1600
 	setlimit; setapilimit 420 40 servers id
-	curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING" | jq -r  '.servers[] | .id+"   "+.name'
+   if test -z "$PARAMSTRING" -a -n "$VM_FILTER"; then VM_FILTER="?${VM_FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_ECS$PARAMSTRING$VM_FILTER" | jq -r  '.servers[] | .id+"   "+.name'
 	return ${PIPESTATUS[0]}
 }
 
 getECSList()
 {
+	local VM_FILTER=$(concatarr "&" "$@")
+	VM_FILTER="${VM_FILTER// /%20}"
 	#curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
 	#setlimit 1200
 	setlimit; setapilimit 2000 40 servers id
-	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
+   if test -z "$PARAMSTRING" -a -n "$VM_FILTER"; then VM_FILTER="?${VM_FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING$VM_FILTER" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
 	return ${PIPESTATUS[0]}
 }
 
@@ -1642,17 +1653,25 @@ getPUBLICIPSDetail()
 
 getSECGROUPListDetail()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
-	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.[]'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+   # V1 Huawei API - filtering not working
+	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING$FILTER" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
 getSECGROUPList()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#setlimit 500
 	setlimit; setapilimit 4000 40 security_groups
-	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+   # V1 Huawei API - filtering not working
+	curlgetauth_pag $TOKEN "$AUTH_URL_SEC_GROUPS$PARAMSTRING$FILTER" | jq '.security_groups[] | {id: .id, name: .name, vpc: .vpc_id} | .id +"   " +.name+"   "+.vpc' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -1709,18 +1728,24 @@ SECGROUPRULECreate()
 
 getEVSListOTC()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES?limit=1200" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#setlimit 1200
 	setlimit; setapilimit 2400 30 volumes
-	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES/detail$PARAMSTRING" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES/detail$PARAMSTRING$FILTER" | jq 'def att(a): [a[0]|{id:.server_id, dev:.device}]|.[]|.id+":"+.dev; def str(v): v|tostring; .volumes[] | .id +"   " +.name+"   "+.status+"   "+.type+"   "+str(.size)+"   "+.availability_zone+"   "+att(.attachments) ' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
 getEVSList()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#setlimit 1600
 	setlimit; setapilimit 400 30 volumes
-	curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_VOLS$PARAMSTRING$FILTER" | jq '.volumes[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/details?limit=1200" | jq '.volumes[] | {id: .id, name: .name, status: .status, type: .volume_type, size: .size|tostring, az: .availability_zone} | .id +"   " +.name+"   "+.status+"   "+.type+"   "+.size+"   "+.az ' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
@@ -1735,9 +1760,12 @@ getEVSDetail()
 
 getSnapshotList()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#setlimit 1200
 	setlimit; setapilimit 440 30 snapshots
-	curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_SNAPS$PARAMSTRING$FILTER" | jq '.snapshots[] | {id: .id, name: .name, status: .status, upd: .updated_at} | .id +"   " +.name +"   "+.status+"   "+.upd ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 	return ${PIPESTATUS[0]}
 }
 
@@ -1775,10 +1803,13 @@ getBackupPolicyDetail()
 
 getBackupList()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#curlgetauth $TOKEN "$AUTH_URL_BACKS?limit=1200" | jq '.backups[] | {id: .id, name: .name} | .id +"   " +.name ' | tr -d '"'
 	#setlimit 1200
 	setlimit; setapilimit 1280 30 backups
-	curlgetauth_pag $TOKEN "$AUTH_URL_BACKS/detail$PARAMSTRING" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_BACKS/detail$PARAMSTRING$FILTER" | jq 'def str(v): v|tostring; .backups[] | .id +"   " +.name+"   "+.status+"   "+str(.size)+"   "+.availability_zone+"   "+.updated_at ' | tr -d '"' | sed 's/\(T[0-9:]*\)\.[0-9]*$/\1/'
 	return ${PIPESTATUS[0]}
 }
 
@@ -1851,10 +1882,14 @@ restoreBackup()
 
 getSUBNETList()
 {
+	FILTER=$(concatarr "&" "$@")
+	FILTER="${FILTER// /%20}"
 	#curlgetauth $TOKEN "$AUTH_URL_SUBNETS?limit=800" | jq '.[]'
 	#setlimit 800
 	setlimit; setapilimit 360 20 subnets
-	curlgetauth_pag $TOKEN  "$AUTH_URL_SUBNETS$PARAMSTRING" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
+   if test -z "$PARAMSTRING" -a -n "$FILTER"; then FILTER="?${FILTER:1}"; fi
+   # V1 Huawei API - filtering not working
+	curlgetauth_pag $TOKEN  "$AUTH_URL_SUBNETS$PARAMSTRING$FILTER" | jq -r '.subnets[] | .id+"   "+.name+"   "+.status+"   "+.cidr+"   "+.vpc_id+"   "+.availability_zone' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4185,9 +4220,9 @@ if [ "$MAINCOM" == "help" -o "$MAINCOM" == "-h" -o "$MAINCOM" == "--help" ]; the
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "help" ]; then
 	ecsHelp
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-short" ]; then
-	getShortECSList
+	getShortECSList "$@"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list" ]; then
-	getECSList
+	getECSList "$@"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-detail" ]; then
 	getECSDetail "$1"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "details" ]; then
@@ -4368,7 +4403,7 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == find ]; then
 elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "help" ]; then
 	subnetHelp
 elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "list" ]; then
-	getSUBNETList
+	getSUBNETList #"$@"
 elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "show" ]; then
 	getSUBNETDetail "$1"
 elif [ "$MAINCOM" == "subnet"  -a "$SUBCOM" == "delete" ]; then
@@ -4389,8 +4424,8 @@ elif [ "$MAINCOM" == "security-group" -a "$SUBCOM" == "help" ]; then
 	sgHelp
 elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "list" ]; then
 	VPCNAME=$1
-	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-	getSECGROUPList
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; shift; fi
+	getSECGROUPList #"$@"
 elif [ "$MAINCOM" == "security-group"  -a "$SUBCOM" == "create" ]; then
 	if [ -n "$VPCNAME" -a -z "$VPCID" ]; then convertVPCNameToId "$VPCNAME"; fi
 	SECGROUPCreate "$@"
@@ -4549,10 +4584,10 @@ elif  [ "$MAINCOM" == "evs" -a "$SUBCOM" == "help" ]; then
 	evsHelp
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-list" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "list" ]; then
-	getEVSList
+	getEVSList "$@"
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-details" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "details" ]; then
-	getEVSListOTC
+	getEVSListOTC "$@"
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ]; then
@@ -4588,7 +4623,7 @@ elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "help" ]; then
 	backupHelp
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
-	getBackupList
+	getBackupList "$@"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "show" ]; then
 	getBackupDetail "$1"
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "delete" ]; then
@@ -4601,7 +4636,7 @@ elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "create" ] ||
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "restore" ]; then
 	restoreBackup "$@"
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "list" ]; then
-	getSnapshotList
+	getSnapshotList "$@"
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
 	getSnapshotDetail "$1"
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
