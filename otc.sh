@@ -993,7 +993,7 @@ smnHelp()
 	echo "otc notifications create TOP [DESC]       # New notification topic"
 	echo "otc notifications delete URN      # Delete notification topic"
 	echo "otc notifications subscriptions   # Show all notification subscriptions"
-	echo "otc notifications subscribe URN   # Subscribe to topic URN"
+	echo "otc notifications subscribe URN PROTO ADDR [REM] # Subscribe to topic URN"
 	echo "otc notifications unsubscribe SUB # Unsubscribe from topic URN"
 	echo "otc notifications publish URN SUBJECT     # Publish notification (stdin)"
 	echo "otc notifications SMS NUM TEXT    # Send SMS message"
@@ -3852,7 +3852,7 @@ listSubscriptions()
 addSubscription()
 {
 	local REMARK=""
-	if test -n "$3"; then REMARK=", \"remark\": \"$4\""; fi
+	if test -n "$4"; then REMARK=", \"remark\": \"$4\""; fi
 	curlpostauth "$TOKEN" "{ \"protocol\": \"$2\", \"endpoint\": \"$3\" $REMARK }" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1/subscriptions" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
