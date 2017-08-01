@@ -3818,7 +3818,7 @@ createTopic()
 
 deleteTopic()
 {
-	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/$1" | jq -r '.'
+	curldeleteauth "$TOKEN" "$AUTH_URL_SMN/v2/$OS_PROJECT_ID/notifications/topics/$1" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
