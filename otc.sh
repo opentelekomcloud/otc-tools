@@ -659,6 +659,8 @@ ecsHelp()
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
+   echo "    --tenancy 				  <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
+   echo "    --dedicated-host-id   <HOSTID>  # use UUID of preexisting DedicatedHost for direct placement"
 	echo "    --datadisks           <DATADISK> # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                       example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		 # determined from subnet by default"
@@ -3026,6 +3028,35 @@ ECSCreate()
 			\"publicip\": { \"id\": \"$EIP_ID\" },"
 	fi
 
+
+   # composing os:scheduler_hints
+   # using:
+   # --tenancy $TENANCY
+   # --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
+   if test -n "$DEDICATED_HOST_ID"; then
+      is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
+      if test -n "$TENANCY"; then
+      OPTIONAL="$OPTIONAL
+         \"os:scheduler_hints\": {
+           \"tenancy\": \"$TENANCY\",
+           \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+         },"
+      else
+      OPTIONAL="$OPTIONAL
+         \"os:scheduler_hints\": {
+           \"tenancy\": \"dedicated\",
+           \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+         },"
+      fi
+   else
+      if test -n "$TENANCY"; then
+      OPTIONAL="$OPTIONAL
+         \"os:scheduler_hints\": {
+           \"tenancy\": \"$TENANCY\"
+         },"
+      fi
+   fi
+
 	if test -n "$KEYNAME"; then
 		OPTIONAL="$OPTIONAL
 			\"key_name\": \"$KEYNAME\","
@@ -4029,6 +4060,10 @@ if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -
 				VOLUME_NAME="$2"; shift;;
 			--volume-description)
 				VOLUME_DESC="$2"; shift;;
+			--dedicated-host|--dedicated-host-id)
+				DEDICATED_HOST_ID="$2"; shift;;
+			--dedicated)
+				TENANCY="dedicated";;
 			--file1)
 				FILE1="$2"; shift;;
 			--file2)
