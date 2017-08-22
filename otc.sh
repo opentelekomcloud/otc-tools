@@ -935,6 +935,10 @@ iamHelp()
 	echo "    --domainscope       # generate a domain scoped token (can be used globally)"
 	echo "otc iam catalog         # catalog as returned with token"
 	echo "otc iam project         # output project_id/tenant_id"
+	echo "otc iam listprojects    # output projects"
+	echo "otc iam showproject ID  # show details of project"
+	echo "otc iam createproject NAME        # create project (opt: --description)"
+	echo "otc iam deleteproject ID          # delete project"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
@@ -3903,6 +3907,20 @@ sendSMS()
 }
 
 
+createPROJECT()
+{
+	local NAME="$1"; shift
+	local DESC
+	if test -z "$DESCRIPTION" -a -n "$2"; then DESCRIPTION="$*"; fi
+	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	curlpostauth "$TOKEN" "{ \"project\": { \"name\": \"$NAME\"$DESC } }" "${IAM_AUTH_URL%/auth*}/projects" | jq -r '.' 
+}
+
+deletePROJECT()
+{
+	# FIXME: Convert name to ID as needed
+	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects/$1" | jq -r '.' 
+}
 
 # These don't work yet well
 listMRSClusters()
@@ -4046,7 +4064,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "$SUBCOM" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -4591,6 +4609,16 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
 # End of unsupported APIs
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listprojects" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.description' | tr -d '"'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
+	createPROJECT "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteproject" ]; then
+	deletePROJECT "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects/$1" | jq -r '.'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
