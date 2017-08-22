@@ -2835,6 +2835,15 @@ getULBDetail()
 	return ${PIPESTATUS[0]}
 }
 
+getULBFullDetail()
+{
+	local ID="$1"
+	if ! is_uuid "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers?name=$ID" | jq '.loadbalancers[].id' | tr -d '"'`; fi
+	#setlimit; setapilimit 880 40 loadbalancers
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers/$ID/statuses" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 getECSJOBList()
 {
 	if test -z "$1"; then echo
@@ -4783,6 +4792,8 @@ elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "list" ]; then
 	getULBList
 elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "show" ]; then
 	getULBDetail "$@"
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "details" ]; then
+	getULBFullDetail "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "help" ]; then
 	rdsHelp
