@@ -839,7 +839,7 @@ imageHelp()
 elbHelp()
 {
 	echo "--- Elastic Load Balancer (ELB) ---"
-	echo "otc elb list            # list all load balancer"
+	echo "otc elb list            # list all load balancers"
 	echo "otc elb show <id>       # show elb details"
 	echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
 	echo "    --vpc-name <vpcname>"
@@ -861,6 +861,9 @@ elbHelp()
 	echo "otc elb showcheck <cid>"
 	echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
 	echo "otc elb delcheck <cid>"
+
+	echo "--- Unified Load Balancer (ULB aka LBaaSv2) ---"
+	echo "otc ulb list            # list all unified load balancers"
 }
 
 rdsHelp()
@@ -1120,6 +1123,11 @@ printHelp()
 is_uuid()
 {
 	echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1
+}
+
+is_id()
+{
+	echo "$1" | grep '^[0-9a-f]\{32\}$' >/dev/null 2>&1
 }
 
 getid()
@@ -2811,6 +2819,22 @@ deleteMember()
 	#return $?
 }
 
+getULBList()
+{
+	setlimit; setapilimit 880 40 loadbalancers
+	curlgetauth_pag $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers$PARAMSTRING" | jq '.loadbalancers[] | .id+"   "+.name+"   "+.operating_status+"   "+.provider+"   "+.vip_address+"   "+.vip_subnet_id+"   "+.listeners[].id+"   "+.pools[].id' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+getULBDetail()
+{
+	local ID="$1"
+	if ! is_uuid "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers?name=$ID" | jq '.loadbalancers[].id' | tr -d '"'`; fi
+	#setlimit; setapilimit 880 40 loadbalancers
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 getECSJOBList()
 {
 	if test -z "$1"; then echo
@@ -3914,12 +3938,16 @@ createPROJECT()
 	if test -z "$DESCRIPTION" -a -n "$2"; then DESCRIPTION="$*"; fi
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
 	curlpostauth "$TOKEN" "{ \"project\": { \"name\": \"$NAME\"$DESC } }" "${IAM_AUTH_URL%/auth*}/projects" | jq -r '.' 
+	return ${PIPESTATUS[0]}
 }
 
 deletePROJECT()
 {
 	# FIXME: Convert name to ID as needed
-	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects/$1" | jq -r '.' 
+	local ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
 }
 
 # These don't work yet well
@@ -4249,6 +4277,7 @@ if [ "$MAINCOM" = "consumers" ]; then MAINCOM="consumer"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
+if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -4618,7 +4647,9 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteproject" ]; then
 	deletePROJECT "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects/$1" | jq -r '.'
+   ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
@@ -4747,6 +4778,11 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
 	createCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
+
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "list" ]; then
+	getULBList
+elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "show" ]; then
+	getULBDetail "$@"
 
 elif [ "$MAINCOM" == "rds" -a "$SUBCOM" == "help" ]; then
 	rdsHelp
