@@ -851,6 +851,11 @@ elbHelp()
 	echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
 	echo "otc elb showlistener <lid>      # show listener detail <lid>"
 	echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
+	echo "    --timeout <to>              # timeout in minutes(!) for TCP/UDP"
+	echo "    --drain <to>                # keep conn after member del in minutes(!) for TCP"
+	echo "    --sslcert <id>              # SSL certificate to use for HTTPS"
+	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1.0 for HTTPS"
+	echo "    --sslcipher <KWD>           # Default or Strict or Extended (Ext only for v1.2+1.1+1.0)"
 	#not implemented: modifylistener
 	echo "otc elb dellistener <lid>"
 	echo "otc elb listmember <lid>"
@@ -861,6 +866,14 @@ elbHelp()
 	echo "otc elb showcheck <cid>"
 	echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
 	echo "otc elb delcheck <cid>"
+	#
+	echo "otc elb listcert                # Show certs for SSL termination"
+	echo "otc elb createcert CERT PRIV [NAME]       # SSL certificate creation (PEM)"
+	echo "otc elb updatecert ID [NAME]    # Update certificate name/desc"
+	echo "    --name NAME --description DESC"
+	#echo "otc elb showcert ID             # SSL certificate details"
+	echo "otc elb deletecert ID           # SSL certificate deletion"
+	# not doc: modifycert
 
 	echo "--- Unified Load Balancer (ULB aka LBaaSv2) ---"
 	echo "otc ulb list            # list all unified load balancers"
@@ -2753,10 +2766,23 @@ createListener()
 	local ALG="$5"
 	local BEPROTO="$6"
 	local BEPORT=$7
+	local OPTPAR
 	if test -z "$ALG"; then ALG="source"; fi
 	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
 	if test -z "$BEPORT"; then BEPORT=$4; fi
-	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then STICKY="\"session_sticky\": \"true\", "; fi
+	if test "$3" = "HTTP" -o "$3" = "HTTPS" && test "$ALG" = "roundrobin"; then STICKY="\"session_sticky\": true, "; fi
+	if test -n "$ELBTIMEOUT"; then
+		if test "$3" = "TCP"; then OPTPAR=", \"tcp_timeout:\": $ELBTIMEOUT";
+		elif test "$3" = "UDP"; then OPTPAR=", \"udp_timeout\": $ELBTIMEOUT";
+		else echo "WARN: ELB ignores --timeout for $3" 1>&2; fi
+	fi
+	if test -n "$ELBDRAIN"; then
+		if test "$3" = "TCP"; then OPTPAR="$OPTPAR, \"tcp_draining\": true, \"tcp_draining+timeout:\": $ELBDRAIN";
+		else echo "WARN: ELB ignore --drain for $3" 1>&2; fi
+	fi
+	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"certficate_id\": \"$SSLCERT\""; fi
+	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
+	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
 	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
@@ -2819,6 +2845,62 @@ deleteMember()
 	#return $?
 }
 
+# SSL termination
+# $1 -> cert content (PEM)
+# $2 -> private key (PEM)
+createELBCert()
+{
+	local DESC NM
+	local CERT="$1"; shift
+	local PRIV="$1"; shift
+	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
+	if test -n "$1" -a -z "$NAME"; then NAME="$*"; fi
+	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
+	if test -z "$PRIV"; then echo "ELB Cert creation: Pass CERT.pem and PrivKey.pem" 1>&2; exit 2; fi
+	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+listELBCert()
+{
+	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq '.certificates[] | .id+"   "+.name+"   "+.certificate+"   "+.description' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+# API not implemented (irregularity)
+showELBCert()
+{
+	ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deleteELBCert()
+{
+	local ID="$1"; shift
+	# Std Name -> ID conversion not working with Huawei custom API :-(
+	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
+	curldeleteauth $TOKEN "$AUTH_URL_ELB/certificate/$ID"
+}
+
+modifyELBCert()
+{
+	local ID="$1"; shift
+	# Std Name -> ID conversion not working with Huawei custom API :-(
+	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
+	if test -z "$NAME" -a -n "$1"; then NAME="$*"; fi
+	local DESC NM
+	NM="\"name\": \"$NAME\""
+	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	curlputauth	$TOKEN "{ $NM $DESC }" "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+
+
+# Neutron LBaaSv2 aka ULB
 getULBList()
 {
 	setlimit; setapilimit 880 40 loadbalancers
@@ -4101,7 +4183,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -4231,6 +4313,16 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "update" -o "$SUBCOM" == "regis
 				DESCRIPTION="$2"; shift;;
 			--name)
 				NAME="$2"; shift;;
+			--timeout)
+				ELBTIMEOUT="$2"; shift;;
+			--drain)
+				ELBDRAIN="$2"; shift;;
+			--sslcert)
+				SSLCERT="$2"; shift;;
+			--sslproto)
+				SSLPROTO="$2"; shift;;
+			--sslcipher)
+				SSLCIPHER="$2"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
@@ -4764,7 +4856,7 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "create" ]; then
 	#WaitForTask $ELBJOBID 2
 	WaitForTaskFieldOpt $ELBJOBID .entities.elb.id
 
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listlistener" ]; then
+elif [ "$MAINCOM" == "elb" -a "${SUBCOM:0:12}" == "listlistener" ]; then
 	getListenerList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showlistener" ]; then
 	getListenerDetail "$@"
@@ -4773,7 +4865,7 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createlistener" ] ||
 	createListener "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "dellistener" ]; then
 	deleteListener "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "listmember" ]; then
+elif [ "$MAINCOM" == "elb" -a "${SUBCOM:0:10}" == "listmember" ]; then
 	getMemberList "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showmember" ]; then
 	getMemberDetail "$@"
@@ -4787,6 +4879,17 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "addcheck" ]; then
 	createCheck "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcheck" ]; then
 	deleteCheck "$@"
+elif [ "$MAINCOM" == "elb" -a "${SUBCOM:0:8}" == "listcert" ]; then
+	listELBCert
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "showcert" ]; then
+	showELBCert "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createcert" ]; then
+	createELBCert "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "updatecert" ]; then
+	modifyELBCert "$@"
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcert" ] || 
+     [ "$MAINCOM" == "elb" -a "$SUBCOM" == "deletecert" ]; then
+	deleteELBCert "$@"
 
 elif [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "list" ]; then
 	getULBList
