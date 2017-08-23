@@ -1068,9 +1068,19 @@ otcnewHelp()
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
+}
+
+dehHelp()
+{
+	echo "--- Dedicated Host (DEH) ---"
 	echo "otc deh list            # List Dedicated Hosts"
 	echo "otc deh show <id>       # Show Dedicated Host Details"
 	echo "otc deh listvm <id>     # List VMs on Dedicated Host"
+	echo "otc deh create NAME TYPE NUM      # Allocate Dedicated Hosts"
+	echo "    --az AZ"
+	echo "    --auto on/off       # allow VMs to be placed here automatically"
+	echo "otc deh delete <id>     # Release Dedicated Host"
+	echo "otc deh listtypes <az>  # List avail Dedicated Host types"
 }
 
 mdsHelp()
@@ -1130,6 +1140,8 @@ printHelp()
 	dmsHelp
 	echo
 	otcnewHelp
+	echo
+	dehHelp
 	echo
 	customHelp
 	echo
@@ -4096,7 +4108,7 @@ listKMS()
 
 listDEH()
 {
-	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq 'def tostr(x): x|tostring; .dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+.instance_total +"   "+.availability_zone+"   "+.host_properties.host_type+"   "+tostr(.available_vcpus)+"   "+tostr(.available_memory)' | tr -d '"''.dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+.instance_total+"   "+.availability_zone+"   "+.host_properties.host_type+"   "+.available_vcpus+   "+.available_memory' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq 'def tostr(x): x|tostring; .dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+tostr(.instance_total)+"   "+.auto_placement+"   "+.availability_zone+"   "+.host_properties.host_type+"   "+tostr(.available_vcpus)+"   "+tostr(.available_memory)' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4109,6 +4121,31 @@ showDEH()
 listDEHservers()
 {
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1/servers" | jq '.servers[] | .id+"   "+.name+"   "+.status+"   "+.flavor.id' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+createDEH()
+{
+	NAME="$1"; shift
+	TYPE="$1"; shift
+	QUANT="$1"; shift
+	if test -z "$AZ" -a -n "$1"; then AZ="$1"; shift; fi
+	RST="$@"
+	if test -z "$AUTOPLC" -a "${RST:0:1}" = "o"; then AUTOPLC="$RST"; shift; fi
+	local APLACE
+	if test -n "$AUTOPLC"; then APLACE=", \"auto_placement\": \"$AUTOPLC\""; fi
+	curlpostauth $TOKEN "{ \"name\": \"$NAME\", \"availability_zone\": \"$AZ\", \"host_type\": \"$TYPE\", \"quantity\": $QUANT$APLACE }" "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deleteDEH()
+{
+	curldeleteauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1"
+}
+
+listDEHtypes()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/availability-zone/$1/dedicated-host-types" | jq '.dedicated_host_types[] | .host_type+"   "+.host_type_name' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4364,6 +4401,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				SSLPROTO="$2"; shift;;
 			--sslcipher)
 				SSLCIPHER="$2"; shift;;
+			--auto)
+				AUTOPLC="$2"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
@@ -5140,13 +5179,19 @@ elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; t
 	showMRSJob $1
 
 elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "help" ]; then
-	otcnewHelp
+	dehHelp
 elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "list" ]; then
 	listDEH
 elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "show" ]; then
 	showDEH "$1"
 elif [ "$MAINCOM" == "deh" -a "${SUBCOM:0:6}" == "listvm" ]; then
 	listDEHservers "$1"
+elif [ "$MAINCOM" == "deh" -a "${SUBCOM:0:8}" == "listtype" ]; then
+	listDEHtypes "$1"
+elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "create" ]; then
+	createDEH "$@"
+elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "delete" ]; then
+	deleteDEH "$1"
 
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
 	mdsHelp
