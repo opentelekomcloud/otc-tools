@@ -1078,7 +1078,7 @@ mdsHelp()
 printHelp()
 {
 	echo "otc-tools version $VERSION: OTC API tool"
-	echo "Usage: otc.sh [global opts] service action [options] [params]"
+	echo "Usage: otc.sh [global flags] service action [options] [params]"
 	echo "--- Global flags ---"
 	echo "otc --debug CMD1 CMD2 [opts] PARAMS       # for debugging REST calls ..."
 	echo "otc --insecure CMD1 CMD2 [opts] PARAMS    # for ignoring SSL security ..."
@@ -1126,7 +1126,8 @@ printHelp()
 	customHelp
 	echo
 	mdsHelp
-	#echo
+	echo
+	echo "Use otc.sh service help to get help for one service only"
 }
 
 
@@ -2776,18 +2777,18 @@ createListener()
 	if test -z "$BEPORT"; then BEPORT=$4; fi
 	if test "$3" = "HTTP" -o "$3" = "HTTPS" && test "$ALG" = "roundrobin"; then STICKY="\"session_sticky\": true, "; fi
 	if test -n "$ELBTIMEOUT"; then
-		if test "$3" = "TCP"; then OPTPAR=", \"tcp_timeout:\": $ELBTIMEOUT";
+		if test "$3" = "TCP"; then OPTPAR=", \"tcp_timeout\": $ELBTIMEOUT";
 		elif test "$3" = "UDP"; then OPTPAR=", \"udp_timeout\": $ELBTIMEOUT";
 		else echo "WARN: ELB ignores --timeout for $3" 1>&2; fi
 	fi
 	if test -n "$ELBDRAIN"; then
-		if test "$3" = "TCP"; then OPTPAR="$OPTPAR, \"tcp_draining\": true, \"tcp_draining+timeout:\": $ELBDRAIN";
+		if test "$3" = "TCP"; then OPTPAR="$OPTPAR, \"tcp_draining\": true, \"tcp_draining_timeout\": $ELBDRAIN";
 		else echo "WARN: ELB ignore --drain for $3" 1>&2; fi
 	fi
 	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"certficate_id\": \"$SSLCERT\""; fi
 	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
 	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
-	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\" }" "$AUTH_URL_ELB/listeners" | jq '.[]'
+	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\"$OPTPAR }" "$AUTH_URL_ELB/listeners" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4325,7 +4326,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				ELBTIMEOUT="$2"; shift;;
 			--drain)
 				ELBDRAIN="$2"; shift;;
-			--sslcert)
+			--sslcert|--certificate)
 				SSLCERT="$2"; shift;;
 			--sslproto)
 				SSLPROTO="$2"; shift;;
