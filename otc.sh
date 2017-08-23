@@ -851,11 +851,12 @@ elbHelp()
 	echo "otc elb listlistener <eid>      # list listeners of load balancer <eid>"
 	echo "otc elb showlistener <lid>      # show listener detail <lid>"
 	echo "otc elb addlistener <eid> <name> <proto> <port> [<alg> [<beproto> [<beport>]]]"
-	echo "    --timeout <to>              # timeout in minutes(!) for TCP/UDP"
-	echo "    --drain <to>                # keep conn after member del in minutes(!) for TCP"
+	echo "    --timeout <min>             # timeout in minutes(!) for TCP/UDP"
+	echo "    --cookieto <min>            # sticky session cookie timeout (min) (roundrobin HTTP/S)"
+	echo "    --drain <min>               # keep conn after member del in minutes(!) for TCP"
 	echo "    --sslcert <id>              # SSL certificate to use for HTTPS"
-	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1 for HTTPS"
-	echo "    --sslcipher <KWD>           # Default or Strict or Extended (Ext for v1.2+1.1+1)"
+	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1 (only HTTPS)"
+	echo "    --sslcipher <Kwd>           # Default or Strict or Extended (Ext for v1.2+1.1+1)"
 	#not implemented: modifylistener
 	echo "otc elb dellistener <lid>"
 	echo "otc elb listmember <lid>"
@@ -2771,13 +2772,14 @@ createListener()
 	local ALG="$5"
 	local BEPROTO="$6"
 	local BEPORT=$7
-	local OPTPAR STICKY
+	local OPTPAR STICKY CTO
 	if test -z "$ALG"; then ALG="source"; fi
 	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
 	if test -z "$BEPORT"; then BEPORT=$4; fi
+	if test -n "$COOKIETIMEOUT"; then CTO=", \"cookie_timeout\": $COOKIETIMEOUT"; fi
 	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then
-		if test "$ALG" = "roundrobin"; then STICKY=", \"session_sticky\": true, \"sticky_session_type\": \"insert\""
-		else STICKY=", \"session_sticky\": false, \"sticky_session_type\": \"insert\""; fi
+		if test "$ALG" = "roundrobin"; then STICKY=", \"session_sticky\": true, \"sticky_session_type\": \"insert\"$CTO"
+		else STICKY=", \"session_sticky\": false, \"sticky_session_type\": \"insert\"$CTO"; fi
 	fi
 	if test -n "$ELBTIMEOUT"; then
 		if test "$3" = "TCP"; then OPTPAR=", \"tcp_timeout\": $ELBTIMEOUT";
@@ -4325,8 +4327,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				DESCRIPTION="$2"; shift;;
 			--name)
 				NAME="$2"; shift;;
-			--timeout)
+			--timeout|--elbtimeout)
 				ELBTIMEOUT="$2"; shift;;
+			--cookieto|--cookietimeout)
+				COOKIETIMEOUT="$2"; shift;;
 			--drain)
 				ELBDRAIN="$2"; shift;;
 			--sslcert|--certificate)
