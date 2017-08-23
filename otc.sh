@@ -868,7 +868,7 @@ elbHelp()
 	echo "otc elb delcheck <cid>"
 	#
 	echo "otc elb listcert                # Show certs for SSL termination"
-	echo "otc elb createcert CERT PRIV [NAME]       # SSL certificate creation (PEM)"
+	echo "otc elb createcert CERT PRIV [NAME]       # SSL certificate creation (PEM files)"
 	echo "otc elb updatecert ID [NAME]    # Update certificate name/desc"
 	echo "    --name NAME --description DESC"
 	#echo "otc elb showcert ID             # SSL certificate details"
@@ -1078,10 +1078,10 @@ mdsHelp()
 printHelp()
 {
 	echo "otc-tools version $VERSION: OTC API tool"
-	echo "Usage: otc.sh service action [options]"
+	echo "Usage: otc.sh [global opts] service action [options] [params]"
 	echo "--- Global flags ---"
-	echo "otc --debug CMD1 CMD2 PARAMS      # for debugging REST calls ..."
-	echo "otc --insecure CMD1 CMD2 PARAMS   # for ignoring SSL security ..."
+	echo "otc --debug CMD1 CMD2 [opts] PARAMS       # for debugging REST calls ..."
+	echo "otc --insecure CMD1 CMD2 [opts] PARAMS    # for ignoring SSL security ..."
 	echo
 	ecsHelp
 	echo
@@ -1244,6 +1244,7 @@ convertSUBNETNameToId()
 		echo "ERROR: No subnet found by name $1" 1>&2
 		exit 3
 	fi
+	if test "$SUBNETAZ" = "null"; then SUBNETAZ=""; fi
 	export SUBNETID SUBNETAZ
 	return $RC
 }
@@ -2664,7 +2665,9 @@ createELB()
 {
 	if test -n "$3"; then BANDWIDTH=$3; fi
 	if test -n "$2"; then NAME="$2"; fi
-	if test -n "$1"; then VPCID=$1; fi
+	if test -n "$1"; then
+		if  is_uuid "$1" ; then VPCID=$1; else convertVPCNameToId "$1"; fi
+	fi
 	if [ -z "$VPCID" -a -n "$VPCNAME" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if test -z "$VPCID"; then echo "ERROR: Need to specify VPC" 1>&2; exit 1; fi
 	local ELBTYPE='"type": "External", "bandwidth": "'$BANDWIDTH'"'
@@ -2673,11 +2676,12 @@ createELB()
 		if [ -n "$SUBNETNAME" -a -z "$SUBNETID" ]; then
 			convertSUBNETNameToId $SUBNETNAME $VPCID
 		fi
-		if [ -n "$SECUGROUPNAME" != "" -a -z "$SECUGROUP" ]; then
+		if [ -n "$SECUGROUPNAME" -a -z "$SECUGROUP" ]; then
 			convertSECUGROUPNameToId "$SECUGROUPNAME"
 		fi
 		if test -z "$AZ"; then
 			if test -n "$SUBNETAZ"; then
+				#echo "WARN: Derive AZ from subnet: $SUBNETAZ" 1>&2
 				AZ="$SUBNETAZ"
 			else
 				echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
@@ -2853,12 +2857,16 @@ createELBCert()
 	local DESC NM
 	local CERT="$1"; shift
 	local PRIV="$1"; shift
+	if test -z "$PRIV"; then echo "ELB Cert creation: Pass CERT.pem and PrivKey.pem" 1>&2; exit 2; fi
+	if test ! -r "$CERT"; then echo "ELB Cert file $CERT must be readable" 1>&2; exit 2; fi
+	CERT=$(cat "$CERT")
+	if test ! -r "$PRIV"; then echo "ELB PrivKey file $PRIV must be readable" 1>&2; exit 2; fi
+	PRIV=$(cat "$PRIV")
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
 	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
 	if test -n "$1" -a -z "$NAME"; then NAME="$*"; fi
 	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
-	if test -z "$PRIV"; then echo "ELB Cert creation: Pass CERT.pem and PrivKey.pem" 1>&2; exit 2; fi
-	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | jq -r '.'
+	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | sed 's/\(-----BEGIN PRIVATE KEY-----\)[^-]*/\1MIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -3123,7 +3131,7 @@ ECSCreate()
 			exit 2
 		fi
 	fi
-	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "null" -a "$SUBNETAZ" != "$AZ"; then
+	if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
