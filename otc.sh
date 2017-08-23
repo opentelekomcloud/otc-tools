@@ -744,6 +744,19 @@ backupHelp()
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
 	echo "otc backuppolicy list                  # list backup policies"
 	echo "otc backuppolicy show NAME|ID          # details of backup policy"
+	echo "otc backuppolicy create NAME           # create backup policy"
+	echo "    --time HH:mm                       # UTC time to start backup"
+	echo "    --freq N                           # no of days b/w backups"
+	echo "    --retain N                         # no of backups to retain (min 2)"
+	echo "    --retain1st Y/N                    # retain first backup of curr month"
+	echo "    --enable/disable                   # enable/disable (def: enable)"
+	echo "otc backuppolicy update ID             # update backup policy (same params as above)"
+	echo "otc backuppolicy delete ID             # delete backup policy"
+	echo "otc backuppolicy add ID VOLID [VOLID [...]]       # add volumes to policy"
+	echo "otc backuppolicy remove ID VOLID [VOLID [...]]    # remove vols from policy"
+	echo "otc backuppolicy execute ID            # trigger backup policy to run once"
+	echo "otc backuppolicy showtasks ID          # show jobs triggered by policy (JSON)"
+	echo "otc backuppolicy listtasks ID          # show jobs triggered by policy (list)"
 }
 
 vpcHelp()
@@ -1394,7 +1407,7 @@ convertBackupPolicyNameToId()
 {
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
-	BACKPOL_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+	BACKPOL_ID=`curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | select(.backup_policy_name == "'$1'") | .backup_policy_id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$BACKPOL_ID"; then
 		echo "ERROR: No backup policy found by name $1" 1>&2
@@ -1838,7 +1851,7 @@ getBackupPolicyList()
 {
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
-	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq '.backup_policies[] | {id: .backup_policy_id, name: .backup_policy_name, status: .scheduled_policy.status} | .id+"   "+.name+"   "+.status' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq 'def tostr(v): v|tostring; .backup_policies[] | .backup_policy_id+"   "+.backup_policy_name+"   "+.scheduled_policy.status+"   "+tostr(.policy_resource_count)+"   "+.scheduled_policy.start_time+"   "+tostr(.scheduled_policy.frequency)+"   "+tostr(.scheduled_policy.rentention_num)+"   "+.scheduled_policy.remain_first_backup_of_curMonth' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -1846,11 +1859,112 @@ getBackupPolicyDetail()
 {
 	#setlimit 800
 	setlimit; setapilimit 320 40 backup_policies
-	if ! is_uuid "$1"; then filter=".name = \"$1\""; else filter=".id = \"$1\""; fi
-	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq ".backup_policies[] | select($filter)"
+	local filter
+	if test -n "$1"; then
+		if ! is_uuid "$1"; then filter="| select(.backup_policy_name == \"$1\")"; else filter="| select(.backup_policy_id == \"$1\")"; fi
+	fi
+	curlgetauth_pag $TOKEN "$AUTH_URL_CBACKUPPOLS$PARAMSTRING" | jq ".backup_policies[] $filter"
 	return ${PIPESTATUS[0]}
 }
-# TODO: More backup policy stuff
+
+createBackupPolicy()
+{
+	local NAME="$1"; shift
+	# Optional pos params (convenience)
+	if test -z "$BKUPTIME" -a -n "$1"; then BKUPTIME="$1";
+		if test -z "$BKUPFREQ" -a -n "$2"; then BKUPFREQ=$2;
+			if test -z "$BKUPRETAIN" -a -n "$3"; then BKUPRETAIN=$3; fi
+		fi
+	fi
+	if test -z "$BKUPRETAIN" -o -z "$BKUPFREQ" -o -z "$BKUPTIME"; then
+		echo "ERROR: backuppolicy needs --time, --freq and --retain" 1>&2; exit 2
+	fi
+	local OPTSTR
+	if test -z "$BKUPRETFIRST"; then echo "WARN: BackupPolicy: Default to retain 1st backup of cur month" 1>&2; BKUPRETFIRST="Y"; fi
+	if test -z "$OPTENABLE" -a -z "$OPTDISABLE"; then OPTENABLE=1; fi
+	if test -n "$OPTENABLE"; then OPTSTR=", \"status\": \"ON\""; else OPTSTR=", \"status\": \"OFF\""; fi
+	# "reNtention" is not a bug in the tool, but the API :-O
+	curlpostauth $TOKEN "{ \"backup_policy_name\": \"$NAME\", \"scheduled_policy\": { \"start_time\": \"$BKUPTIME\", \"frequency\": $BKUPFREQ, \"rentention_num\": $BKUPRETAIN, \"remain_first_backup_of_curMonth\": \"$BKUPRETFIRST\"$OPTSTR } }" "$AUTH_URL_CBACKUPPOLS" | jq -r '.'
+	return ${PIPESTATUS[0]} 
+}
+
+updateBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	local POL=""
+	if test -n "$NAME"; then NM="\"backup_policy_name\": \"$NAME\","; fi
+	if test -n "$BKUPTIME"; then POL="$POL, \"start_time\": \"$BKUPTIME\""; fi
+	if test -n "$BKUPFREQ"; then POL="$POL, \"frequency\": $BKUPFREQ"; fi
+	if test -n "$BKUPRETAIN"; then POL="$POL, \"rentention_num\": $BKUPFREQ"; fi
+	if test -n "$BKUPRETFIRST"; then POL="$POL, \"remain_first_backup_of_curMonth\": \"$BKUPRETFIRST\""; fi
+	if test -n "$OPTENABLE"; then POL="$POL, \"status\": \"ON\""; fi
+	if test -n "$OPTDISABLE"; then POL="$POL, \"status\": \"OFF\""; fi
+	if test -n "$POL"; then POL="\"scheduled_policy\": { ${POL#,} }"; fi
+	if test -z "$NM" -a -z "$POL"; then echo "ERROR: BackupPolicy update without any changes?" 1>&2; exit 2; fi
+	curlputauth $TOKEN "{ $NM $POL }" "$AUTH_URL_CBACKUPPOLS/$BACKPOL_ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deleteBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	curldeleteauth $TOKEN "$AUTH_URL_CBACKUPPOLS/$BACKPOL_ID"
+}
+
+addVolsToPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	local RSRC=""
+	for vol in "$@"; do
+		RSRC="$RSRC, { \"resource_id\": \"$vol\", \"resource_type\": \"volume\" }"
+	done
+	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be added to BackupPolicy" 1>&2; exit2; fi
+	RSRC="\"resources\": [ ${RSRC#,} ]"
+	curlpostauth $TOKEN "{ \"backup_policy_id\": \"$BACKPOL_ID\", $RSRC }" "${AUTH_URL_CBACKUPPOLS}resources" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+rmvVolsFromPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	local RSRC=""
+	for vol in "$@"; do
+		RSRC="$RSRC, { \"resource_id\": \"$vol\" }"
+	done
+	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be removed from BackupPolicy" 1>&2; exit2; fi
+	RSRC="\"resources\": [ ${RSRC#,} ]"
+	# Ugh, POST for deleting objects :-(
+	curlpostauth $TOKEN "{ $RSRC }" "${AUTH_URL_CBACKUPPOLS}resources/$BACKPOL_ID/deleted_resources" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+executeBackupPolicy()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	curlpostauth $TOKEN "" "$AUTH_URL_CBACKUPPOLS/$BACKPOL_ID/action"
+}
+
+showBackupPolicyTasks()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	curlgetauth $TOKEN $AUTH_URL_CBACKUPPOLS/$BACKPOL_ID/backuptasks | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+listBackupPolicyTasks()
+{
+	BACKPOL_ID="$1"; shift
+	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
+	curlgetauth $TOKEN $AUTH_URL_CBACKUPPOLS/$BACKPOL_ID/backuptasks | jq -r '.tasks[] | .job_id+"   "+.backup_name+"   "+.status+"   "+.resource_id+"   "+.created_at' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
 
 getBackupList()
 {
@@ -4143,6 +4257,8 @@ deleteDEH()
 	curldeleteauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1"
 }
 
+# Not yet implemented: updateDEH
+
 listDEHtypes()
 {
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/availability-zone/$1/dedicated-host-types" | jq '.dedicated_host_types[] | .host_type+"   "+.host_type_name' | tr -d '"'
@@ -4403,6 +4519,18 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				SSLCIPHER="$2"; shift;;
 			--auto)
 				AUTOPLC="$2"; shift;;
+			--time)
+				BKUPTIME="$2"; shift;;
+			--freq)
+				BKUPFREQ=$2; shift;;
+			--retain)
+				BKUPRETAIN=$2; shift;;
+			--retain1st)
+				BKUPRETFIRST="$2"; shift;;
+			--enable)
+				OPTENABLE=1;;
+			--disable)
+				OPTDISABLE=1;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
@@ -4899,6 +5027,23 @@ elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "list" ]; then
 	getBackupPolicyList
 elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "show" ]; then
 	getBackupPolicyDetail "$1"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "create" ]; then
+	createBackupPolicy "$@"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "update" ]; then
+	updateBackupPolicy "$@"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "delete" ]; then
+	deleteBackupPolicy "$1"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "add" ]; then
+	addVolsToPolicy "$@"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "remove" ]; then
+	rmvVolsFromPolicy "$@"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "execute" ]; then
+	executeBackupPolicy "$1"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "showtasks" ]; then
+	showBackupPolicyTasks "$1"
+elif [ "$MAINCOM" == "backuppolicy" -a "$SUBCOM" == "listtasks" ]; then
+	listBackupPolicyTasks "$1"
+
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "help" ]; then
 	backupHelp
 elif [ "$MAINCOM" == "backup" -a "$SUBCOM" == "list" ]; then
