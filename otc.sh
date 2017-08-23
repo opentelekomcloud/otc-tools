@@ -499,6 +499,7 @@ getIAMToken()
 			TROVE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" database $OS_PROJECT_ID)
 			KEYSTONE_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" identity $OS_PROJECT_ID)
 			CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
+			IRONIC_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" baremetal $OS_PROJECT_ID)
 		fi
 		if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
@@ -526,6 +527,7 @@ getIAMToken()
 		TROVE_URL=$(getv2endpoint "$IAMJSON" database $OS_PROJECT_ID)
 		KEYSTONE_URL=$(getv2endpoint "$IAMJSON" identity $OS_PROJECT_ID)
 		CEILOMETER_URL=$(getv2endpoint "$IAMJSON" metering $OS_PROJECT_ID)
+		IRONIC_URL=$(getv2endpoint "$IAMJSON" baremetal $OS_PROJECT_ID)
 		if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.endpoints[].id+"   "+.type+"   "+.name+"   "+.endpoints[].publicURL+"   "+.endpoints[].region+"   public"' | tr -d '"'; fi
 		if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.metadata.roles[]+"   "+.user.roles[].name' | tr -d '"'; fi
 	fi
@@ -540,6 +542,7 @@ getIAMToken()
 		NOVA_URL=${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID
 		HEAT_URL=${BASEURL/iam/rts}/v1/$OS_PROJECT_ID
 		TROVE_URL=${BASEURL/iam/rds}
+		IRONIC_URL=${BASEURL/iam/bms}
 	fi
 
 	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
@@ -601,6 +604,7 @@ getIAMToken()
 	AUTH_URL_CTS="${BASEURL/iam/cts}"
 	AUTH_URL_DMS="${BASEURL/iam/dms}"
 	AUTH_URL_MRS="${BASEURL/iam/mrs}"
+	AUTH_URL_DEH="${BASEURL/iam/deh}"
 	AUTH_URL_ANTIDDOS="${BASEURL/iam/antiddos}"
 }
 
@@ -1064,6 +1068,9 @@ otcnewHelp()
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
+	echo "otc deh list            # List Dedicated Hosts"
+	echo "otc deh show <id>       # Show Dedicated Host Details"
+	echo "otc deh listvm <id>     # List VMs on Dedicated Host"
 }
 
 mdsHelp()
@@ -4087,6 +4094,24 @@ listKMS()
 	return ${PIPESTATUS[0]}
 }
 
+listDEH()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq 'def tostr(x): x|tostring; .dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+.instance_total +"   "+.availability_zone+"   "+.host_properties.host_type+"   "+tostr(.available_vcpus)+"   "+tostr(.available_memory)' | tr -d '"''.dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+.instance_total+"   "+.availability_zone+"   "+.host_properties.host_type+"   "+.available_vcpus+   "+.available_memory' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+showDEH()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+listDEHservers()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1/servers" | jq '.servers[] | .id+"   "+.name+"   "+.status+"   "+.flavor.id' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
 
 getMeta()
 {
@@ -4395,6 +4420,7 @@ if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
 if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
+if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -4856,7 +4882,8 @@ elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
 
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ] || 
+     [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "help" ]; then
 	elbHelp
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
 	getELBList
@@ -5112,6 +5139,15 @@ elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "joblist" -o "$SUBCOM" == "listjobs"
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "job" -o "$SUBCOM" == "showjob" ]; then
 	showMRSJob $1
 
+elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "help" ]; then
+	otcnewHelp
+elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "list" ]; then
+	listDEH
+elif [ "$MAINCOM" == "deh" -a "$SUBCOM" == "show" ]; then
+	showDEH "$1"
+elif [ "$MAINCOM" == "deh" -a "${SUBCOM:0:6}" == "listvm" ]; then
+	listDEHservers "$1"
+
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "help" ]; then
 	mdsHelp
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "meta_data" ]; then
@@ -5130,6 +5166,9 @@ elif [ "$MAINCOM" == "custom" -a "$SUBCOM" == "help" ]; then
 elif [ "$MAINCOM" == "custom" ]; then
 	handleCustom "$SUBCOM" "$@"
 else
+	if [ "$MAINCOM" != "help" ]; then
+		echo "ERROR: Could not parse $MAINCOM $SUBCOM" 1>&2
+	fi
 	printHelp
 fi
 
