@@ -854,8 +854,8 @@ elbHelp()
 	echo "    --timeout <to>              # timeout in minutes(!) for TCP/UDP"
 	echo "    --drain <to>                # keep conn after member del in minutes(!) for TCP"
 	echo "    --sslcert <id>              # SSL certificate to use for HTTPS"
-	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1.0 for HTTPS"
-	echo "    --sslcipher <KWD>           # Default or Strict or Extended (Ext only for v1.2+1.1+1.0)"
+	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1 for HTTPS"
+	echo "    --sslcipher <KWD>           # Default or Strict or Extended (Ext for v1.2+1.1+1)"
 	#not implemented: modifylistener
 	echo "otc elb dellistener <lid>"
 	echo "otc elb listmember <lid>"
@@ -2771,11 +2771,14 @@ createListener()
 	local ALG="$5"
 	local BEPROTO="$6"
 	local BEPORT=$7
-	local OPTPAR
+	local OPTPAR STICKY
 	if test -z "$ALG"; then ALG="source"; fi
 	if test -z "$BEPROTO"; then BEPROTO="$3"; fi
 	if test -z "$BEPORT"; then BEPORT=$4; fi
-	if test "$3" = "HTTP" -o "$3" = "HTTPS" && test "$ALG" = "roundrobin"; then STICKY="\"session_sticky\": true, "; fi
+	if test "$3" = "HTTP" -o "$3" = "HTTPS"; then
+		if test "$ALG" = "roundrobin"; then STICKY=", \"session_sticky\": true, \"sticky_session_type\": \"insert\""
+		else STICKY=", \"session_sticky\": false, \"sticky_session_type\": \"insert\""; fi
+	fi
 	if test -n "$ELBTIMEOUT"; then
 		if test "$3" = "TCP"; then OPTPAR=", \"tcp_timeout\": $ELBTIMEOUT";
 		elif test "$3" = "UDP"; then OPTPAR=", \"udp_timeout\": $ELBTIMEOUT";
@@ -2785,10 +2788,10 @@ createListener()
 		if test "$3" = "TCP"; then OPTPAR="$OPTPAR, \"tcp_draining\": true, \"tcp_draining_timeout\": $ELBDRAIN";
 		else echo "WARN: ELB ignore --drain for $3" 1>&2; fi
 	fi
-	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"certficate_id\": \"$SSLCERT\""; fi
+	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"certificate_id\": \"$SSLCERT\""; fi
 	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
 	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
-	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, $STICKY\"lb_algorithm\": \"$ALG\"$OPTPAR }" "$AUTH_URL_ELB/listeners" | jq -r '.'
+	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, \"lb_algorithm\": \"$ALG\"$OPTPAR$STICKY }" "$AUTH_URL_ELB/listeners" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
