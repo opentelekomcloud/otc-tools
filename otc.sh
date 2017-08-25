@@ -4173,6 +4173,9 @@ createPROJECT()
 {
 	local NAME="$1"; shift
 	local DESC
+	REG="${OS_REGION_NAME}_"
+	REGLN=${#REG}
+	if test "${NAME:0:$REGLN}" != "$REG"; then echo "WARN: Project creation: Start name with $REG" 1>&2; fi
 	if test -z "$DESCRIPTION" -a -n "$2"; then DESCRIPTION="$*"; fi
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
 	curlpostauth "$TOKEN" "{ \"project\": { \"name\": \"$NAME\"$DESC } }" "${IAM_AUTH_URL%/auth*}/projects" | jq -r '.' 
@@ -4949,7 +4952,7 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listprojects" ]; then
+elif [ "$MAINCOM" == "iam"  -a "${SUBCOM:0:11}" == "listproject" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.description' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
