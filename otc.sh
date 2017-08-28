@@ -157,6 +157,12 @@ if test ! -d "$TMPDIR"; then TMPDIR=/tmp; fi
 
 # REST call curl wrappers ###########################################################
 
+# Output HTML
+dumphtml()
+{
+	echo "$@" | sed 's/<[^>]*>//g'
+}
+
 # Generic wrapper to facilitate debugging
 docurl()
 {
@@ -181,8 +187,11 @@ docurl()
 		RC=$?
 		echo "$ANS"
 	fi
-	if test $RC != 0; then echo "$ANS" 1>&2
+	if test $RC != 0; then echo "$ANS" 1>&2; return $RC
 	else
+		if echo "$ANS" | grep '401 Authorization' >/dev/null 2>&1; then
+			dumphtml "$ANS" 1>&2; return 9
+		fi
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
 		if test "$CODE" == "null"; then
 			local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
@@ -4188,6 +4197,15 @@ deletePROJECT()
 	local ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
 	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+deletePROJECText()
+{
+	# FIXME: Convert name to ID as needed
+	local ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
