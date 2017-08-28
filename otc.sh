@@ -492,6 +492,7 @@ getIAMToken()
 			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq 'def str(s): s|tostring; .id+"   "+.type+"   "+.name+"   "+str(.endpoints[])' | sed 's/\\"url\\"://' | tr -d '"'; fi
 			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
+			if test -n "$DEL_TOKEN"; then curldeleteauth $TOKEN "$IAM_AUTH_URL"; fi
 		else
 			SERVICES="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}services)"
 			ENDPOINTS="$(curlgetauth $TOKEN ${IAM_AUTH_URL%auth*}endpoints)"
@@ -4614,6 +4615,7 @@ if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
+if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "deletetoken" ]; then DEL_TOKEN=1; fi
 
 if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" -a "$SUBCOM" != "help" ]; then
 	if [ "$MAINCOM" == "iam" -a -z "$REQSCOPE" ] && \
@@ -4936,6 +4938,8 @@ elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "help" ]; then
 	iamHelp
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "token" ]; then
 	echo $TOKEN
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletetoken" ]; then
+	echo -n ""
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
