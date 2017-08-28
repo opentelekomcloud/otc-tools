@@ -244,6 +244,13 @@ curlgetauth()
 		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
+curlheadauth()
+{
+	TKN="$1"; shift
+	docurl -sS -X HEAD -H "Content-Type: application/json" -H "Accept: application/json" \
+		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+}
+
 curlgetauth_pag()
 {
 	local URL="$2" HASLIM HASPAR LIM TMPF MARKPAR NOANS LASTNO
@@ -1078,7 +1085,7 @@ customHelp()
 {
 	echo "--- Custom command support ---"
 	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
-	echo "      METHOD=GET/PUT/POST/DELETE, vars with \\\$ are evaluated (not sanitized!)"
+	echo "      METHOD=GET/PUT/POST/DELETE/HEAD, vars with \\\$ are evaluated (not sanitized!)"
 	echo "      example: otc custom GET \\\$BASEURL/v2/\\\$OS_PROJECT_ID/servers"
 	echo "      note that \\\$BASEURL gets prepended if URL starts with /"
 	echo "    --jqfilter allows to use a filtering string for jq processing (def=.)"
@@ -1488,6 +1495,9 @@ handleCustom()
 	case "$METH" in
 		GET)
 			curlgetauth $TOKEN "$URL" | eval "$JQ"
+			;;
+		HEAD)
+			curlheadauth $TOKEN "$URL" | eval "$JQ"
 			;;
 		PUT)
 			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
