@@ -247,7 +247,7 @@ curlgetauth()
 curlheadauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X HEAD -H "Content-Type: application/json" -H "Accept: application/json" \
+	docurl -sS -X HEAD --head -H "Content-Type: application/json" -H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
 }
 
