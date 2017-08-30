@@ -1477,6 +1477,7 @@ convertEipToId()
 
 handleCustom()
 {
+	local RC
 	if test "$1" == "--jqfilter"; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
 	if test -n "$JQFILTER"; then JQ="jq -r \"$JQFILTER\""; else JQ="cat -"; fi
 	METH=$1
@@ -1497,7 +1498,13 @@ handleCustom()
 			curlgetauth $TOKEN "$URL" | eval "$JQ"
 			;;
 		HEAD)
-			curlheadauth $TOKEN "$URL" | eval "$JQ"
+			RESP=$(curlheadauth $TOKEN "$URL")
+			RC=$(echo "$RESP" | grep HTTP)
+			echo "$RC"
+			RC=$(echo "$RC" | sed 's@HTTP/[0-9\.]* \([0-9]*\).*$@\1@')
+			#echo $RC
+			test $RC -ge 200 -a $RC -le 299
+			RC=$?
 			;;
 		PUT)
 			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
@@ -1520,8 +1527,9 @@ handleCustom()
 			exit 1
 			;;
 	esac
+	if test -z "$RC"; then RC=${PIPESTATUS[0]}; fi
 	if test -z "$JQFILTER"; then echo; fi
-	return ${PIPESTATUS[0]}
+	return $RC
 }
 
 
