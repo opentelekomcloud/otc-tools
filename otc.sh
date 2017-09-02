@@ -3324,33 +3324,33 @@ ECSCreate()
 	fi
 
 
-   # composing os:scheduler_hints
-   # using:
-   # --tenancy $TENANCY
-   # --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
-   if test -n "$DEDICATED_HOST_ID"; then
-      is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
-      if test -n "$TENANCY"; then
-      OPTIONAL="$OPTIONAL
-         \"os:scheduler_hints\": {
-           \"tenancy\": \"$TENANCY\",
-           \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
-         },"
-      else
-      OPTIONAL="$OPTIONAL
-         \"os:scheduler_hints\": {
-           \"tenancy\": \"dedicated\",
-           \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
-         },"
-      fi
-   else
-      if test -n "$TENANCY"; then
-      OPTIONAL="$OPTIONAL
-         \"os:scheduler_hints\": {
-           \"tenancy\": \"$TENANCY\"
-         },"
-      fi
-   fi
+	# composing os:scheduler_hints
+	# using:
+	# --tenancy $TENANCY
+	# --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
+	if test -n "$DEDICATED_HOST_ID"; then
+		is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
+ 		if test -n "$TENANCY"; then
+			OPTIONAL="$OPTIONAL
+			 \"os:scheduler_hints\": {
+			 \"tenancy\": \"$TENANCY\",
+			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+			},"
+		else
+			OPTIONAL="$OPTIONAL
+			 \"os:scheduler_hints\": {
+			 \"tenancy\": \"dedicated\",
+			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+			},"
+		fi
+	else
+		if test -n "$TENANCY"; then
+			OPTIONAL="$OPTIONAL
+			 \"os:scheduler_hints\": {
+			 \"tenancy\": \"$TENANCY\"
+			},"
+		fi
+	fi
 
 	if test -n "$KEYNAME"; then
 		OPTIONAL="$OPTIONAL
@@ -3361,6 +3361,22 @@ ECSCreate()
 			\"adminPass\": \"$ADMINPASS\","
 	fi
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
+	if test -n "$METADATA"; then
+		OPTIONAL="$OPTIONAL
+			\"metadata\": { $METADATA },"
+	fi
+	if test -n "$TAGS"; then
+		local MYTAGS=""
+		OLDIFS="$IFS"
+		IFS=","
+		for tag in $TAGS; do
+			MYTAGS="$MYTAGS \"${tag/=/.}\","
+		done
+		IFS="$OLDIFS"
+		OPTIONAL="$OPTIONAL
+			\"tags\" [ ${MYTAGS%,} ],"
+	fi
+
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
 	local SECUGROUPIDS=""
@@ -3569,7 +3585,7 @@ EVSCreate()
 	fi
 
 	local OPTIONAL=""
-   local META=""
+	local META=""
 	if test -n "$SHAREABLE"; then
 		OPTIONAL="$OPTIONAL
 			\"shareable\": \"$SHAREABLE\","
@@ -3582,10 +3598,10 @@ EVSCreate()
 		OPTIONAL="$OPTIONAL
 			\"backup_id\": \"$BACKUPID\","
 	fi
-   if test -n "$CYPTKEYID"; then META="\"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
-   if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
-   if test -n "$VBD"; then META="$META \"hw:passthrough\": \"false\","; fi
-   META="${META%,}"
+	if test -n "$CYPTKEYID"; then META="\"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
+	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
+	if test -n "$VBD"; then META="$META \"hw:passthrough\": \"false\","; fi
+	META="${META%,}"
 	if test -n "$META"; then OPTIONAL="$OPTIONAL \"metadata\": { $META },"; fi
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 	if test -z "$VOLUME_DESC"; then VOLUME_DESC=$VOLUME_NAME; fi
@@ -4491,7 +4507,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				ROOTDISKSIZE="$2"; shift;;
 			--shareable)
 				SHAREABLE=1;;
-			-crypt)
+			--crypt)
 				CRYPTKEYID=$2; shift;;
 			--scsi)
 				SCSI=1;;
@@ -4499,6 +4515,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				VBD=1;;
 			--datadisks)
 				DATADISKS="$2"; shift;;
+			--tags)
+				TAGS="$2"; shift;;
+			--metadata)
+				METADATA="$2"; shift;;
 			--direction)
 				DIRECTION="$2"; shift;;
 			--portmin|--port-min)
