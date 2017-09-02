@@ -3374,7 +3374,7 @@ ECSCreate()
 		done
 		IFS="$OLDIFS"
 		OPTIONAL="$OPTIONAL
-			\"tags\" [ ${MYTAGS%,} ],"
+			\"tags\": [ ${MYTAGS%,} ],"
 	fi
 
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
