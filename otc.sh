@@ -641,6 +641,50 @@ build_data_volumes_json()
 	echo $DATA_VOLUMES
 }
 
+isnum()
+{
+	echo "$@" | grep '^[0-9]\{1,99\}$' >/dev/null 2>&1
+}
+
+jsonesc()
+{
+	if isnum "$@"; then
+		echo "$@"
+	elif test "$@" == "null" -o "$@" == "true" -o "$@" == "false"; then
+		echo "$@"
+	else
+		echo "\"$@\""
+	fi
+}
+
+
+keyval2list()
+{
+	local LIST=""
+	OLDIFS="$IFS"
+	IFS=","
+	for tag in $*; do
+		LIST="$LIST \"${tag/=/.}\","
+	done
+	IFS="$OLDIFS"
+	echo "${LIST%,}"
+}
+
+keyval2json()
+{
+	local JSON=""
+	OLDIFS="$IFS"
+	IFS=","
+	for tag in $*; do
+		KEY="${tag%%=*}"
+		VAL="$(jsonesc ${tag#*=})"
+		JSON="$JSON \"$KEY\": $VAL,"
+	done
+	IFS="$OLDIFS"
+	echo "${JSON%,}"
+}	
+
+
 # Usage
 ecsHelp()
 {
@@ -3361,20 +3405,14 @@ ECSCreate()
 			\"adminPass\": \"$ADMINPASS\","
 	fi
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
-	if test -n "$METADATA"; then
+	if test -n "$METADATA_JSON"; then
 		OPTIONAL="$OPTIONAL
-			\"metadata\": { $METADATA },"
+			\"metadata\": { $METADATA_JSON },"
+		echo "WARN: metadata passing not supported on ECS creation via Huawei API" 1>&2
 	fi
 	if test -n "$TAGS"; then
-		local MYTAGS=""
-		OLDIFS="$IFS"
-		IFS=","
-		for tag in $TAGS; do
-			MYTAGS="$MYTAGS \"${tag/=/.}\","
-		done
-		IFS="$OLDIFS"
 		OPTIONAL="$OPTIONAL
-			\"tags\": [ ${MYTAGS%,} ],"
+			\"tags\": [ $(keyval2list $TAGS) ],"
 	fi
 
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
@@ -4517,8 +4555,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				DATADISKS="$2"; shift;;
 			--tags)
 				TAGS="$2"; shift;;
+			--metadata-json)
+				METADATA_JSON="$2"; shift;;
 			--metadata)
-				METADATA="$2"; shift;;
+				METADATA="$(keyval2json $2)"; shift;;
 			--direction)
 				DIRECTION="$2"; shift;;
 			--portmin|--port-min)
