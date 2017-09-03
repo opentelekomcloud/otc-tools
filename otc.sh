@@ -4558,7 +4558,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 			--metadata-json)
 				METADATA_JSON="$2"; shift;;
 			--metadata)
-				METADATA="$(keyval2json $2)"; shift;;
+				METADATA_JSON="$(keyval2json $2)"; shift;;
 			--direction)
 				DIRECTION="$2"; shift;;
 			--portmin|--port-min)
