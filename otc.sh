@@ -5060,6 +5060,8 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
 	createPROJECT "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteproject" ]; then
 	deletePROJECT "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "cleanproject" ]; then
+	deletePROJECText "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
    ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
