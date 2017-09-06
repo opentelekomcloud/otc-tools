@@ -276,7 +276,9 @@ curlgetauth_pag()
 		LASTNO=$NOANS
 		docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
 			-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$URL$LIMPAR$MARKPAR" >>$TMPF
-		if test $RC == 0; then RC=$?; fi
+		# Remember error
+		RV=$?
+		if test $RC == 0 -a $RV != 0; then RC=$RV; fi
 		local ANS=$(cat $TMPF | jq -r ".${ARRNM}[] | .${IDFIELD}")
 		NOANS=$(echo "$ANS" | wc -l)
 		LAST=$(echo "$ANS" | tail -n1 | tr -d '"')
