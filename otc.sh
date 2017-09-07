@@ -226,8 +226,13 @@ curlpostauth()
 curlputauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
-		-H "X-Auth-Token: $TKN" -d "$1" "$2"
+	if test -n "$1"; then
+		docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
+			-H "X-Auth-Token: $TKN" -d "$1" "$2"
+	else
+		docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
+			-H "X-Auth-Token: $TKN" "$2"
+	fi
 }
 
 curlputauthbinfile()
@@ -734,6 +739,8 @@ ecsHelp()
 	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
 	echo "    --[no]wait"
 	echo
+	echo "otc ecs update <id>             # change VM data (same parms as create)"
+	echo "    -r  specifies that tags or metadata will remove others"
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
 	echo "                                # optionally --soft/--hard"
 	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
@@ -746,7 +753,6 @@ ecsHelp()
 	echo "    <ecs> <ecs> ...             # you could give IDs or names"
 	echo "otc ecs job <id>                # show status of job <id>"
 	echo "otc ecs limits                  # display project quotas"
-	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "otc ecs az-list                 # list availability zones"
 	echo "otc ecs flavor-list             # list available flavors"
 	echo "otc ecs attach-nic ECSID PORT   # attach vNIC to VM: port-spec see below"
@@ -1590,6 +1596,10 @@ getECSVM()
 	if test $RC != 0; then echo "}"; return $RC; fi
 	echo -n ", \"interfaceAttachments\": "
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
+	if test $RC != 0; then echo "}"; return $RC; fi
+	MYTAGS=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/tags")
+	if test $? != 0 -o -z "$MYTAGS" -o "$MYTAGS" = "\"tags\": []"; then echo "}"; return $RC; fi
+	echo ", \"tags\": $(echo $MYTAGS | jq -r '.[]')"
 	echo "}"
 	return ${PIPESTATUS[0]}
 }
@@ -3551,21 +3561,47 @@ appendparm()
 
 ECSUpdate()
 {
+	#if test "$1" = "-r"; then REPLACE=1; shift; fi
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
+	if test "$2" = "-r"; then REPLACE=1; fi
 	local PARMS=""
+	local RC=0
 	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
 	if test -n "$INSTANCE_NAME"; then appendparm "\"name\": \"$INSTANCE_NAME\""; fi
 	if test -n "$INSTANCE_TYPE"; then appendparm "\"flavorRef\": \"$INSTANCE_TYPE\""; fi
-	if test -n "$METADATA_JSON"; then appendparm "\"metadata\": { $METADATA_JSON }"; fi
+	#if test -n "$METADATA_JSON"; then appendparm "\"metadata\": { $METADATA_JSON }"; fi
+	#if test -n "$TAGS"; then appendparm "\"tags\": [ $(keyval2list $TAGS) ]"; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		appendparm "\"${prop%%=*}\": \"${prop#*=}\""
 	done
-	if test -n "$TAGS"; then appendparm "\"tags\": [ $(keyval2list $TAGS) ]"; fi
-
 	IFS="$OLDIFS"
-	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$ECS_ID"
-	#return $?
+	if test -n "$PARMS"; then
+		curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$ECS_ID" | jq -r '.'
+		RC=${PIPESTATUS[0]}
+	fi
+	if test -n "$METADATA_JSON"; then
+		if test "$REPLACE" = 1; then
+			curlputauth $TOKEN "{ \"metadata\": { $METADATA_JSON } }" "$AUTH_URL_ECS/$ECS_ID/metadata" | jq -r '.'
+		else
+			curlpostauth $TOKEN "{ \"metadata\": { $METADATA_JSON } }" "$AUTH_URL_ECS/$ECS_ID/metadata" | jq -r '.'
+		fi
+		if test $RC = 0; then RC=${PIPESTATUS[0]}; fi
+	fi
+	if test -n "$TAGS"; then
+		if test "$REPLACE" = 1; then
+			curlputauth $TOKEN "{ \"tags\": [ $(keyval2list $TAGS) ] }" "$AUTH_URL_ECS/$ECS_ID/tags" | jq -r '.'
+			if test $RC = 0; then RC=${PIPESTATUS[0]}; fi
+		else
+			OLDIFS="$IFS"
+			IFS=","
+			for tag in $TAGS; do
+				curlputauth $TOKEN "" "$AUTH_URL_ECS/$ECS_ID/tags/${tag/=/.}"
+				R=$?; if test $RC = 0; then RC=$R; fi
+			done
+		fi
+	fi
+	return $RC
 }
 
 ECSDelete()
@@ -4508,6 +4544,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
+			-r|--replace)
+				REPLACE=1;;
 			-a|--admin-pass)
 				ADMINPASS="$2"; shift;;
 			-n|--instance-name)
@@ -4868,7 +4906,7 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
 	ECSDelete $@
 	WaitForTask $ECSTASKID 5
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
-	ECSUpdate $1
+	ECSUpdate "$@"
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listaz" ]; then
 	getAZList
