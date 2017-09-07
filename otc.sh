@@ -3555,6 +3555,7 @@ ECSUpdate()
 	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
 	if test -n "$INSTANCE_NAME"; then appendparm "\"name\": \"$INSTANCE_NAME\""; fi
 	if test -n "$INSTANCE_TYPE"; then appendparm "\"flavorRef\": \"$INSTANCE_TYPE\""; fi
+	if test -n "$METADATA_JSON"; then appendparm "\"metadata\": { $METADATA_JSON }"; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
 		appendparm "\"${prop%%=*}\": \"${prop#*=}\""
