@@ -3560,6 +3560,8 @@ ECSUpdate()
 	for prop in $PROPS; do
 		appendparm "\"${prop%%=*}\": \"${prop#*=}\""
 	done
+	if test -n "$TAGS"; then appendparm "\"tags\": [ $(keyval2list $TAGS) ]"; fi
+
 	IFS="$OLDIFS"
 	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$1"
 	#return $?
