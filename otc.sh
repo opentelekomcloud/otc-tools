@@ -734,7 +734,6 @@ ecsHelp()
 	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
 	echo "    --[no]wait"
 	echo
-	#echo "otc ecs update [opts] <ID>      # change name, type, tags, metadata"
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
 	echo "                                # optionally --soft/--hard"
 	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
@@ -787,6 +786,7 @@ evsHelp()
 	echo "    --shareable                 # create shareable volume"
 	echo "    --crypt CRYPTKEYID          # encryption"
 	echo "    --scsi/--vbd                # SCSI passthrough or plain VBD attachment"
+	echo "otc evs update                  # change volume setting (name, descr, type, ...)"
 	echo "otc evs delete                  # delete volume"
 	echo
 	echo "otc evs attach        ecsid    device:volumeid    # attach volume at ecs using given device name"
@@ -3540,7 +3540,7 @@ ECSStop()
 	#return $?
 }
 
-appparm()
+appendparm()
 {
 	if test -z "$PARMS"; then
 		PARMS="$1"
@@ -3552,11 +3552,12 @@ appparm()
 ECSUpdate()
 {
 	local PARMS=""
-	if test -n "$INSTANCE_NAME"; then appparm "\"name\": \"$INSTANCE_NAME\""; fi
-	if test -n "$IMAGENAME"; then appparm "\"image\": \"$IMAGENAME\""; fi
+	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
+	if test -n "$INSTANCE_NAME"; then appendparm "\"name\": \"$INSTANCE_NAME\""; fi
+	if test -n "$INSTANCE_TYPE"; then appendparm "\"flavorRef\": \"$INSTANCE_TYPE\""; fi
 	OLDIFS="$IFS"; IFS=","
 	for prop in $PROPS; do
-		appparm "\"${prop%%=*}\": \"${prop#*=}\""
+		appendparm "\"${prop%%=*}\": \"${prop#*=}\""
 	done
 	IFS="$OLDIFS"
 	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$1"
@@ -3626,7 +3627,8 @@ EVSCreate()
 	fi
 
 	local OPTIONAL=""
-	local META=""
+	local META="$METADATA_JSON"
+	if test -n "$META"; then META="$META, "; fi
 	if test -n "$SHAREABLE"; then
 		OPTIONAL="$OPTIONAL
 			\"shareable\": \"$SHAREABLE\","
@@ -3639,9 +3641,9 @@ EVSCreate()
 		OPTIONAL="$OPTIONAL
 			\"backup_id\": \"$BACKUPID\","
 	fi
-	if test -n "$CYPTKEYID"; then META="\"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
-	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
-	if test -n "$VBD"; then META="$META \"hw:passthrough\": \"false\","; fi
+	if test -n "$CRYPTKEYID"; then META="$META \"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
+	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\",";  fi
+	if test -n "$VBD";  then META="$META \"hw:passthrough\": \"false\","; fi
 	META="${META%,}"
 	if test -n "$META"; then OPTIONAL="$OPTIONAL \"metadata\": { $META },"; fi
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
@@ -3671,6 +3673,31 @@ EVSCreate()
 	# this lines for DEBUG
 	#return ${PIPESTATUS[0]}
 }
+
+EVSUpdate()
+{
+	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
+	local OPTIONAL=""
+	local META="$METADATA_JSON"
+	if test -n "$META"; then META="$META, "; fi
+	if test -n "$SHAREABLE"; then
+		OPTIONAL="$OPTIONAL
+			\"shareable\": \"$SHAREABLE\","
+	fi
+	if test -n "$CRYPTKEYID"; then META="$META \"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
+	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
+	if test -n "$VBD"; then META="$META \"hw:passthrough\": \"false\","; fi
+	META="${META%,}"
+	if test -n "$META"; then OPTIONAL="$OPTIONAL \"metadata\": { $META },"; fi
+	if test -n "$VOLUME_NAME"; then OPTIONAL="$OPTIONAL \"name\": \"$VOLUME_NAME\","; fi
+	if test -n "$VOLUME_DESC"; then OPTIONAL="$OPTIONAL \"description\": \"$VOLUME_DESC\","; fi
+
+	if test -z "$OPTIONAL"; then echo "WARN: No changes specified" 1>&2; exit 1; fi
+
+	curlputauth $TOKEN "{ \"volume\": { ${OPTIONAL%,} } }" "$AUTH_URL_VOLS/$EVS_ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 
 EVSDelete()
 {
@@ -5113,6 +5140,8 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	echo "Task ID: $EVSTASKID"
 	#WaitForTask $EVSTASKID 5
 	WaitForTaskFieldOpt $EVSTASKID '.entities.volume_id' 5
+elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "update" ]; then
+	EVSUpdate "$@"
 elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "delete" ]; then
 	EVSDelete "$@"
 	echo "Task ID: $EVSTASKID"
