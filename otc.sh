@@ -719,7 +719,7 @@ ecsHelp()
 	echo "    --admin-pass          <PASSWD>"
 	echo "    --key-name            <SSHKEYNAME>"
 	echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
-	echo "    --user-data-file      <USERDFILEG>    # don't forget #cloud-config header"
+	echo "    --user-data-file      <USERDFILE>     # don't forget #cloud-config header"
 	echo "    --public              <true/false/IP>"
 	echo "    --volumes             <device:volume>[<device,volume>[,..]]    # attach volumes as named devices"
 	echo "    --bandwidth           <BW>		# defaults to 25"
@@ -734,6 +734,7 @@ ecsHelp()
 	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
 	echo "    --[no]wait"
 	echo
+	#echo "otc ecs update [opts] <ID>      # change name, type, tags, metadata"
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
 	echo "                                # optionally --soft/--hard"
 	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
