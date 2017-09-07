@@ -3551,6 +3551,7 @@ appendparm()
 
 ECSUpdate()
 {
+	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
 	local PARMS=""
 	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
 	if test -n "$INSTANCE_NAME"; then appendparm "\"name\": \"$INSTANCE_NAME\""; fi
@@ -3563,7 +3564,7 @@ ECSUpdate()
 	if test -n "$TAGS"; then appendparm "\"tags\": [ $(keyval2list $TAGS) ]"; fi
 
 	IFS="$OLDIFS"
-	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$1"
+	curlputauth $TOKEN "{ \"server\": { $PARMS } }" "$AUTH_URL_ECS/$ECS_ID"
 	#return $?
 }
 
