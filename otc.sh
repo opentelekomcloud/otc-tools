@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.17
+VERSION=0.7.18
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1043,7 +1043,9 @@ iamHelp()
 	echo "otc iam listprojects    # output projects"
 	echo "otc iam showproject ID  # show details of project"
 	echo "otc iam createproject NAME        # create project (opt: --description)"
-	echo "otc iam deleteproject ID          # delete project"
+	echo "otc iam deleteproject ID          # delete project (fails on OTC to avoid orphaned resrcs)"
+	echo "otc iam cleanproject ID           # recursive project cleanup (grace period of some hours)"
+	echo "otc iam recoverproject ID         # stop recursive project cleanup"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
@@ -4337,7 +4339,6 @@ createPROJECT()
 
 deletePROJECT()
 {
-	# FIXME: Convert name to ID as needed
 	local ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
 	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
@@ -4346,11 +4347,18 @@ deletePROJECT()
 
 deletePROJECText()
 {
-	# FIXME: Convert name to ID as needed
 	local ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
-	curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID" | jq -r '.'
-	return ${PIPESTATUS[0]}
+	#curldeleteauth "$TOKEN" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID"
+	curlputauth "$TOKEN" "{ \"project\": { \"status\": \"suspended\" } }" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID"
+	#return ${PIPESTATUS[0]}
+}
+
+recoverPROJECText()
+{
+	local ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	curlputauth "$TOKEN" "{ \"project\": { \"status\": \"normal\" } }" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID"
 }
 
 # These don't work yet well
@@ -5134,6 +5142,8 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteproject" ]; then
 	deletePROJECT "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "cleanproject" ]; then
 	deletePROJECText "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "recoverproject" ]; then
+	recoverPROJECText "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
    ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
