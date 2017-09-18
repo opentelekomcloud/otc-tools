@@ -5175,6 +5175,9 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletetoken" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "domains" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}domains" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "services" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
