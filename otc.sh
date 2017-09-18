@@ -621,6 +621,7 @@ getIAMToken()
 
 	AUTH_URL_DNS="$DESIGNATE_URL/v2/zones"
 
+	# FIXME: Use full URLs that point to the service
 	AUTH_URL_AS="${HEAT_URL/rts/as}"
 	AUTH_URL_AS="${AUTH_URL_AS%%/v[12]*}"
 
@@ -640,6 +641,9 @@ getIAMToken()
 	else
 		AUTH_URL_SFS="${BASEURL/iam/sfs}/v2/$OS_PROJECT_ID"	# shares
 	fi
+	AUTH_URL_CSBS="${BASEURL/iam/csbs}"
+	AUTH_URL_DWS="${BASEURL/iam/dws}"
+	AUTH_URL_TMS="${BASEURL/iam/tms}"
 }
 
 build_data_volumes_json()
