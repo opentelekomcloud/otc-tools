@@ -415,7 +415,7 @@ readIAMTokenFile()
 {
 	local TKFN=$1
 	if ! test -r $TKFN; then return 1; fi
-	if test -n "$DISCARDCACHE"; then return 1; fi
+	if test -n "$DISCARDCACHE" -o -n "$NOCACHE"; then return 1; fi
 	local RESP=$(cat $TKFN)
 	# TODO: Check for expiration in next minutes
 	local now=$(date +"%s")
@@ -524,7 +524,7 @@ getIAMToken()
 		IAMRESP="$(getIAMTokenKeystone)"
 		RC=$?
 		if test $RC != 0; then exit $RC; fi
-		writeIAMTokenFile $TKNFN "$IAMRESP"
+		if test -z "$NOCACHE"; then writeIAMTokenFile $TKNFN "$IAMRESP"; fi
 	fi
 
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
@@ -1253,6 +1253,7 @@ printHelp()
 	echo "otc --insecure CMD1 CMD2 [opts] PARAMS    # for ignoring SSL security ..."
 	echo "    --domainscope       # get/use a domain scoped token (can be used globally)"
 	echo "    --discardcache      # don't use token from cache but request new one"
+	echo "    --nocache           # ignore token cache"
 	echo
 	ecsHelp
 	echo
@@ -4565,6 +4566,8 @@ while test "${1:0:2}" == '--'; do
 			REQSCOPE="project";;
 		discardcache)
 			DISCARDCACHE=1;;
+		nocache)
+			NOCACHE=1;;
 		*)
 			echo "ERROR: Unknown option \"$1\"" 1>&2
 			exit 1
