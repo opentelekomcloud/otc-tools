@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.7.18
+VERSION=0.8.0
 
 # Get Config ####################################################################
 warn_too_open()
@@ -399,21 +399,48 @@ getv2endpoint()
 	fi
 }
 
-# Get a token (and the project ID)
-# TODO: Token caching ...
-TROVE_OVERRIDE=0
-IS_OTC=1
-getIAMToken()
+# Token caching ...
+IAMTokenFilename()
 {
-	if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD" -o -z "$IAM_AUTH_URL"; then
-		echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, OS_AUTH_URL, and OS_PROJECT_NAME environment" 1>&2
-		echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
-		exit 1
-	fi
+	# We don't need OS_REGION_NAME, as it's contained in the PROJECT.
+	local FN=$OS_USER_DOMAIN_NAME.${OS_USERNAME% *}
+	local PRJ=$OS_PROJECT_ID
+	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; fi
+	if test "$REQSCOPE" = "project"; then FN=$FN.$PRJ; fi
+	echo "$HOME/tmp/.otc.cache.$FN"
+}
 
-	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
-	BASEURL=${BASEURL%%/v[23]*}
-   local REQSCOPE=${1:-project} TENANT PROJECT USER SCOPE
+# Filename
+readIAMTokenFile()
+{
+	local TKFN=$1
+	if ! test -r $TKFN; then return 1; fi
+	if test -n "$DISCARDCACHE"; then return 1; fi
+	local RESP=$(cat $TKFN)
+	# TODO: Check for expiration in next minutes
+	local now=$(date +"%s")
+	# NOTE: This needs testing for keystonev2
+	local exp=$(echo "$RESP" | tail -n1 | jq '.token.expires_at' | tr -d '"')
+	if test "$exp" = "null" -o -z "$exp"; then exp=$(echo "$RESP" | tail -n1 | jq '.access.token.expires' | tr -d '"'); fi
+	exp=$(date -d "$exp" +"%s")
+	if test -n "$DEBUG"; then echo "Token valid for $(($exp-$now))s" 1>&2; fi
+	if test $(($exp-$now)) -lt 900; then return 2; fi
+	echo "$RESP"
+}
+
+# Filename, Header and Body
+writeIAMTokenFile()
+{
+	local TKFN=$1
+	OLDUMASK=$(umask)
+	umask 0177
+	echo "$2" > $TKFN
+	umask $OLDUMASK
+}
+
+getIAMTokenKeystone()
+{
+	local TENANT PROJECT USER SCOPE IAM_REQ RESP
 
    # Project by ID or by Name
 	if test -n "$OS_PROJECT_ID"; then
@@ -436,17 +463,8 @@ getIAMToken()
 		SCOPE="\"scope\": { $PROJECT }"
    fi
 
-	local IAM2_REQ='{
-			"auth": {
-				'$TENANT',
-				"passwordCredentials": {
-					"username": "'"$OS_USERNAME"'",
-					"password": "'"$OS_PASSWORD"'"
-				}
-			}
-		}
-	'
-	local IAM3_REQ='{
+	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
+		IAM_REQ='{
 			"auth": {
 			 "identity": {
 				"methods": [ "password" ],
@@ -460,19 +478,56 @@ getIAMToken()
 			 },
 			 '$SCOPE'
 			}
-	}
-	'
-	if test -n "$OS_PROJECT_DOMAIN_NAME"; then
-		IAM3_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
+		}
+		'
+		if test -n "$OS_PROJECT_DOMAIN_NAME"; then
+			IAM_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
+		fi
+	else
+		IAM_REQ='{
+			"auth": {
+				'$TENANT',
+				"passwordCredentials": {
+					"username": "'"$OS_USERNAME"'",
+					"password": "'"$OS_PASSWORD"'"
+				}
+			}
+		}
+		'
 	fi
-	#if test -n "$DEBUG"; then
-	#	echo "curl $INS -d $IAM_REQ $IAM_AUTH_URL" | sed 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
-	#fi
-	local IAMRESP
+	RESP=$(curlpost "$IAM_REQ" "$IAM_AUTH_URL")
+	RC=$?
+	if test $RC != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP" 1>&2; exit $RC; fi
+	echo "$RESP"
+}
+
+
+# Get a token (and the project ID)
+TROVE_OVERRIDE=0
+IS_OTC=1
+getIAMToken()
+{
+	if test -z "$OS_USERNAME" -o -z "$OS_PASSWORD" -o -z "$IAM_AUTH_URL"; then
+		echo "ERROR: Need to set OS_USERNAME, OS_PASSWORD, OS_AUTH_URL, and OS_PROJECT_NAME environment" 1>&2
+		echo " Optionally: OS_CACERT, HTTPS_PROXY, S3_ACCESS_KEY_ID, and S3_SECRET_ACCESS_KEY" 1>&2
+		exit 1
+	fi
+
+   REQSCOPE=${1:-project}
+	local IAMRESP TKNFN=$(IAMTokenFilename)
+	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
+	BASEURL=${BASEURL%%/v[23]*}
+
+	IAMRESP=$(readIAMTokenFile $TKNFN)
+	if test $? != 0; then
+		if test -n "$DEBUG"; then echo "No valid cached token, request from keystone" 1>&2; fi
+		IAMRESP="$(getIAMTokenKeystone)"
+		RC=$?
+		if test $RC != 0; then exit $RC; fi
+		writeIAMTokenFile $TKNFN "$IAMRESP"
+	fi
+
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
-		IAMRESP=`curlpost "$IAM3_REQ" "$IAM_AUTH_URL"`
-		local RC=$?
-		if test $RC != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP" 1>&2; exit $RC; fi
 		TOKEN=`echo "$IAMRESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 		#echo ${TOKEN} | sed -e 's/[0-9]/./g' -e 's/[a-z]/x/g' -e 's/[A-Z]/X/g'
 		if test -z "$OS_PROJECT_ID"; then
@@ -531,9 +586,6 @@ getIAMToken()
 		if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
 		IS_OTC=0
-		IAMRESP=`curlpost "$IAM2_REQ" "$IAM_AUTH_URL"`
-		local RC=$?
-		if test $RC != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP" 1>&2; exit $RC; fi
 		local IAMJSON=`echo "$IAMRESP" | tail -n1`
 		TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`
 		if test -z "$OS_PROJECT_ID"; then
@@ -1051,7 +1103,6 @@ iamHelp()
 {
 	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
-	echo "    --domainscope       # generate a domain scoped token (can be used globally)"
 	echo "otc iam catalog         # catalog as returned with token"
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam listprojects    # output projects"
@@ -1200,6 +1251,8 @@ printHelp()
 	echo "--- Global flags ---"
 	echo "otc --debug CMD1 CMD2 [opts] PARAMS       # for debugging REST calls ..."
 	echo "otc --insecure CMD1 CMD2 [opts] PARAMS    # for ignoring SSL security ..."
+	echo "    --domainscope       # get/use a domain scoped token (can be used globally)"
+	echo "    --discardcache      # don't use token from cache but request new one"
 	echo
 	ecsHelp
 	echo
@@ -4495,14 +4548,6 @@ else
 	if test -n "$OS_CACERT"; then INS="--cacert $OS_CACERT"; else unset INS; fi
 fi
 
-# Proxy Auth
-case "$HTTPS_PROXY" in
-	*@*)
-		if test -z "$INS"; then INS="--proxy-anyauth";
-		else INS="--proxy-anyauth $INS"; fi
-		;;
-esac
-
 declare -i DEBUG=0
 # Debugging
 while test "$1" = "debug"; do let DEBUG+=1; shift; done
@@ -4510,12 +4555,16 @@ while test "$1" = "debug"; do let DEBUG+=1; shift; done
 # Global options ...
 while test "${1:0:2}" == '--'; do
 	case "${1:2}" in
+		insecure)
+			INS="--insecure";;
 		debug)
 			let DEBUG+=1;;
 		domainscope)
 			REQSCOPE="domain";;
 		projectscope)
 			REQSCOPE="project";;
+		discardcache)
+			DISCARDCACHE=1;;
 		*)
 			echo "ERROR: Unknown option \"$1\"" 1>&2
 			exit 1
@@ -4524,6 +4573,14 @@ while test "${1:0:2}" == '--'; do
 	esac
 	shift
 done
+
+# Proxy Auth
+case "$HTTPS_PROXY" in
+	*@*)
+		if test -z "$INS"; then INS="--proxy-anyauth";
+		else INS="--proxy-anyauth $INS"; fi
+		;;
+esac
 
 if test $DEBUG = 0; then unset DEBUG; fi
 
@@ -4535,6 +4592,8 @@ SUBCOM=$1; shift
 # Global options ...
 while test "${1:0:2}" == '--'; do
 	case "${1:2}" in
+		discardcache)
+			DISCARDCACHE=1;;
 		domainscope)
 			REQSCOPE="domain";;
 		projectscope)
