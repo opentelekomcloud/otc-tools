@@ -505,7 +505,7 @@ getIAMToken()
 			IRONIC_URL=$(getcatendpoint "$CATJSON" baremetal $OS_PROJECT_ID)
 			MANILA_URL=$(getcatendpoint "$CATJSON" sharev2 $OS_PROJECT_ID)
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
-			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"'; fi
+			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"' | sort -k2 -u; fi
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq 'def str(s): s|tostring; .id+"   "+.type+"   "+.name+"   "+str(.endpoints[])' | sed 's/\\"url\\"://' | tr -d '"'; fi
 			if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.id+"   "+.name' | tr -d '"'; fi
 			if test -n "$DEL_TOKEN"; then curldeleteauth $TOKEN "$IAM_AUTH_URL"; fi
@@ -556,7 +556,7 @@ getIAMToken()
 		CEILOMETER_URL=$(getv2endpoint "$IAMJSON" metering $OS_PROJECT_ID)
 		IRONIC_URL=$(getv2endpoint "$IAMJSON" baremetal $OS_PROJECT_ID)
 		MANILA_URL=$(getv2endpoint "$IAMJSON" sharev2 $OS_PROJECT_ID)
-		if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.endpoints[].id+"   "+.type+"   "+.name+"   "+.endpoints[].publicURL+"   "+.endpoints[].region+"   public"' | tr -d '"'; fi
+		if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.endpoints[].id+"   "+.type+"   "+.name+"   "+.endpoints[].publicURL+"   "+.endpoints[].region+"   public"' | tr -d '"' | sort -k2 -u; fi
 		if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.metadata.roles[]+"   "+.user.roles[].name' | tr -d '"'; fi
 	fi
 	# FIXME: Delete this
