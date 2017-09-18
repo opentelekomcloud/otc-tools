@@ -425,6 +425,7 @@ readIAMTokenFile()
 	exp=$(date -d "$exp" +"%s")
 	if test -n "$DEBUG"; then echo "Token valid for $(($exp-$now))s" 1>&2; fi
 	if test $(($exp-$now)) -lt 900; then return 2; fi
+	# TODO: Check Token validity with HEAD /v3/auth/tokens
 	echo "$RESP"
 }
 
