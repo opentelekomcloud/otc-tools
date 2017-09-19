@@ -168,7 +168,7 @@ docurl()
 {
 	local ANS RC TMPHDR
 	if test -n "$DEBUG"; then
-		echo DEBUG: curl $INS "$@" | sed -e 's/X-Auth-Token: MII[^ ]*/X-Auth-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
+		echo "DEBUG: docurl $INS $@" | sed -e 's/-Token: MII[^ ]*/-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
 			TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
@@ -212,6 +212,11 @@ curlpost()
 	docurl -i -sS -H "Content-Type: application/json" -d "$1" "$2"
 }
 
+curlhead()
+{
+	docurl -I -sS -X HEAD -H "Content-Type: application/json" -H "Accept: application/json" "$1"
+}
+
 curlpostauth()
 {
 	TKN="$1"; shift
@@ -252,8 +257,14 @@ curlgetauth()
 curlheadauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X HEAD --head -H "Content-Type: application/json" -H "Accept: application/json" \
-		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+	docurl -sS -X HEAD --head -H "X-Auth-Token: $TKN" "$1"
+}
+
+curlheadauthparm()
+{
+	TKN="$1"; shift
+	URL="$1"; shift
+	docurl -sS -X HEAD --head -H "Content-Type: application/json" -H "X-Auth-Token: $TKN" "$@" "$URL"
 }
 
 curlgetauth_pag()
@@ -426,6 +437,11 @@ readIAMTokenFile()
 	if test -n "$DEBUG"; then echo "Token valid for $(($exp-$now))s" 1>&2; fi
 	if test $(($exp-$now)) -lt 900; then return 2; fi
 	# TODO: Check Token validity with HEAD /v3/auth/tokens
+	if test -n "$CHECKTOKEN"; then
+		TOKEN=`echo "$RESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
+		if test -z "$TOKEN"; then TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`; fi
+		curlheadauthparm $TOKEN "$IAM_AUTH_URL" -H "X-Subject-Token: $TOKEN" || return 3
+	fi
 	echo "$RESP"
 }
 
@@ -1616,13 +1632,14 @@ handleCustom()
 	shift; shift
 	ARGS=$(eval echo "$@")
 	if test $? != 0; then echo "ERROR evaluating arguments $@ -> \"$ARGS\"" 1>&2; fi
-	echo "#DEBUG: curl -X $METH -d $ARGS $URL" 1>&2
 	#TODO: Capture return code ...
 	case "$METH" in
 		GET)
+			echo "#DEBUG: curl -X $METH $URL" 1>&2
 			curlgetauth $TOKEN "$URL" | eval "$JQ"
 			;;
 		HEAD)
+			echo "#DEBUG: curl -X $METH --head $URL" 1>&2
 			RESP=$(curlheadauth $TOKEN "$URL")
 			RC=$(echo "$RESP" | grep HTTP)
 			echo "$RC"
@@ -1632,18 +1649,23 @@ handleCustom()
 			RC=$?
 			;;
 		PUT)
+			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		POST)
+			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlpostauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		PATCH)
+			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlpatchauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			;;
 		DELETE)
 			if test -z "$ARGS"; then
+				echo "#DEBUG: curl -X $METH $URL" 1>&2
 				curldeleteauth $TOKEN "$URL" | eval "$JQ"
 			else
+				echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 				curldeleteauthwithjsonparameter $TOKEN "$ARGS" "$URL" | eval "$JQ"
 			fi
 			;;
