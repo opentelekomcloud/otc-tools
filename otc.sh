@@ -414,10 +414,11 @@ getv2endpoint()
 IAMTokenFilename()
 {
 	# We don't need OS_REGION_NAME, as it's contained in the PROJECT.
-	local FN=$OS_USER_DOMAIN_NAME.${OS_USERNAME% *}
+	local FN="${OS_USERNAME% *}"
+	if test "$REQSCOPE" != "unscoped"; then FN="$FN.$OS_USER_DOMAIN_NAME"; fi
 	local PRJ=$OS_PROJECT_ID
 	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; fi
-	if test "$REQSCOPE" = "project"; then FN=$FN.$PRJ; fi
+	if test "$REQSCOPE" = "project"; then FN="$FN.$PRJ"; fi
 	echo "$HOME/tmp/.otc.cache.$FN"
 }
 
@@ -475,7 +476,9 @@ getIAMTokenKeystone()
 	fi
 	# Token scope: project vs domain
 	if test "$REQSCOPE" == "domain"; then
-		SCOPE="\"scope\": { \"domain\": { \"name\": \"$OS_USER_DOMAIN_NAME\" } } "
+		SCOPE="\"scope\": { \"domain\": { \"name\": \"$OS_USER_DOMAIN_NAME\" } }"
+	elif test "$REQSCOPE" == "unscoped"; then
+		SCOPE=""
 	else
 		SCOPE="\"scope\": { $PROJECT }"
    fi
@@ -4583,6 +4586,8 @@ while test "${1:0:2}" == '--'; do
 			INS="--insecure";;
 		debug)
 			let DEBUG+=1;;
+		unscoped)
+			REQSCOPE="unscoped";;
 		domainscope)
 			REQSCOPE="domain";;
 		projectscope)
