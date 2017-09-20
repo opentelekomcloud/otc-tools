@@ -436,11 +436,13 @@ readIAMTokenFile()
 	if test "$exp" = "null" -o -z "$exp"; then exp=$(echo "$RESP" | tail -n1 | jq '.access.token.expires' | tr -d '"'); fi
 	exp=$(date -d "$exp" +"%s")
 	if test -n "$DEBUG"; then echo "Token valid for $(($exp-$now))s" 1>&2; fi
-	if test $(($exp-$now)) -lt 900; then return 2; fi
+	TOKEN=`echo "$RESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
+	if test -z "$TOKEN"; then TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`; fi
+	if test $(($exp-$now)) -lt 900; then
+		if test $(($exp-$now)) -ge 1; then echo "$TOKEN"; return 42; else return 2; fi
+	fi
 	# TODO: Check Token validity with HEAD /v3/auth/tokens
 	if test -n "$CHECKTOKEN"; then
-		TOKEN=`echo "$RESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
-		if test -z "$TOKEN"; then TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`; fi
 		curlheadauthparm $TOKEN "$IAM_AUTH_URL" -H "X-Subject-Token: $TOKEN" || return 3
 	fi
 	echo "$RESP"
@@ -484,24 +486,37 @@ getIAMTokenKeystone()
    fi
 
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
-		IAM_REQ='{
+		if test -n "$OLDTOKEN" -a -n "$TOKENFROMTOKEN"; then
+		 IAM_REQ='{
+			"auth": {
+			 "identity": {
+				"methods": [ "token" ],
+				"token": { "id": "'"$OLDTOKEN"'" }
+			 },
+			 '$SCOPE'
+			}
+		 } 
+		 '
+		else
+		 IAM_REQ='{
 			"auth": {
 			 "identity": {
 				"methods": [ "password" ],
-				 "password": {
+				"password": {
 					"user": {
 						'$USER',
 						"password": "'"$OS_PASSWORD"'",
 						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
 					}
-				 }
+				}
 			 },
 			 '$SCOPE'
 			}
-		}
-		'
+		 } 
+		 '
+		fi
 		if test -n "$OS_PROJECT_DOMAIN_NAME"; then
-			IAM_REQ=$(echo "$IAM3_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
+			IAM_REQ=$(echo "$IAM_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
 		fi
 	else
 		IAM_REQ='{
@@ -539,8 +554,10 @@ getIAMToken()
 	BASEURL=${BASEURL%%/v[23]*}
 
 	IAMRESP=$(readIAMTokenFile $TKNFN)
-	if test $? != 0; then
+	RC=$?
+	if test $RC != 0; then
 		if test -n "$DEBUG"; then echo "No valid cached token, request from keystone" 1>&2; fi
+		if test $RC = 42; then OLDTOKEN="$IAMRESP"; fi
 		IAMRESP="$(getIAMTokenKeystone)"
 		RC=$?
 		if test $RC != 0; then exit $RC; fi
@@ -1271,7 +1288,9 @@ printHelp()
 	echo "--- Global flags ---"
 	echo "otc --debug CMD1 CMD2 [opts] PARAMS       # for debugging REST calls ..."
 	echo "otc --insecure CMD1 CMD2 [opts] PARAMS    # for ignoring SSL security ..."
-	echo "    --domainscope       # get/use a domain scoped token (can be used globally)"
+	echo "    --domainscope       # get/use a domain scoped token"
+	echo "    --projectscope      # get/use a project scoped token"
+	echo "    --unscoped          # get/use an unscoped token"
 	echo "    --discardcache      # don't use token from cache but request new one"
 	echo "    --nocache           # ignore token cache"
 	echo
