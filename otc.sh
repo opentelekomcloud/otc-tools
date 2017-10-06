@@ -1258,6 +1258,7 @@ otcnewHelp()
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
+	echo "otc shares list         # List shared filesystems"
 }
 
 dehHelp()
@@ -4544,15 +4545,23 @@ showMRSJob()
 
 listAntiDDoS()
 {
+	# TODO: Translate into list format
 	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 listKMS()
 {
+	# TODO: Translate into list format
 	# POST, bad API design
 	curlpostauth "$TOKEN" "" "$AUTH_URL_KMS/v1.0/$OS_PROJECT_ID/kms/list-keys" | jq -r '.'
 	return ${PIPESTATUS[0]}
+}
+
+listShares()
+{	
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.'
 }
 
 listDEH()
@@ -4941,6 +4950,7 @@ if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
+if [ "$MAINCOM" = "sfs" ]; then MAINCOM="shares"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -5682,6 +5692,8 @@ elif [ "$MAINCOM" == "notifications" -a "$SUBCOM" == "SMS" ]; then
 
 elif [ "$MAINCOM" == "antiddos"  -a "$SUBCOM" == "list" ]; then
 	listAntiDDoS
+elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "list" ]; then
+	listShares
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
