@@ -2572,7 +2572,7 @@ createDomain()
 {
 	if test -z "$1"; then echo "Must specify domain name" 1>&2; dnsHelp; exit 1; fi
 	if test "${1: -1:1}" != "."; then
-		echo "WARN: Name should end in '.'" 1>&2
+		echo "WARN: Zone/Domain name should end in '.'" 1>&2
 	fi
 	local REQ="{ \"name\": \"$1\""
 	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
