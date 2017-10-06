@@ -2581,19 +2581,28 @@ createDomain()
 
 showDomain()
 {
-	curlgetauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+	ID=$1
+	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
+	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	curlgetauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
 
 deleteDomain()
 {
-	curldeleteauth $TOKEN $AUTH_URL_DNS/$1 | jq .
+	ID=$1
+	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
+	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	curldeleteauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
 
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
 addRecord()
 {
+	ID=$1
+	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
+	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
 	if test -z "$5"; then
 		echo "ERROR: Need to provide more params" 1>&2
 		exit 1
@@ -2616,13 +2625,16 @@ addRecord()
 	for val in $5; do VALS="$VALS \"$val\","; done
 	IFS="$OLDIFS"
 	REQ="$REQ, \"records\": [ ${VALS%,} ] }"
-	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$1/recordsets | jq '.'
+	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS/$ID/recordsets | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
 showRecord()
 {
-	curlgetauth $TOKEN $AUTH_URL_DNS/$1/recordsets/$2 | jq '.'
+	ID=$1
+	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
+	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	curlgetauth $TOKEN $AUTH_URL_DNS/$ID/recordsets/$2 | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -2632,7 +2644,10 @@ listRecords()
 	if test -z "$1"; then
 		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	else
-		curlgetauth $TOKEN "$AUTH_URL_DNS/$1/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
+		ID=$1
+		if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
+		if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+		curlgetauth $TOKEN "$AUTH_URL_DNS/$ID/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	fi
 	return ${PIPESTATUS[0]}
 }
