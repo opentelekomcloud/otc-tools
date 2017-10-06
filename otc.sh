@@ -1124,6 +1124,8 @@ dnsHelp()
 	echo "otc domain showrecord zid rid     # show record <rid> for zone <zid>"
 	echo "otc domain listrecords [zid]      # list records for zone <zid>"
 	echo "otc domain delrecord zid rid      # delete record <rid> in zone <zid>"
+	echo "otc domain associate  zid vpc     # connect vpc to private DNS server zid"
+	echo "otc domain dissociate zid vpc     # discconnect vpc from private DNS zid"
 }
 
 cceHelp()
@@ -2648,9 +2650,7 @@ addRecord()
 
 showRecord()
 {
-	ID=$1
-	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
-	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	ID=$(domainNameID $1)
 	curlgetauth $TOKEN $AUTH_URL_DNS/$ID/recordsets/$2 | jq '.'
 	return ${PIPESTATUS[0]}
 }
@@ -2674,6 +2674,23 @@ deleteRecord()
 	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
 	return ${PIPESTATUS[0]}
 }
+
+associateDomain()
+{
+	ID=$(domainNameID $1)
+	if ! is_uuid $2; then convertVPCNameToId "$2"; else VPCID=$2; fi
+	local REQ="{ \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" } }"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_DNS/$ID/associaterouter" | jq '.'
+}
+
+dissociateDomain()
+{
+	ID=$(domainNameID $1)
+	if ! is_uuid $2; then convertVPCNameToId "$2"; else VPCID=$2; fi
+	local REQ="{ \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" } }"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_DNS/$ID/disassociaterouter" | jq '.'
+}
+
 
 # concatenate array using $1 as concatenation token
 concatarr()
@@ -5537,6 +5554,11 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "delrecord" ]; then
 	deleteRecord "$@"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
 	addRecord "$@"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "associate" ]; then
+	associateDomain "$@"
+elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "dissociate" ] ||
+	  [ "$MAINCOM" == "domain" -a "$SUBCOM" == "disassociate" ]; then
+	dissociateDomain "$@"
 
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "help" ]; then
 	cceHelp
