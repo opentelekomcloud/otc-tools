@@ -732,7 +732,7 @@ getIAMToken()
 	fi
 	AUTH_URL_CSBS="${BASEURL/iam/csbs}"
 	AUTH_URL_DWS="${BASEURL/iam/dws}"
-	AUTH_URL_TMS="${BASEURL/iam/tms}"
+	AUTH_URL_TMS="${BASEURL/iam/tms}/v1.0"
 }
 
 build_data_volumes_json()
@@ -1255,10 +1255,12 @@ customHelp()
 otcnewHelp()
 {
 	echo "--- OTC2.0 new services ---"
+	echo "NOTE: These are not complete and output formatted JSON"
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
 	echo "otc shares list         # List shared filesystems"
+	echo "otc tags list           # List shared filesystems"
 }
 
 dehHelp()
@@ -4564,6 +4566,12 @@ listShares()
 	curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.'
 }
 
+listTags()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_TMS/predefine_tags" | jq -r '.'
+}
+
 listDEH()
 {
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq 'def tostr(x): x|tostring; .dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+tostr(.instance_total)+"   "+.auto_placement+"   "+.availability_zone+"   "+.host_properties.host_type+"   "+tostr(.available_vcpus)+"   "+tostr(.available_memory)' | tr -d '"'
@@ -4951,6 +4959,7 @@ if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "sfs" ]; then MAINCOM="shares"; fi
+if [ "$MAINCOM" = "tms" ]; then MAINCOM="tags"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -4965,6 +4974,7 @@ if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" -a "$SUBCOM" !
 		-a "$SUBCOM" != "domain" ]; then
 		REQSCOPE="domain"
 	fi
+	if [ "$MAINCOM" == "tags" ]; then REQSCOPE="domain"; fi
 	getIAMToken $REQSCOPE
 fi
 
@@ -5694,6 +5704,8 @@ elif [ "$MAINCOM" == "antiddos"  -a "$SUBCOM" == "list" ]; then
 	listAntiDDoS
 elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "list" ]; then
 	listShares
+elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "list" ]; then
+	listTags
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
