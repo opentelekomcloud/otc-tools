@@ -2560,12 +2560,15 @@ listDomains()
 	#setlimit; setapilimit 500 100 zones
 	#curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r '.'
 	curlgetauth $TOKEN $AUTH_URL_DNS$PARAMSTRING | jq -r 'def str(s): s|tostring; .zones[] | .id+"   "+.name+"   "+.status+"   "+.zone_type+"   "+str(.ttl)+"   "+str(.record_num)+"   "+.description'
+	RC=${PIPESTATUS[0]}
+	curlgetauth $TOKEN "$AUTH_URL_DNS$PARAMSTRING&type=private" | jq -r 'def str(s): s|tostring; .zones[] | .id+"   "+.name+"   "+.status+"   "+.zone_type+"   "+str(.ttl)+"   "+str(.record_num)+"   "+.description'
 	return ${PIPESTATUS[0]}
 }
 
 # Params: NAME [DESC [TYPE [EMAIL [TTL]]]]
 createDomain()
 {
+	if test -z "$1"; then echo "Must specify domain name" 1>&2; dnsHelp; exit 1; fi
 	if test "${1: -1:1}" != "."; then
 		echo "WARN: Name should end in '.'" 1>&2
 	fi
@@ -2574,25 +2577,41 @@ createDomain()
 	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
 	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
 	if test -n "$5"; then REQ="$REQ, \"ttl\": $5"; fi
+	if test "$3" == "private"; then
+		if test -z "$VPCID" -a -z "$VPCNAME"; then
+			echo "Need to specify VPC (--vpc-id or --vpc-name) for private domain" 1>&2;
+			exit 1;
+		fi
+		if test -z "$VPCID"; then convertVPCNameToId $VPCNAME; fi
+		REQ="$REQ, \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" }"
+	fi
 	REQ="$REQ }"
 	curlpostauth $TOKEN "$REQ" $AUTH_URL_DNS | jq .
 	return ${PIPESTATUS[0]}
 }
 
+domainNameID()
+{
+	if is_id "$1"; then echo "$1"; return; fi
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$1" | jq '.zones[].id' | tr -d '"')
+	if is_id "$ID"; then echo "$ID"; return; fi
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$1" | jq '.zones[].id' | tr -d '"')
+	if is_id "$ID"; then echo "$ID"; return; fi
+	echo "No such zone $1" 1>&2
+	exit 2
+}
+
+
 showDomain()
 {
-	ID=$1
-	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
-	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	ID=$(domainNameID $1)
 	curlgetauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
 
 deleteDomain()
 {
-	ID=$1
-	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
-	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	ID=$(domainNameID $1)
 	curldeleteauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
@@ -2600,9 +2619,7 @@ deleteDomain()
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
 addRecord()
 {
-	ID=$1
-	if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
-	if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+	ID=$(domainNameID $1)
 	if test -z "$5"; then
 		echo "ERROR: Need to provide more params" 1>&2
 		exit 1
