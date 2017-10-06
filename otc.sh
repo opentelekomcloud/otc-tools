@@ -730,9 +730,10 @@ getIAMToken()
 	else
 		AUTH_URL_SFS="${BASEURL/iam/sfs}/v2/$OS_PROJECT_ID"	# shares
 	fi
-	AUTH_URL_CSBS="${BASEURL/iam/csbs}"
-	AUTH_URL_DWS="${BASEURL/iam/dws}"
+	AUTH_URL_CSBS="${BASEURL/iam/csbs}/v1/$OS_PROJECT_ID"
+	AUTH_URL_DWS="${BASEURL/iam/dws}/v1.0/$OS_PROJECT_ID"
 	AUTH_URL_TMS="${BASEURL/iam/tms}/v1.0"
+	AUTH_URL_MAAS="${BASEURL/iam/maas}/v1/$OS_PROJECT_ID"
 }
 
 build_data_volumes_json()
@@ -1254,13 +1255,17 @@ customHelp()
 
 otcnewHelp()
 {
-	echo "--- OTC2.0 new services ---"
+	echo "--- OTC2.x new services ---"
 	echo "NOTE: These are not complete and output formatted JSON"
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
 	echo "otc shares list         # List shared filesystems"
 	echo "otc tags list           # List shared filesystems"
+	echo "otc cache list          # List distributed cache instances"
+	echo "otc dws list            # List data warehous clusters"
+	echo "otc serverbackup list   # List server backup checkpoints"
+	echo "otc migration list      # List migration tasks"
 }
 
 dehHelp()
@@ -4560,6 +4565,20 @@ listKMS()
 	return ${PIPESTATUS[0]}
 }
 
+# Unsupported
+listDirectConnects()
+{	
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_DCAAS/direct-connects" | jq -r '.'
+}
+
+listMigrations()
+{	
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_MAAS/objectstorage/task?start=0&limit=100" | jq -r '.'
+	#curlgetauth $TOKEN "$AUTH_URL_MAAS/objectstorage/task" | jq -r '.'
+}
+
 listShares()
 {	
 	# TODO: Translate into list format
@@ -4570,6 +4589,36 @@ listTags()
 {
 	# TODO: Translate into list format
 	curlgetauth $TOKEN "$AUTH_URL_TMS/predefine_tags" | jq -r '.'
+}
+
+listCaches()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_DCS/instances" | jq -r '.'
+}
+
+listCacheProducts()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "${AUTH_URL_DCS%/*}/products" | jq -r '.'
+}
+
+listCacheAZs()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "${AUTH_URL_DCS%/*}/availableZones" | jq -r '.'
+}
+
+listDWS()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_DWS/clusters" | jq -r '.'
+}
+
+listServerBackups()
+{
+	# TODO: Translate into list format
+	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items" | jq -r '.'
 }
 
 listDEH()
@@ -4960,6 +5009,11 @@ if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "sfs" ]; then MAINCOM="shares"; fi
 if [ "$MAINCOM" = "tms" ]; then MAINCOM="tags"; fi
+if [ "$MAINCOM" = "dcs" ]; then MAINCOM="cache"; fi
+if [ "$MAINCOM" = "warehouse" ]; then MAINCOM="dws"; fi
+if [ "$MAINCOM" = "datawarehouse" ]; then MAINCOM="dws"; fi
+if [ "$MAINCOM" = "csbs" ]; then MAINCOM="serverbackup"; fi
+if [ "$MAINCOM" = "maas" ]; then MAINCOM="migration"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -5706,6 +5760,18 @@ elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "list" ]; then
 	listShares
 elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "list" ]; then
 	listTags
+elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "list" ]; then
+	listCaches
+elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "products" ]; then
+	listCacheProducts
+elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "azs" ]; then
+	listCacheAZs
+elif [ "$MAINCOM" == "dws"  -a "$SUBCOM" == "list" ]; then
+	listDWS
+elif [ "$MAINCOM" == "serverbackup"  -a "$SUBCOM" == "list" ]; then
+	listServerBackups
+elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
+	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
