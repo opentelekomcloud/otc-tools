@@ -452,6 +452,7 @@ readIAMTokenFile()
 writeIAMTokenFile()
 {
 	local TKFN=$1
+	if ! test -d "$(dirname $TKFN)"; then mkdir "$(dirname $TKFN)"; fi
 	OLDUMASK=$(umask)
 	umask 0177
 	echo "$2" > $TKFN
@@ -462,18 +463,18 @@ getIAMTokenKeystone()
 {
 	local TENANT PROJECT USER SCOPE IAM_REQ RESP
 
-   # Project by ID or by Name
+	# Project by ID or by Name
 	if test -n "$OS_PROJECT_ID"; then
 		TENANT="\"tenantId\": \"$OS_PROJECT_ID\""
-      PROJECT="\"project\": { \"id\": \"$OS_PROJECT_ID\" }"
-   else
+		PROJECT="\"project\": { \"id\": \"$OS_PROJECT_ID\" }"
+	else
 		TENANT="\"tenantName\": \"$OS_PROJECT_NAME\""
-      PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
-   fi
-   # USER by ID or by Name
+		PROJECT="\"project\": { \"name\": \"$OS_PROJECT_NAME\" }"
+	fi
+	# USER by ID or by Name
 	if test -n "$OS_USER_ID"; then
 		USER="\"id\": \"$OS_USER_ID\""
-   else
+	else
 		USER="\"name\": \"$OS_USERNAME\""
 	fi
 	# Token scope: project vs domain
@@ -483,7 +484,7 @@ getIAMTokenKeystone()
 		SCOPE=""
 	else
 		SCOPE="\"scope\": { $PROJECT }"
-   fi
+	fi
 
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
 		if test -n "$OLDTOKEN" -a -n "$TOKENFROMTOKEN"; then
