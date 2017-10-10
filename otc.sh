@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.0
+VERSION=0.8.1
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1259,6 +1259,7 @@ otcnewHelp()
 	echo "--- OTC2.x new services ---"
 	echo "NOTE: These are not complete and output formatted JSON"
 	echo "otc trace list          # List trackers from cloud trace"
+	echo "otc trace show (IAM|ECS|CTS)      # List traces from cloud bucket"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
 	echo "otc shares list         # List shared filesystems"
@@ -4239,10 +4240,91 @@ AlarmsAction()
 
 listTrackers()
 {
-	#curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq '.'
 	curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/tracker" | jq -r '.[] | .tracker_name+"   "+.bucket_name+"   "+.status+"   "+.file_prefix_name'
 	return ${PIPESTATUS[0]}
 }
+
+### RLSH 2017-10-06 #########################################################
+listTraces()
+{
+	SERVICE_TYPE=$1 ;
+	case  $SERVICE_TYPE  in
+		"IAM" )
+			# echo "URL: " "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE"
+			LIST=$(curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE" | \
+				jq -r '.traces[] | [.time, .trace_name, .resource_name, .source_ip, .code]' | \
+				sed 's/\(\[\|\]\|"\)//g' | \
+				sed -e 's/^[ \t]*//' | \
+				sed -z 's/,\n/\t/g' | \
+				sed '/^$/d') ;
+			echo -e "$LIST" ;
+			# return ${PIPESTATUS[0]} ;
+			;;
+		"ECS" )
+			LIST=$(curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE" | \
+				jq -r '.traces[] | [.time, .trace_name, .resource_name, .user, .source_ip, .message]' | \
+				sed 's/\(\[\|\]\|"\|{\|}\|\\\)//g' | \
+				sed -e 's/^[ \t]*//' | \
+				sed -z 's/,\n/\t/g' | \
+				sed '/^$/d') ;
+			# echo -e "$LIST" ;
+			### formatating stuff
+			while read -r LINE;
+			do
+				array=(${LINE//,/}) ;
+				arraylength=${#array[@]} ;
+				for (( i=0; i<${arraylength}; i++ ));
+				do
+					if [ $i == 0 ];
+					then
+						printf "${array[$i]}" ;
+					elif [ $i == 3 ];
+					then
+						USER=$(echo ${array[$i]} | awk -F'id:' '{printf $1}' | awk -F':' '{printf $2}') ;
+						printf "   $USER" ;
+					else
+						printf "   ${array[$i]}" ;
+					fi
+				done
+				printf "\n" ;
+			done <<< "$LIST"
+			# return ${PIPESTATUS[0]} ;
+			;;
+		"CTS" )
+			LIST=$(curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE" | \
+				jq '.traces[] | [.time, .trace_name, .resource_name, .user, .source_ip]' | \
+				sed 's/\(\[\|\]\|"\|{\|}\|\\\)//g' | \
+				sed -e 's/^[ \t]*//' | \
+				sed -z 's/,\n/\t/g' | \
+				sed '/^$/d') ;
+			# echo -e "$LIST" ;
+			### formatating stuff
+			while read -r LINE;
+			do
+				array=(${LINE//,/}) ;
+				arraylength=${#array[@]} ;
+				for (( i=0; i<${arraylength}; i++ ));
+				do
+					if [ $i == 0 ];
+					then
+						printf "${array[$i]}" ;
+					elif [ $i == 3 ];
+					then
+						USER=$(echo ${array[$i]} | awk -F'name:' '{printf $2}' | awk -F'domain:' '{printf $1}') ;
+						printf "   $USER" ;
+					else
+						printf "   ${array[$i]}" ;
+					fi
+				done
+				printf "\n" ;
+			done <<< "$LIST"
+			;;
+		* )
+			otcnewHelp ;
+    		exit 0 ;
+	esac
+}
+#############################################################################
 
 listQueues()
 {
@@ -5699,6 +5781,11 @@ elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "help" ]; then
 	otcnewHelp
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
+	
+### RLSH 2017-10-06 #########################################################
+elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "show" ]; then
+	listTraces $1
+#############################################################################
 
 elif [ "$MAINCOM" == "queues" -a "$SUBCOM" == "help" ]; then
 	dmsHelp
