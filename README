@@ -40,7 +40,7 @@ is a small, but active community on github.com/OpenTelekomCloud/.
 
 The OpenStack REST API has paginated interfaces to allow the consumers to
 control how large a response may get. Since 0.7.6, otc-tools ist using this
-feature to avoid exceeding the maximum response sizes on OTC. (Tha API gateway
+feature to avoid exceeding the maximum response sizes on OTC. (The API gateway
 limits responses to a few hundred kB).
 So otc-tools ends up doing a few REST calls in case you request large amounts
 of data, such as otc.sh ecs list when you have hundreds of VMs.
@@ -52,7 +52,7 @@ autopagination.
 
 Output formatting
 -----------------
-otc tools tries to output things in a human readable format. It has two basic
+otc tools tries to output things in a human readable format. It has three basic
 formats:
 
 * The list format: It creates a table with columns that are separated by 3 spaces.
@@ -64,6 +64,8 @@ formats:
   with a '#'.
   This format is returned by list and details subcommands and is supposed to be 
   parsed by humans.
+  (Exception: When new services are implemented, I may just output JSON before
+   I decide on a good list format.)
 * The JSON format: The REST calls return JSON objects of course and jq is used
   to present a nicely formatted represntation of the object. The JSON can be
   further passed.
@@ -81,7 +83,7 @@ switches to control the output. Pull requests are welcome :-)
 Custom commands
 ---------------
 New in otc-tools-0.7.0, we support custom commands using
-  otc custom GET|PUT|POST|POST|PATCH URL JSON
+  otc custom GET|PUT|POST|DELETE|HEAD URL JSON
 You can reference variables by using \$BASEURL \$CINDER_URL \$OS_PROJECT_ID.
 These are not standardized and well-documented yet (except for the OS_ ones
 which are the normal OpenStack environment). You'll need to check the source
@@ -92,6 +94,12 @@ By default, the output from the REST call is passed through jq -r '.'.
 You can replace this with --jqfilter '' which results in no processing.
 Or you pass a string like --jqfilter '.servers[] | .id+\"   \"+.name'.
 Note the quoting for \".
+
+Return codes
+------------
+Some work has been done in the 0.7.x series to tidy up the return of response
+codes; so otc.sh should really have a non-zero exit code if there were serious
+failures.
 
 Packages
 --------
