@@ -1523,7 +1523,12 @@ convertIMAGENameToId()
 	#setlimit 800
 	#setlimit; setapilimit 1600 100 images
 	NAME="${1// /%20}"
-	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?name=$NAME" | find_id images "$1"; return ${PIPESTATUS[0]}`
+	if [[ "$INSTANCE_TYPE" = "physical"* ]]; then
+		FILT="&virtual_env_type=Ironic"
+	else
+		FILT="&virtual_env_type=FusionCompute"
+	fi
+	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?name=$NAME$FILT" | find_id images "$1"; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$IMAGE_ID"; then
 		echo "ERROR: No image found by name $1" 1>&2
