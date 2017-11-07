@@ -4640,9 +4640,17 @@ showMRSJob()
 
 listAntiDDoS()
 {
-	# TODO: Translate into list format
-	curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list" | jq -r '.'
-	return ${PIPESTATUS[0]}
+	echo "#Traffic limited list: POS Mbps PPS"
+	RESP=$(curlgetauth "$TOKEN" "$AUTH_URL_ANTIDDOS/v1/$OS_PROJECT_ID/antiddos/query_config_list")
+	RC=$RET
+	echo "$RESP" | jq 'def str(v): v | tostring; .traffic_limited_list[] | str(.traffic_pos_id)+"   "+str(.traffic_per_second)+"   "+str(.packet_per_second)' | tr -d '"'
+	echo "#HTTP limited list: POS PPS"
+	echo "$RESP" | jq 'def str(v): v | tostring; .http_limited_list[] | str(.http_request_pos_id)+"   "+"   "+str(.http_packet_per_second)' | tr -d '"'
+	echo "#Connection limited list: POS Conn/s TotConn"
+	echo "$RESP" | jq 'def str(v): v | tostring; .connection_limited_list[] | str(.cleaning_access_pos_id)+"   "+str(.new_connection_limited)+"   "+str(.total_connection_limited)' | tr -d '"'
+	echo "#Extend DDOS config: setID MBps PPS HTTPpS ConnpS TotConn"
+	echo "$RESP" | jq 'def str(v): v | tostring; .extend_ddos_config[] | str(.setID)+"   "+str(.traffic_per_second)+"   "+str(.packet_per_second)+"   "+str(.http_packet_per_second)+"   "+str(.new_connection_limited)+"   "+str(.total_connection_limited)' | tr -d '"'
+	return $RC
 }
 
 listKMS()
