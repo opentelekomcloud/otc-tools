@@ -5149,7 +5149,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 
 	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
 	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
-	if [ "$IMAGENAME" != "" ]; then convertIMAGENameToId "$IMAGENAME"; fi
+	if [ -z "$IMAGE_ID" -a -n "$IMAGENAME" ]; then convertIMAGENameToId "$IMAGENAME"; fi
 	SECUGROUPNAMELIST="$SECUGROUPNAME"
 	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
 		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
