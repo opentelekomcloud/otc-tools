@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.1
+VERSION=0.8.2
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1257,11 +1257,11 @@ customHelp()
 otcnewHelp()
 {
 	echo "--- OTC2.x new services ---"
-	echo "NOTE: These are not complete and output formatted JSON"
+	echo "NOTE: These are not complete and some list output is JSON, not list format"
 	echo "otc trace list          # List trackers from cloud trace"
 	echo "otc trace show (IAM|ECS|CTS)      # List traces from cloud bucket"
-	echo "otc kms list            # List keys from key management service"
 	echo "otc antiddos list       # List AntiDDOS policies"
+	echo "otc kms list            # List keys from key management service"
 	echo "otc shares list         # List shared filesystems"
 	echo "otc tags list           # List shared filesystems"
 	echo "otc cache list          # List distributed cache instances"
@@ -2726,7 +2726,7 @@ getIMAGEList()
 	#setlimit 800
 	setlimit; setapilimit 1600 100 images
    if test -z "$PARAMSTRING" -a -n "$IMAGE_FILTER"; then IMAGE_FILTER="?${IMAGE_FILTER:1}"; fi
-	curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform ' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_IMAGES$PARAMSTRING$IMAGE_FILTER"| jq 'def str(v): v|tostring; .images[] | .id +"   "+.name+"   "+.status+"   "+str(.min_disk)+"   "+.visibility+"   "+.__platform+"   "+.virtual_env_type' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
