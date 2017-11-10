@@ -163,6 +163,17 @@ dumphtml()
 	echo "$@" | sed 's/<[^>]*>//g'
 }
 
+is_html()
+{
+	echo "$1" | grep '<[hH][tT][mM][lL]' 2>&1 >/dev/null
+}
+
+is_html_err()
+{
+	if ! is_html "$1"; then return 0; fi
+	echo "$1" | grep '<[tT][iT][tT][lL][eE]> *[45][012][0-9] [A-Z]' 2>&1 >/dev/null
+}
+
 # Generic wrapper to facilitate debugging
 docurl()
 {
@@ -189,7 +200,7 @@ docurl()
 	fi
 	if test $RC != 0; then echo "$ANS" 1>&2; return $RC
 	else
-		if echo "$ANS" | grep '401 Authorization' >/dev/null 2>&1; then
+		if is_html_err "$ANS"; then
 			dumphtml "$ANS" 1>&2; return 9
 		fi
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
