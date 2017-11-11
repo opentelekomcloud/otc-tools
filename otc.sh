@@ -170,7 +170,7 @@ is_html()
 
 is_html_err()
 {
-	if ! is_html "$1"; then return 0; fi
+	if ! is_html "$1"; then return 1; fi
 	echo "$1" | grep '<[tT][iT][tT][lL][eE]> *[45][012][0-9] [A-Z]' 2>&1 >/dev/null
 }
 
