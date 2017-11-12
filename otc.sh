@@ -4653,6 +4653,65 @@ recoverPROJECText()
 	curlputauth "$TOKEN" "{ \"project\": { \"status\": \"normal\" } }" "${IAM_AUTH_URL%/auth*}-ext/projects/$ID"
 }
 
+# User Management
+addUser()
+{
+	while test -n "$1"; do
+		case "$1" in
+		    --password)
+			PWDJSON="\"password\": \"$2\","
+			shift; shift ;;
+		    --name)
+			NAMEJSON="\"name\": \"$2\","
+			shift; shift ;;
+		    --description)
+			DESCJSON="\"description\": \"$2\","
+			shift; shift ;;
+		    --default-project)
+			PRJJSON="\"default_project_id\": \"$2\","
+			shift; shift ;;
+		    --disabled)
+			ENJSON="\"enabled\": false,"
+			shift ;;
+		    --*)
+			echo "Unsupported parameter $1" 1>&2
+			exit 1 ;;
+		    *)
+			NAMEJSON="\"name\": \"$1\","
+			shift ;;
+		esac
+	done
+	if test -z "$ENJSON"; then ENJSON="\"enabled\": true,"; fi
+	if test -z "$NAMEJSON"; then echo "Must specify --name" 1>&2; exit 1; fi
+	curlpostauth "$TOKEN" "{
+		\"user\": {
+			$PRJJSON
+			$ENJSON
+			$NAMEJSON
+			$DESCJSON
+			${PWDJSON%,}
+		}
+	}" "${IAM_AUTH_URL%/auth*}/users" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+showUser()
+{
+	local USID=$1
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+delUser()
+{
+	local USID=$1
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
+}
+
 # These don't work yet well
 listMRSClusters()
 {
@@ -5501,6 +5560,14 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "users" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "adduser" ]; then
+	addUser "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changeuser" ]; then
+	changeUser "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showuser" ]; then
+	showUser "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deluser" ]; then
+	delUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
    echo -n ""
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles2" ]; then
