@@ -155,6 +155,9 @@ fi
 if test -z "$TMPDIR"; then TMPDIR=/dev/shm; fi
 if test ! -d "$TMPDIR"; then TMPDIR=/tmp; fi
 
+PRIMARYDNS=${PRIMARYDNS:-100.125.4.25}
+SECDNS=${SECDNS:-8.8.8.8}
+
 # REST call curl wrappers ###########################################################
 
 # Output HTML
@@ -3953,15 +3956,22 @@ VPCCreate()
 
 SUBNETCreate()
 {
+	# Calculate gateway_ip from CIDR if needed
+	if test -z "$GWIP"; then
+		NETIP=$(echo ${CIDR%/*}.0.0.0 | sed 's/\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\)\.\([0-9]*\).*$/\1.\2.\3.\4/')
+		LASTOCT=${NETIP##*.}
+		GWIP=${NETIP%.*}.$((LASTOCT+1))
+	fi
+	if test -n "$AZ"; then AZJSON="\"availability_zone\": \"$AZ\","; fi
 	local REQ_CREATE_SUBNET='{
 		"subnet": {
 			"name": "'"$SUBNETNAME"'",
 			"cidr": "'"$CIDR"'",
-			"gateway_ip": "'"$GWIP"'",
+			"gateway_ip": "'$GWIP'",
 			"dhcp_enable": "true",
 			"primary_dns": "'"$PRIMARYDNS"'",
 			"secondary_dns": "'"$SECDNS"'",
-			"availability_zone":"'"$AZ"'",
+			'$AZJSON'
 			"vpc_id":"'"$VPCID"'"
 		}
 	}'
