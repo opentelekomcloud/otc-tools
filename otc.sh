@@ -1010,6 +1010,8 @@ sgHelp()
 	echo "    --ethertype           <ethtype: IPv4,IPv6>"
 	echo "    --portmin             <port range lower end>"
 	echo "    --portmax             <port range upper end>"
+	echo "    --remotegroup         <ID of remote security group>"
+	echo "    --remoteip            <CIDR of remote IP>"
 }
 
 imageHelp()
@@ -2005,6 +2007,11 @@ SECGROUPDelete()
 
 SECGROUPRULECreate()
 {
+	if test -n "$REMGROUPID"; then
+		REMOTE="\"remote_group_id\": \"$REMGROUPID\","
+	elif test -n "$REMIP"; then
+		REMOTE="\"remote_ip_prefix\": \"$REMIP\","
+	fi
 	local REQ_CREATE_SECGROUPRULE='{
 		"security_group_rule": {
 			"direction":"'"$DIRECTION"'",
@@ -2012,6 +2019,7 @@ SECGROUPRULECreate()
 			"port_range_max":"'"$PORTMAX"'",
 			"ethertype":"'"$ETHERTYPE"'",
 			"protocol":"'"$PROTOCOL"'",
+			'$REMOTE'
 			"security_group_id":"'"$SECUGROUP"'"
 		}
 	}'
@@ -5002,6 +5010,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				PORTMAX="$2"; shift;;
 			--protocol)
 				PROTOCOL="$2"; shift;;
+			--remotegroup|--remote-group)
+				REMGORUPID="$2"; shift;;
+			--remoteip|--remote-ip)
+				REMIP="$2"; shift;;
 			--ethertype|--ether-type)
 				ETHERTYPE="$2"; shift;;
 			--key-name)
