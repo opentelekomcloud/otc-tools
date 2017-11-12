@@ -699,7 +699,8 @@ getIAMToken()
 	AUTH_URL_ROUTER="$NEUTRON_URL/v2.0/routers"
 	AUTH_URL_PUBLICIPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/publicips"
 	AUTH_URL_SEC_GROUPS="$NEUTRON_URL/v1/$OS_PROJECT_ID/security-groups"
-	AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2/$OS_PROJECT_ID/security-group-rules"
+	#AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2/$OS_PROJECT_ID/security-group-rules"
+	AUTH_URL_SEC_GROUP_RULES="$NEUTRON_URL/v2.0/security-group-rules"
 	AUTH_URL_SUBNETS="$NEUTRON_URL/v1/$OS_PROJECT_ID/subnets"
 
 	AUTH_URL_IMAGES="$GLANCE_URL/v2/images"
@@ -2012,8 +2013,12 @@ SECGROUPRULECreate()
 	elif test -n "$REMIP"; then
 		REMOTE="\"remote_ip_prefix\": \"$REMIP\","
 	fi
+	if test -n "$DESCRIPTION"; then
+		DESCJSON="\"description\": \"$DESCRIPTION\","
+	fi
 	local REQ_CREATE_SECGROUPRULE='{
 		"security_group_rule": {
+			'$DESCJSON'
 			"direction":"'"$DIRECTION"'",
 			"port_range_min":"'"$PORTMIN"'",
 			"port_range_max":"'"$PORTMAX"'",
