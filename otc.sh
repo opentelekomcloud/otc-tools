@@ -4849,6 +4849,16 @@ showGroup()
 	return ${PIPESTATUS[0]}
 }
 
+listGroup()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users | jq -r 'def enstr(v): v|tostring; .users[] | .id+"   "+.name+"   "+enstr(.enabled)+"   "+.description' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
 delGroup()
 {
 	local GRID="$1"
@@ -5738,6 +5748,8 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changegroup" ]; then
 	changeGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showgroup" ]; then
 	showGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listgroup" ]; then
+	listGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroup" ] ||
 	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletegroup" ]; then
 	delGroup "$@"
