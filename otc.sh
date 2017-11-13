@@ -4699,7 +4699,7 @@ parseUserParm()
 		  --password|--passwd)
 			PWDJSON="\"password\": \"$2\","
 			shift; shift ;;
-		  --name)
+		  --name|--user|--username)
 			NAMEJSON="\"name\": \"$2\","
 			shift; shift ;;
 		  --description|--desc)
@@ -4779,9 +4779,90 @@ delUser()
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
 }
 
+# TODO: Groups and Roles
+
+# Parser for group mgmt params
+parseGroupParm()
+{
+	unset NONOPTARG NAMEJSON DESCJSON DOMJSON
+	while test -n "$1"; do
+		case "$1" in
+		  --name|--group)
+			NAMEJSON="\"name\": \"$2\","
+			shift; shift ;;
+		  --description|--desc)
+			DESCJSON="\"description\": \"$2\","
+			shift; shift ;;
+		  --domain-id|domainid)
+			DOMJSON="\"domain_id\": \"$2\","
+			shift; shift ;;
+		  --*)
+			echo "Unsupported parameter $1" 1>&2
+			exit 1 ;;
+		  *)
+			NONOPTARG="$1"
+			shift ;;
+		esac
+	done
+}
+
+addGroup()
+{
+	parseGroupParm "$@"
+	if test -z "$NAMEJSON" -a -n "$NONOPTARG"; then NAMEJSON="\"name\": \"$NONOPTARG\","; fi
+	if test -z "$NAMEJSON"; then echo "Must specify --name" 1>&2; exit 1; fi
+	curlpostauth "$TOKEN" "{
+		\"group\": {
+			$DOMJSON
+			$DESCJSON
+			${NAMEJSON%,}
+		}
+	}" "${IAM_AUTH_URL%/auth*}/groups" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+changeGroup()
+{
+	parseGroupParm "$@"
+	local GRID="$NONOPTARG"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	local JSON=$(rmvCommaJSON "{
+		\"group\": {
+			$DOMJSON
+			$DESCJSON
+			${NAMEJSON%,}
+		}
+	}")
+	curlpatchauth $TOKEN "$JSON" "${IAM_AUTH_URL%/auth*}/groups/$GRID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+showGroup()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+delGroup()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID
+}
+
+
+
 # TODO: Group membership of user
 
-# TODO: Groups and Roles
+
 
 # These don't work yet well
 listMRSClusters()
@@ -5651,6 +5732,15 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "policies" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addgroup" ]; then
+	addGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changegroup" ]; then
+	changeGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showgroup" ]; then
+	showGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroup" ] ||
+	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletegroup" ]; then
+	delGroup "$@"
 # End of unsupported APIs
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
