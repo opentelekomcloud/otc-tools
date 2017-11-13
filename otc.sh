@@ -397,6 +397,32 @@ unset SUBNETAZ
 
 #FUNCTIONS ###############################################################################
 
+# Helper to remove unnecessary trailing , in JSON (before })
+rmvCommaJSON()
+{
+	# Remove trailing , even w/o '}'
+	CLBR=$2
+	STR="$1"
+	LF="
+"
+	TB=$(echo -e "\t")
+	declare -i LN=${#STR}
+	declare -i CI=$LN
+	while test $CI -gt 0; do
+		let CI-=1
+		CHR="${STR:$CI:1}"
+		if test "$CHR" == "}"; then CLBR=1; continue; fi
+		if test "$CHR" == "$LF" -o "$CHR" == " " -o "$CHR" == "$TB"; then continue; fi
+		if test $CLBR == 1 -a "$CHR" == ","; then
+			let LN-=1
+			STR="${STR:0:$CI}${STR:$((CI+1)):$((LN-CI))}"
+			continue
+		fi
+		CLBR=0
+	done
+	echo "$STR"
+}
+
 # Arguments CATALOGJSON SERVICETYPE
 getcatendpoint()
 {
@@ -4723,20 +4749,7 @@ changeUser()
 	if test -z "$USID"; then echo "Need to specify UserID or UserName" 1>&2; exit 1; fi
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
-	# Strip last ","
-	if test -z "$PWDJSON"; then
-		DESCJSON="${DESCJSON%,}"
-		if test -z "$DESCJSON"; then
-			NAMEJSON="${NAMJSON%,}"
-			if test -z "$NAMEJSON"; then
-				ENJSON="${ENJSON%,}"
-				if test -z "$ENJSON"; then
-					PRJJSON="${PRJJSON%,}"
-				fi
-			fi
-		fi
-	fi
-	curlpatchauth $TOKEN "{
+	local JSON=$(rmvCommaJSON "{
 		\"user\": {
 			$PRJJSON
 			$ENJSON
@@ -4744,7 +4757,8 @@ changeUser()
 			$DESCJSON
 			${PWDJSON%,}
 		}
-	}" "${IAM_AUTH_URL%/auth*}/users/$USID" | jq -r '.'
+	}")
+	curlpatchauth $TOKEN "$JSON" "${IAM_AUTH_URL%/auth*}/users/$USID" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
