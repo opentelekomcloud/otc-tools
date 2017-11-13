@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.3
+VERSION=0.8.4
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1172,8 +1172,18 @@ iamHelp()
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
-	echo "otc iam users           # get user list"
 	echo "otc iam groups          # get group list"
+	echo "otc iam users           # get user list"
+	echo "otc iam adduser USER    # create user with username USER"
+	echo "   --password PWD       # password"
+	echo "   --en/disabled	      # disabled/enabled(default)"
+	echo "   --default-project ID # set default project ID"
+	echo "   --description DESC   # description of user"
+	echo "   --name USER          # change username"
+	echo "otc iam changeuser USER # change user properties (same params as adduser)"
+	echo "otc iam showuser USER   # details on USER (by ID or username)"
+	echo "otc iam deluser USER    # delete USER (by ID or username)"
+	echo "otc iam users           # get user list"
 	echo "--- Access Control: Federation ---"
 	echo "otc iam listidp         # list Identity Providers"
 	echo "otc iam showidp IDP     # details of IDP"
@@ -4660,25 +4670,28 @@ parseUserParm()
 	unset NONOPTARG PWDJSON NAMEJSON DESCJSON PRJJSON ENJSON
 	while test -n "$1"; do
 		case "$1" in
-		    --password)
+		  --password|--passwd)
 			PWDJSON="\"password\": \"$2\","
 			shift; shift ;;
-		    --name)
+		  --name)
 			NAMEJSON="\"name\": \"$2\","
 			shift; shift ;;
-		    --description)
+		  --description|--desc)
 			DESCJSON="\"description\": \"$2\","
 			shift; shift ;;
-		    --default-project)
+		  --default-project|--default-prj|--defaultproject|--defaultprj)
 			PRJJSON="\"default_project_id\": \"$2\","
 			shift; shift ;;
-		    --disabled)
+		  --disabled|--disable)
 			ENJSON="\"enabled\": false,"
 			shift ;;
-		    --*)
+		  --enabled|--enable)
+			ENJSON="\"enabled\": true,"
+			shift ;;
+		  --*)
 			echo "Unsupported parameter $1" 1>&2
 			exit 1 ;;
-		    *)
+		  *)
 			NONOPTARG="$1"
 			shift ;;
 		esac
@@ -4688,7 +4701,7 @@ parseUserParm()
 addUser()
 {
 	parseUserParm "$@"
-	if test -z "$NAMEJSON" -a -n "$NONOPTARG"; then NAMEJSON="\"name\": \$NONOPTARG\","; fi
+	if test -z "$NAMEJSON" -a -n "$NONOPTARG"; then NAMEJSON="\"name\": \"$NONOPTARG\","; fi
 	if test -z "$ENJSON"; then ENJSON="\"enabled\": true,"; fi
 	if test -z "$NAMEJSON"; then echo "Must specify --name" 1>&2; exit 1; fi
 	curlpostauth "$TOKEN" "{
@@ -4700,6 +4713,38 @@ addUser()
 			${PWDJSON%,}
 		}
 	}" "${IAM_AUTH_URL%/auth*}/users" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+changeUser()
+{
+	parseUserParm "$@"
+	local USID="$NONOPTARG"
+	if test -z "$USID"; then echo "Need to specify UserID or UserName" 1>&2; exit 1; fi
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	# Strip last ","
+	if test -z "$PWDJSON"; then
+		DESCJSON="${DESCJSON%,}"
+		if test -z "$DESCJSON"; then
+			NAMEJSON="${NAMJSON%,}"
+			if test -z "$NAMEJSON"; then
+				ENJSON="${ENJSON%,}"
+				if test -z "$ENJSON"; then
+					PRJJSON="${PRJJSON%,}"
+				fi
+			fi
+		fi
+	fi
+	curlpatchauth $TOKEN "{
+		\"user\": {
+			$PRJJSON
+			$ENJSON
+			$NAMEJSON
+			$DESCJSON
+			${PWDJSON%,}
+		}
+	}" "${IAM_AUTH_URL%/auth*}/users/$USID" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4719,6 +4764,10 @@ delUser()
 	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
 }
+
+# TODO: Group membership of user
+
+# TODO: Groups and Roles
 
 # These don't work yet well
 listMRSClusters()
@@ -5574,7 +5623,8 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changeuser" ]; then
 	changeUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showuser" ]; then
 	showUser "$@"
-elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deluser" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deluser" ] ||
+	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteuser" ]; then
 	delUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
    echo -n ""
