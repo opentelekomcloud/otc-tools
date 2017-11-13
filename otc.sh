@@ -4654,8 +4654,10 @@ recoverPROJECText()
 }
 
 # User Management
-addUser()
+# Parser for user mgmt params
+parseUserParm()
 {
+	unset NONOPTARG PWDJSON NAMEJSON DESCJSON PRJJSON ENJSON
 	while test -n "$1"; do
 		case "$1" in
 		    --password)
@@ -4677,10 +4679,16 @@ addUser()
 			echo "Unsupported parameter $1" 1>&2
 			exit 1 ;;
 		    *)
-			NAMEJSON="\"name\": \"$1\","
+			NONOPTARG="$1"
 			shift ;;
 		esac
 	done
+}
+
+addUser()
+{
+	parseUserParm "$@"
+	if test -z "$NAMEJSON" -a -n "$NONOPTARG"; then NAMEJSON="\"name\": \$NONOPTARG\","; fi
 	if test -z "$ENJSON"; then ENJSON="\"enabled\": true,"; fi
 	if test -z "$NAMEJSON"; then echo "Must specify --name" 1>&2; exit 1; fi
 	curlpostauth "$TOKEN" "{
