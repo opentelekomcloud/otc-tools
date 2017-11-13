@@ -217,6 +217,10 @@ docurl()
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 		fi
+		# PUT/HEAD onlyreturn an HTTP header
+		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
+		CODE=$(echo "$HDR" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
+		if test -n "$CODE" && test "$CODE" -ge 400; then echo "${HDR#* }" 1>&2; RC=9; fi
 	fi
 	return $RC
 }
@@ -4748,7 +4752,7 @@ changeUser()
 	local USID="$NONOPTARG"
 	if test -z "$USID"; then echo "Need to specify UserID or UserName" 1>&2; exit 1; fi
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
-	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	local JSON=$(rmvCommaJSON "{
 		\"user\": {
 			$PRJJSON
@@ -4766,7 +4770,7 @@ showUser()
 {
 	local USID=$1
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
-	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
@@ -4775,7 +4779,7 @@ delUser()
 {
 	local USID=$1
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
-	if test -z "$USID"; then echo "No such user" 1>&2; exit 2; fi
+	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
 }
 
@@ -4844,7 +4848,7 @@ showGroup()
 	local GRID="$1"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
-	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
 	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
@@ -4854,9 +4858,21 @@ listGroup()
 	local GRID="$1"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
-	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
 	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users | jq -r 'def enstr(v): v|tostring; .users[] | .id+"   "+.name+"   "+enstr(.enabled)+"   "+.description' | tr -d '"'
 	return ${PIPESTATUS[0]}
+}
+
+checkGroup()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
+	local USID=$2
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
+	HDR=$(curlheadauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID)
 }
 
 delGroup()
@@ -4864,14 +4880,33 @@ delGroup()
 	local GRID="$1"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
-	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID
 }
 
+addGroupUser()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
+	local USID=$2
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
+	curlputauth $TOKEN "" ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID
+}
 
-
-# TODO: Group membership of user
-
+delGroupUser()
+{
+	local GRID="$1"
+	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
+	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
+	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
+	local USID=$2
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
+	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID
+}
 
 
 # These don't work yet well
@@ -5750,9 +5785,15 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showgroup" ]; then
 	showGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listgroup" ]; then
 	listGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "checkgroup" ]; then
+	checkGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroup" ] ||
 	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletegroup" ]; then
 	delGroup "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addgroupuser" ]; then
+	addGroupUser "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroupuser" ]; then
+	delGroupUser "$@"
 # End of unsupported APIs
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
