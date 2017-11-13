@@ -1202,7 +1202,22 @@ iamHelp()
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
+	echo "otc iam roles2          # list available role policies"
+	echo "otc iam showrole RID    # output properties of role RID"
+	echo " --- Groups --- "
 	echo "otc iam groups          # get group list"
+	echo "otc iam addgroup GRP    # create user with groupname GRP"
+	echo "   --domainid ID        # set domain ID"
+	echo "   --description DESC   # description of group"
+	echo "   --name GRP           # change groupname"
+	echo "otc iam changegroup GRP # change group properties (same params as addgroup)"
+	echo "otc iam showgroup GRP   # details on USER (by ID or username)"
+	echo "otc iam delgroup GRP    # delete USER (by ID or username)"
+	echo "otc iam listgroup GRP   # list members(users) of group"
+	echo "otc iam checkgroup GRP USER       # test membership of USER in GRP"
+	echo "otc iam addgroupuser GRP USER     # add USER to GRP"
+	echo "otc iam delgroupuser GRP USER     # del USER from GRP"
+	echo " --- Users ---"
 	echo "otc iam users           # get user list"
 	echo "otc iam adduser USER    # create user with username USER"
 	echo "   --password PWD       # password"
@@ -1213,7 +1228,6 @@ iamHelp()
 	echo "otc iam changeuser USER # change user properties (same params as adduser)"
 	echo "otc iam showuser USER   # details on USER (by ID or username)"
 	echo "otc iam deluser USER    # delete USER (by ID or username)"
-	echo "otc iam users           # get user list"
 	echo "--- Access Control: Federation ---"
 	echo "otc iam listidp         # list Identity Providers"
 	echo "otc iam showidp IDP     # details of IDP"
@@ -4783,8 +4797,7 @@ delUser()
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
 }
 
-# TODO: Groups and Roles
-
+# Groups
 # Parser for group mgmt params
 parseGroupParm()
 {
@@ -4908,6 +4921,15 @@ delGroupUser()
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID
 }
 
+# Roles
+listRoleAssign()
+{
+	local USID=$1
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
+	if test "$2" == "--effective"; then EFF="&effective"; fi
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/role_assignmentsr?user.id=$USID&include_names$EFF" | jq '.'
+}
 
 # These don't work yet well
 listMRSClusters()
@@ -5768,9 +5790,15 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deluser" ] ||
 	delUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
    echo -n ""
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "userroles" ]; then
+   listRoleAssign "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles2" ]; then
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.policy.Depends[].display_name' | tr -d '"'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq 'def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)' | tr -d '\\' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showrole" ]; then
+   curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles/$1" | jq -r '.'
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
