@@ -615,6 +615,7 @@ getIAMToken()
 		if test -z "$OS_PROJECT_ID"; then
 			OS_PROJECT_ID=`echo "$IAMRESP" | tail -n1 | jq -r '.token.project.id'`
 		fi
+
 		if test -z "$TOKEN" -o -z "$OS_PROJECT_ID"; then
 			echo "ERROR: Failed to authenticate and get token from $IAM_AUTH_URL for user $OS_USERNAME" 1>&2
 			exit 2
@@ -1201,9 +1202,14 @@ iamHelp()
 	echo "otc iam recoverproject ID         # stop recursive project cleanup"
 	echo "otc iam services        # service catalog"
 	echo "otc iam endpoints       # endpoints of the services"
+	echo " --- Roles and Role Assignments ---"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
 	echo "otc iam roles2          # list available role policies"
 	echo "otc iam showrole RID    # output properties of role RID"
+	echo "otc iam listrolegroup GRP         # list roles of group GRP"
+	echo "    --project PRJID               # optionally list project instead of domain roles"
+	echo "otc iam addrolegroup RID GRP      # assign role RID to group GRP (optional: --project PRJID)"
+	echo "otc iam delrolegroup RID GRP      # remove role RID from group GRP (optional: --project PRJID)"
 	echo " --- Groups --- "
 	echo "otc iam groups          # get group list"
 	echo "otc iam addgroup GRP    # create user with groupname GRP"
@@ -4922,13 +4928,60 @@ delGroupUser()
 }
 
 # Roles
+ROLEDISPLAY='def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.type+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)'
 listRoleAssign()
 {
 	local USID=$1
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	if test "$2" == "--effective"; then EFF="&effective"; fi
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/role_assignmentsr?user.id=$USID&include_names$EFF" | jq '.'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/role_assignmentsr?user.id=$USID&include_names$EFF" | jq "$ROLEDISPLAY" | tr -d '"'
+}
+
+listRoleUser()
+{
+	local SCP=domain
+	local SCPID=$OS_USER_DOMAIN_ID
+	if test "$1" == "listrolegroup"; then OBJ=group; else OBJ=user; fi; shift
+	if test "$1" == "--project"; then SCP=project; SCPID=$2; shift; shift; fi
+	local USID=$1
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such $OBJ $1" 1>&2; exit 2; fi
+	if test "$2" == "--project"; then SCP=project; SCPID=$3; fi
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/${SCP}s/$SCPID/${OBJ}s/$USID/roles" | jq "$ROLEDISPLAY" | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+addRoleUser()
+{
+	local SCP=domain
+	local SCPID=$OS_USER_DOMAIN_ID
+	if test "$1" == "addrolegroup"; then OBJ=group; else OBJ=user; fi; shift
+	if test "$1" == "--project"; then SCP=project; SCPID=$2; shift; shift; fi
+	local RID=$1
+	if ! is_id $RID; then RID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/roles?name=$RID | jq '.roles[].id' | tr -d '"'); fi
+	if test -z "$RID"; then echo "Need to specify valid role" 1>&2; exit 2; fi
+	local USID=$2
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such $OBJ $2" 1>&2; exit 2; fi
+	if test "$3" == "--project"; then SCP=project; SCPID=$4; fi
+	curlputauth $TOKEN "" "${IAM_AUTH_URL%/auth*}/${SCP}s/$SCPID/${OBJ}s/$USID/roles/$RID"
+}
+
+delRoleUser()
+{
+	local SCP=domain
+	local SCPID=$OS_USER_DOMAIN_ID
+	if test "$1" == "delrolegroup" -o "$1" == "deleterolegroup"; then OBJ=group; else OBJ=user; fi; shift
+	if test "$1" == "--project"; then SCP=project; SCPID=$OS_PROJECT_ID; shift; fi
+	local RID=$1
+	if ! is_id $RID; then RID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/roles?name=$RID | jq '.roles[].id' | tr -d '"'); fi
+	if test -z "$RID"; then echo "Need to specify valid role" 1>&2; exit 2; fi
+	local USID=$2
+	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
+	if test -z "$USID"; then echo "No such $OBJ $2" 1>&2; exit 2; fi
+	if test "$3" == "--project"; then SCP=project; SCPID=$4; shift; fi
+	curldeleteauth $TOKEN "${IAM_AUTH_URL%/auth*}/${SCP}s/$SCPID/${OBJ}s/$USID/roles/$RID"
 }
 
 # These don't work yet well
@@ -5795,15 +5848,26 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "userroles" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles2" ]; then
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.policy.Depends[].display_name' | tr -d '"'
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq 'def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)' | tr -d '\\' | tr -d '"'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq 'def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.type+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)' | tr -d '\\' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showrole" ]; then
    curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles/$1" | jq -r '.'
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listroleuser" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listrolegroup" ]; then
+	listRoleUser $SUBCOM "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addroleuser" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addrolegroup" ]; then
+	addRoleUser $SUBCOM "$@"
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delroleuser" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleterolegroup" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delrolegroup" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleterolegroup" ]; then
+	delRoleUser $SUBCOM "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
-	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.groups[] | .id+"   "+.name+"   "+.description+"   "' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addgroup" ]; then
 	addGroup "$@"
