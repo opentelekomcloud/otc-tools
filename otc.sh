@@ -1210,6 +1210,7 @@ iamHelp()
 	echo "    --project PRJID               # optionally list project instead of domain roles"
 	echo "otc iam addrolegroup RID GRP      # assign role RID to group GRP (optional: --project PRJID)"
 	echo "otc iam delrolegroup RID GRP      # remove role RID from group GRP (optional: --project PRJID)"
+	echo "                        # corresponding list/add/delroleuser implementd by not supp on OTC"
 	echo " --- Groups --- "
 	echo "otc iam groups          # get group list"
 	echo "otc iam addgroup GRP    # create user with groupname GRP"
