@@ -1193,8 +1193,10 @@ iamHelp()
 	echo "--- Access Control (IAM) ---"
 	echo "otc iam token           # generate a new iam token"
 	echo "otc iam catalog         # catalog as returned with token"
+	echo "otc iam domain          # output domain ID"
+	echo "otc iam listdomains     # domain list"
 	echo "otc iam project         # output project_id/tenant_id"
-	echo "otc iam listprojects    # output projects"
+	echo "otc iam listprojects    # output project list"
 	echo "otc iam showproject ID  # show details of project"
 	echo "otc iam createproject NAME        # create project (opt: --description)"
 	echo "otc iam deleteproject ID          # delete project (fails on OTC to avoid orphaned resrcs)"
@@ -1204,7 +1206,8 @@ iamHelp()
 	echo "otc iam endpoints       # endpoints of the services"
 	echo " --- Roles and Role Assignments ---"
 	echo "otc iam roles           # list project roles (add --domainscope for domain role)"
-	echo "otc iam roles2          # list available role policies"
+	echo "otc iam roles2          # show available role policies"
+	echo "otc iam listroles       # list available role policies"
 	echo "otc iam showrole RID    # output properties of role RID"
 	echo "otc iam listrolegroup GRP         # list roles of group GRP"
 	echo "    --project PRJID               # optionally list project instead of domain roles"
@@ -1212,7 +1215,8 @@ iamHelp()
 	echo "otc iam delrolegroup RID GRP      # remove role RID from group GRP (optional: --project PRJID)"
 	echo "                        # corresponding list/add/delroleuser implementd by not supp on OTC"
 	echo " --- Groups --- "
-	echo "otc iam groups          # get group list"
+	echo "otc iam groups          # show groups"
+	echo "otc iam listgroups      # get group list"
 	echo "otc iam addgroup GRP    # create user with groupname GRP"
 	echo "   --domainid ID        # set domain ID"
 	echo "   --description DESC   # description of group"
@@ -1220,12 +1224,13 @@ iamHelp()
 	echo "otc iam changegroup GRP # change group properties (same params as addgroup)"
 	echo "otc iam showgroup GRP   # details on USER (by ID or username)"
 	echo "otc iam delgroup GRP    # delete USER (by ID or username)"
-	echo "otc iam listgroup GRP   # list members(users) of group"
+	echo "otc iam listusergroup GRP         # list members(users) of group"
 	echo "otc iam checkgroup GRP USER       # test membership of USER in GRP"
 	echo "otc iam addgroupuser GRP USER     # add USER to GRP"
 	echo "otc iam delgroupuser GRP USER     # del USER from GRP"
 	echo " --- Users ---"
-	echo "otc iam users           # get user list"
+	echo "otc iam users           # show users"
+	echo "otc iam listusers       # get user list"
 	echo "otc iam adduser USER    # create user with username USER"
 	echo "   --password PWD       # password"
 	echo "   --en/disabled	      # disabled/enabled(default)"
@@ -5442,22 +5447,29 @@ fi
 # Support aliases / alternative names
 if [ "$MAINCOM" = "server" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
+if [ "$MAINCOM" = "nova" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "volumes" ]; then MAINCOM="evs"; fi
 if [ "$MAINCOM" = "volume" ]; then MAINCOM="evs"; fi
+if [ "$MAINCOM" = "cinder" ]; then MAINCOM="evs"; fi
+if [ "$MAINCOM" = "neutron" ]; then MAINCOM="vpc"; fi
 if [ "$MAINCOM" = "router" ]; then MAINCOM="vpc"; fi
 if [ "$MAINCOM" = "floating-ip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "floatingip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "eip" ]; then MAINCOM="publicip"; fi
 if [ "$MAINCOM" = "image" ]; then MAINCOM="images"; fi
+if [ "$MAINCOM" = "glance" ]; then MAINCOM="images"; fi
 if [ "$MAINCOM" = "sg" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "securitygroup" ]; then MAINCOM="security-group"; fi
 if [ "$MAINCOM" = "vbs" ]; then MAINCOM="backup"; fi
 if [ "$MAINCOM" = "auth" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "identity" ]; then MAINCOM="iam"; fi
+if [ "$MAINCOM" = "keystone" ]; then MAINCOM="iam"; fi
 if [ "$MAINCOM" = "ces" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "metric" ]; then MAINCOM="metrics"; fi
 if [ "$MAINCOM" = "alarm" ]; then MAINCOM="alarms"; fi
+if [ "$MAINCOM" = "dns" ]; then MAINCOM="domain"; fi
 if [ "$MAINCOM" = "cce" ]; then MAINCOM="cluster"; fi
+if [ "$MAINCOM" = "magnum" ]; then MAINCOM="cluster"; fi
 if [ "$MAINCOM" = "traces" ]; then MAINCOM="trace"; fi
 if [ "$MAINCOM" = "cts" ]; then MAINCOM="trace"; fi
 #if [ "$MAINCOM" = "snm" ]; then MAINCOM="notifications"; fi
@@ -5469,17 +5481,21 @@ if [ "$MAINCOM" = "dms" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "queue" ]; then MAINCOM="queues"; fi
 if [ "$MAINCOM" = "consumers" ]; then MAINCOM="consumer"; fi
 if [ "$MAINCOM" = "db" ]; then MAINCOM="rds"; fi
+if [ "$MAINCOM" = "trove" ]; then MAINCOM="rds"; fi
 if [ "$MAINCOM" = "heat" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "rts" ]; then MAINCOM="stack"; fi
 if [ "$MAINCOM" = "lbaas" ]; then MAINCOM="ulb"; fi
+if [ "$MAINCOM" = "octavia" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "vlb" ]; then MAINCOM="ulb"; fi
 if [ "$MAINCOM" = "sfs" ]; then MAINCOM="shares"; fi
+if [ "$MAINCOM" = "manila" ]; then MAINCOM="shares"; fi
 if [ "$MAINCOM" = "tms" ]; then MAINCOM="tags"; fi
 if [ "$MAINCOM" = "dcs" ]; then MAINCOM="cache"; fi
 if [ "$MAINCOM" = "warehouse" ]; then MAINCOM="dws"; fi
 if [ "$MAINCOM" = "datawarehouse" ]; then MAINCOM="dws"; fi
 if [ "$MAINCOM" = "csbs" ]; then MAINCOM="serverbackup"; fi
 if [ "$MAINCOM" = "maas" ]; then MAINCOM="migration"; fi
+if [ "$MAINCOM" = "designate" ]; then MAINCOM="domain"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -5496,6 +5512,7 @@ if [ -n "$MAINCOM" -a "$MAINCOM" != "help" -a "$MAINCOM" != "mds" -a "$SUBCOM" !
 	fi
 	if [ "$MAINCOM" == "tags" ]; then REQSCOPE="domain"; fi
 	getIAMToken $REQSCOPE
+	ERR=$?
 fi
 
 #if [ "$MAINCOM" = "rds" -a $TROVE_OVERRIDE = 1 ]; then
@@ -5814,8 +5831,12 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletetoken" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "endpoints" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}endpoints" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listdomain" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listdomains" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%tokens}domains" | jq 'def tostr(v): v|tostring; .domains[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description' | tr -d '"'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "domains" ]; then
-	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}domains" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%tokens}domains" | jq '.'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "services" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%auth*}services" | jq '.' #'.[]'
@@ -5830,7 +5851,10 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "catalog2" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/tokens}/catalog" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "users" ]; then
-	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listuser" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listusers" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/users" | jq 'def tostr(s): s|tostring; .users[] | .id+"   "+.name+"   "+tostr(.enabled)+"   "+.description+"   "+.password_expires_at+"   "+.countrycode' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "adduser" ]; then
@@ -5847,12 +5871,18 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "userroles" ]; then
    listRoleAssign "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles2" ]; then
-	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
 	#curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.policy.Depends[].display_name' | tr -d '"'
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq '.' #'.[]'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listrole" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listroles" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listroles2" ] ; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles" | jq 'def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.type+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)' | tr -d '\\' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showrole" ]; then
+	# FIXME: RoleName -> ID
    curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/roles/$1" | jq -r '.'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listroleuser" ] ||
      [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listrolegroup" ]; then
 	listRoleUser $SUBCOM "$@"
@@ -5868,6 +5898,10 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "policies" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/policies" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "groups" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listgroup" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listgroups" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/groups" | jq '.groups[] | .id+"   "+.name+"   "+.description+"   "' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addgroup" ]; then
@@ -5876,7 +5910,7 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changegroup" ]; then
 	changeGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showgroup" ]; then
 	showGroup "$@"
-elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listgroup" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listusergroup" ]; then
 	listGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "checkgroup" ]; then
 	checkGroup "$@"
@@ -5891,7 +5925,8 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroupuser" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
-elif [ "$MAINCOM" == "iam"  -a "${SUBCOM:0:11}" == "listproject" ]; then
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listproject" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listprojects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.description' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
@@ -6338,6 +6373,6 @@ fi
 
 # Collect status for pieces that might have been performed in MAIN
 RC=$?
-if test $RC = 0 -a -n "$ERR"; then RC=$ERR; fi
+if test $RC == 0 -a -n "$ERR"; then RC=$ERR; fi
 if test $RC == 0 -a -n "${PIPESTATUS[0]}"; then RC=${PIPESTATUS[0]}; fi
 exit $RC
