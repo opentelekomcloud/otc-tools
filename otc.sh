@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.4
+VERSION=0.8.5
 
 # Get Config ####################################################################
 warn_too_open()
@@ -4366,14 +4366,17 @@ listTraces()
 			# return ${PIPESTATUS[0]} ;
 			;;
 		"ECS" )
-			LIST=$(curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE" | \
-				jq -r '.traces[] | [.time, .trace_name, .resource_name, .user, .source_ip, .message]' | \
-				sed 's/\(\[\|\]\|"\|{\|}\|\\\)//g' | \
+			LIST=$(curlgetauth "$TOKEN" "$AUTH_URL_CTS/v1.0/$OS_PROJECT_ID/system/trace?service_type=$SERVICE_TYPE&limit=199" | \
+				jq -r '.traces[] | [.time, .request, .resource_name, .user, .source_ip, .message]' | \
+				sed -r 's/(\\n(\\t)*|"|\{|\}|\\|\[|\])//g' | \
 				sed -e 's/^[ \t]*//' | \
-				sed -z 's/,\n/\t/g' | \
-				sed '/^$/d') ;
+				sed 's/:\s*/:/g' | \
+				sed 's/\s*,/,/g' | \
+				sed -z 's/,\n/\t/g' |\
+				sed '/^$/d' \
+				) ;
 			# echo -e "$LIST" ;
-			### formatating stuff
+			### formatting stuff
 			while read -r LINE;
 			do
 				array=(${LINE//,/}) ;
@@ -4383,6 +4386,10 @@ listTraces()
 					if [ $i == 0 ];
 					then
 						printf "${array[$i]}" ;
+					elif [ $i == 1 ];
+					then
+						ACTION=$(echo ${array[$i]} | awk -F':' '{printf $1}') ;
+						printf "   $ACTION" ;
 					elif [ $i == 3 ];
 					then
 						USER=$(echo ${array[$i]} | awk -F'id:' '{printf $1}' | awk -F':' '{printf $2}') ;
@@ -4403,7 +4410,7 @@ listTraces()
 				sed -z 's/,\n/\t/g' | \
 				sed '/^$/d') ;
 			# echo -e "$LIST" ;
-			### formatating stuff
+			### formatting stuff
 			while read -r LINE;
 			do
 				array=(${LINE//,/}) ;
