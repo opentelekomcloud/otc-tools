@@ -1,6 +1,6 @@
 #!/bin/bash
 # vi:set ts=3 sw=3:
-# == Module: Open Telekom Cloud CLI 0.7.x
+# == Module: Open Telekom Cloud CLI 0.8.x
 #
 # Manage OTC via Command Line
 #
@@ -156,7 +156,7 @@ if test -z "$TMPDIR"; then TMPDIR=/dev/shm; fi
 if test ! -d "$TMPDIR"; then TMPDIR=/tmp; fi
 
 PRIMARYDNS=${PRIMARYDNS:-100.125.4.25}
-SECDNS=${SECDNS:-8.8.8.8}
+SECDNS=${SECDNS:-9.9.9.9}
 
 # REST call curl wrappers ###########################################################
 
