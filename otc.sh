@@ -478,7 +478,7 @@ readIAMTokenFile()
 	# NOTE: This needs testing for keystonev2
 	local exp=$(echo "$RESP" | tail -n1 | jq '.token.expires_at' | tr -d '"')
 	if test "$exp" = "null" -o -z "$exp"; then exp=$(echo "$RESP" | tail -n1 | jq '.access.token.expires' | tr -d '"'); fi
-	exp=$(date -d "$exp" +"%s")
+	exp=$(date -d "${exp%Z}" +"%s")
 	if test -n "$DEBUG"; then echo "Token valid for $(($exp-$now))s" 1>&2; fi
 	TOKEN=`echo "$RESP" | grep "X-Subject-Token:" | cut -d' ' -f 2`
 	if test -z "$TOKEN"; then TOKEN=`echo "$IAMJSON" | jq -r '.access.token.id' | tr -d '"'`; fi
