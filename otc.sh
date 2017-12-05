@@ -940,7 +940,7 @@ evsHelp()
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
 	echo "    --az                  <AZ>"
-	echo "    --shareable                 # create shareable volume"
+	echo "    --multiattach               # create shareable volume"
 	echo "    --crypt CRYPTKEYID          # encryption"
 	echo "    --scsi/--vbd                # SCSI passthrough or plain VBD attachment"
 	echo "otc evs update                  # change volume setting (name, descr, type, ...)"
@@ -3943,7 +3943,7 @@ EVSCreate()
 	if test -n "$META"; then META="$META, "; fi
 	if test -n "$SHAREABLE"; then
 		OPTIONAL="$OPTIONAL
-			\"shareable\": \"$SHAREABLE\","
+			\"multiattach\": $SHAREABLE,"
 	fi
 	if test -n "$IMAGEREFID"; then
 		OPTIONAL="$OPTIONAL
@@ -3994,7 +3994,7 @@ EVSUpdate()
 	if test -n "$META"; then META="$META, "; fi
 	if test -n "$SHAREABLE"; then
 		OPTIONAL="$OPTIONAL
-			\"shareable\": \"$SHAREABLE\","
+			\"multiattach\": $SHAREABLE,"
 	fi
 	if test -n "$CRYPTKEYID"; then META="$META \"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
 	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\","; fi
@@ -5335,8 +5335,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				VOLUMETYPE="$2"; shift;;
 			--disksize|--disk-size)
 				ROOTDISKSIZE="$2"; shift;;
-			--shareable)
-				SHAREABLE=1;;
+			--shareable|--multiattach|--multi-attach)
+				SHAREABLE="true";;
 			--crypt)
 				CRYPTKEYID=$2; shift;;
 			--scsi)
