@@ -3899,6 +3899,7 @@ ECSDelete()
 	done
 	##### TODO: we have to wait here until detachments were finished -- otherwize we run into a deadlock!
 	IDS="${IDS%,}"
+	if test -z "$IDS"; then echo "No VMs to delete found" 1>&2; exit 1; fi
 	local REQ_ECS_DELETE='{
 		"servers": [ '$IDS' ],
 		"delete_publicip": '$delete_publicip',
