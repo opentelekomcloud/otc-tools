@@ -882,7 +882,7 @@ ecsHelp()
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-	echo "    --tenancy 				  <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
+	echo "    --tenancy             <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
 	echo "    --dedicated-host-id   <HOSTID>        # use UUID of preexisting DedicatedHost for direct placement"
 	echo "    --datadisks           <DATADISK>      # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                          #   example: SSD:20,SATA:50"
@@ -3541,17 +3541,21 @@ ECSDetachVolumeListName()
 	local dev_vol ecs="$1" DEV_VOL="$2"
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
-		if [ $AZ != ${volume_az//\"/} ]; then
-			echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT ATTACHING" 1>&2
-		fi
-		ECSAttachVolumeName "$ecs" $dev_vol
+		#if [ $AZ != ${volume_az//\"/} ]; then
+		#	echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT DETACHING" 1>&2
+		#fi
+		ECSDetachVolumeName "$ecs" $dev_vol
 	done
 }
 
 ECSDetachVolumeName()
 {
 	local server_name="$1" dev_vol="$2" ecsid volid  ##### dev_vol could be of the form <device>:<volume> or just <volume>
-	ecsid=$(getECSList |  while read id name x; do [ "$name" = "$server_name"  ] && echo $id && break; done)
+	if is_uuid "$server_name"; then
+		ecsid=$server_name
+	else
+		ecsid=$(getECSList |  while read id name x; do [ "$name" = "$server_name"  ] && echo $id && break; done)
+	fi
 	volid=$(getEVSList |  while read id name x; do [ "$name" = "${dev_vol#*:}" ] && echo $id && break; done)
 	if test -z "$volid"; then
 		echo "ERROR: could not determine volume id -- perhaps volume is not mounted or ecs name is not unique" 1>&2
@@ -3890,11 +3894,21 @@ ECSDelete()
 			*)           break;;
 		esac
 	done
+	ERR=0
 	for ecs in $@; do
-		# convert $ecs to an id if given ecs is a name, otherwize keep the ecs=id
-		for id in $(getECSList | while read ecsid name x; do [ "$ecsid" = "$ecs" ]||[ "$name" = "$ecs" ]||continue; echo "$ecsid";done); do
+		if ! is_uuid "$ecs"; then
+			NAME="${ecs// /%20}"
+			ecs=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$ecs'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+			if test $? != 0 -o -z "$ecs" -o "$ecs" = "null"; then
+				echo "ERROR: ECSDelete: No such VM $NAME" 1>&2
+				let ERR+=1
+				continue
+			fi
+		fi
+		# Can be multiple if specified by name and several exist ...
+		for id in $ecs; do
 			IDS="$IDS { \"id\": \"$id\" },"
-			[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$ecs" "$DEV_VOL" ##### detach some external volumes before deleting the vm
+			[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$id" "$DEV_VOL" ##### detach some external volumes before deleting the vm
 		done
 	done
 	##### TODO: we have to wait here until detachments were finished -- otherwize we run into a deadlock!
@@ -3917,7 +3931,7 @@ ECSDelete()
 		echo "$ECSRESP" | jq '.[]' 1>&2
 		return 1
 	fi
-	return $RC
+	return $(($RC+$ERR))
 }
 
 EVSCreate()
