@@ -181,7 +181,7 @@ hashtoken()
 {
 	while read ln; do
 		if ! echo "$ln" | grep '\-Token' >/dev/null 2>&1; then continue; fi
-		echo "$ln" | sed 's@^\-Token: MII\([^ ]*\).*$@MII\1@g' | md5sum | awk '{ print $1; }'
+		echo "$ln" | sed 's@^.*\-Token: MII\([^ ]*\).*$@MII\1@g' | md5sum | awk '{ print $1; }'
 		#if test ${PIPESTATUS[1]} != 0; then echo "ERROR IN SED" 1>&2; exit 2; fi
 	done
 }
@@ -207,11 +207,11 @@ docurl()
 		fi
 		TKNDEB=$(echo "$ANS" | hashtoken)
 		echo "DEBUG: ($RC) $ANS" | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
-		echo "$ANS"
+		#echo "$ANS"
 	else
 		ANS=`curl $INS "$@"`
 		RC=$?
-		echo "$ANS"
+		#echo "$ANS"
 	fi
 	if test $RC != 0; then echo "$ANS" 1>&2; return $RC
 	else
@@ -246,6 +246,7 @@ docurl()
 		CODE=$(echo "$HDR" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
 		if test -n "$CODE" && test "$CODE" -ge 400; then echo "${HDR#* }" 1>&2; RC=9; fi
 	fi
+	echo "$ANS"
 	return $RC
 }
 
@@ -485,7 +486,7 @@ IAMTokenFilename()
 	local FN="${OS_USERNAME% *}"
 	if test "$REQSCOPE" != "unscoped"; then FN="$FN.$OS_USER_DOMAIN_NAME"; fi
 	local PRJ=$OS_PROJECT_ID
-	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; PRJ_ID_UNSET=1; fi
+	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; fi
 	if test "$REQSCOPE" = "project"; then FN="$FN.$PRJ"; fi
 	echo "$HOME/tmp/.otc.cache.$FN"
 }
@@ -619,6 +620,8 @@ getIAMToken()
 		exit 1
 	fi
 
+	if test -z "$OS_PROJECT_ID"; then PRJ_ID_UNSET=1; fi
+  
    REQSCOPE=${1:-project}
 	local IAMRESP TKNFN=$(IAMTokenFilename)
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
