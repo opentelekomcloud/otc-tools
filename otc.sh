@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.6
+VERSION=0.8.7
 
 # Get Config ####################################################################
 warn_too_open()
@@ -177,24 +177,36 @@ is_html_err()
 	echo "$1" | grep '<[tT][iT][tT][lL][eE]> *[45][012][0-9] [A-Z]' 2>&1 >/dev/null
 }
 
+hashtoken()
+{
+	while read ln; do
+		if ! echo "$ln" | grep '\-Token' >/dev/null 2>&1; then continue; fi
+		echo "$ln" | sed 's@^\-Token: MII\([^ ]*\).*$@MII\1@g' | md5sum | awk '{ print $1; }'
+		#if test ${PIPESTATUS[1]} != 0; then echo "ERROR IN SED" 1>&2; exit 2; fi
+	done
+}
+
 # Generic wrapper to facilitate debugging
 docurl()
 {
 	local ANS RC TMPHDR
 	if test -n "$DEBUG"; then
-		echo "DEBUG: docurl $INS $@" | sed -e 's/-Token: MII[^ ]*/-Token: MIIsecretsecret/g' -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
+		TKNDEB=$(echo "$@" | hashtoken)
+		echo "DEBUG: docurl $INS $@" | sed -e "s/-Token: MII[^ ]*/-Token: MII$TKNDEB/g" -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
 			TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
 			RC=$?
+			TKNDEB=$(cat $TMPHDR | hashtoken)
 			echo -n "DEBUG: Header" 1>&2
-			cat $TMPHDR  | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+			cat $TMPHDR  | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
 			rm $TMPHDR
 		else
 			ANS=`curl $INS "$@"`
 			RC=$?
 		fi
-		echo "DEBUG: ($RC) $ANS" | sed 's/X-Subject-Token: MII.*$/X-Subject-Token: MIIsecretsecret/' 1>&2
+		TKNDEB=$(echo "$ANS" | hashtoken)
+		echo "DEBUG: ($RC) $ANS" | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
 		echo "$ANS"
 	else
 		ANS=`curl $INS "$@"`
@@ -213,6 +225,17 @@ docurl()
 		fi
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
+				echo "$MSG -> Retry" 1>&2
+				local OLDDC=$DISCARDCACHE
+				DISCARDCACHE=1
+				getIAMToken || exit $?
+				DISCARDCACHE=$OLDDC
+				declare -a ARGS
+				for a in "$@"; do ARGS[${#ARGS[@]}]=$(echo $a | sed "s/Token: MII[^ ]*/Token: $TOKEN/"); done
+				docurl "${ARGS[@]}"
+				return
+			fi	
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
@@ -575,9 +598,11 @@ getIAMTokenKeystone()
 		}
 		'
 	fi
+	export INAUTH=1
 	RESP=$(curlpost "$IAM_REQ" "$IAM_AUTH_URL")
 	RC=$?
 	if test $RC != 0; then echo -e "ERROR: Authentication call failed\n$IAMRESP" 1>&2; exit $RC; fi
+	unset INAUTH
 	echo "$RESP"
 }
 
