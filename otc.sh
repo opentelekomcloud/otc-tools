@@ -229,6 +229,7 @@ docurl()
 				echo "$MSG -> Retry" 1>&2
 				local OLDDC=$DISCARDCACHE
 				DISCARDCACHE=1
+				if test -n "$PRJ_ID_UNSET"; then unset OS_PROJECT_ID; fi
 				getIAMToken || exit $?
 				DISCARDCACHE=$OLDDC
 				declare -a ARGS
@@ -484,7 +485,7 @@ IAMTokenFilename()
 	local FN="${OS_USERNAME% *}"
 	if test "$REQSCOPE" != "unscoped"; then FN="$FN.$OS_USER_DOMAIN_NAME"; fi
 	local PRJ=$OS_PROJECT_ID
-	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; fi
+	if test -z "$PRJ"; then PRJ="$OS_PROJECT_NAME"; PRJ_ID_UNSET=1; fi
 	if test "$REQSCOPE" = "project"; then FN="$FN.$PRJ"; fi
 	echo "$HOME/tmp/.otc.cache.$FN"
 }
