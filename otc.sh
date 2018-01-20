@@ -230,7 +230,7 @@ docurl()
 				local OLDDC=$DISCARDCACHE
 				DISCARDCACHE=1
 				if test -n "$PRJ_ID_UNSET"; then unset OS_PROJECT_ID; fi
-				getIAMToken || exit $?
+				getIAMToken $REQSCOPE || exit $?
 				DISCARDCACHE=$OLDDC
 				declare -a ARGS
 				for a in "$@"; do ARGS[${#ARGS[@]}]=$(echo $a | sed "s/Token: MII[^ ]*/Token: $TOKEN/"); done
