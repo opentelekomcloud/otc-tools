@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.7
+VERSION=0.8.8
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1227,6 +1227,7 @@ iamHelp()
 	echo "otc iam project         # output project_id/tenant_id"
 	echo "otc iam listprojects    # output project list"
 	echo "otc iam showproject ID  # show details of project"
+	echo "otc iam showextproject ID         # show details of project including status"
 	echo "otc iam createproject NAME        # create project (opt: --description)"
 	echo "otc iam deleteproject ID          # delete project (fails on OTC to avoid orphaned resrcs)"
 	echo "otc iam cleanproject ID           # recursive project cleanup (grace period of some hours)"
@@ -5980,6 +5981,10 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listproject" ] ||
      [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listprojects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.description' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listextproject" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listextprojects" ]; then
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}-ext/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.status+"   "+.description' | tr -d '"'
+	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "createproject" ]; then
 	createPROJECT "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteproject" ]; then
@@ -5991,7 +5996,14 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "recoverproject" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
    ID="$1"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	if test -z "$ID"; then echo "No such project" 1>&2; exit 2; fi
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
+	ERR=${PIPESTATUS[0]}
+elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showextproject" ]; then
+   ID="$1"
+	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
+	if test -z "$ID"; then echo "No such project" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}-ext/projects/$ID" | jq -r '.'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam" -a "$SUBCOM" == "project" ] ||
      [ "$MAINCOM" == "iam" -a "$SUBCOM" == "tenant" ]; then
