@@ -911,7 +911,7 @@ ecsHelp()
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-	echo "    --tenancy             <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
+	echo "    --tenancy             <TENANCY>       # use 'dedicated' for auto-placement on matching DedicatedHost"
 	echo "    --dedicated-host-id   <HOSTID>        # use UUID of preexisting DedicatedHost for direct placement"
 	echo "    --datadisks           <DATADISK>      # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                          #   example: SSD:20,SATA:50"
@@ -1843,6 +1843,10 @@ getECSVM()
 	echo -n ", \"interfaceAttachments\": "
 	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
 	if test $RC != 0; then echo "}"; return $RC; fi
+	AUTOREC=$(curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/$ECS_ID/autorecovery")
+	if test $? = 0 && echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
+		echo ", \"autorecovery\": $AUTOREC"
+	fi
 	MYTAGS=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/tags")
 	if test $? != 0 -o -z "$MYTAGS" -o "$MYTAGS" = "\"tags\": []"; then echo "}"; return $RC; fi
 	echo ", \"tags\": $(echo $MYTAGS | jq -r '.[]')"
@@ -3734,6 +3738,11 @@ ECSCreate()
 		OPTIONAL="$OPTIONAL
 			\"tags\": [ $(keyval2list $TAGS) ],"
 	fi
+
+	if test -n "$AUTORECOV"; then
+		OPTIONAL="$OPTIONAL
+			\"extendparam\": { \"support_auto_recovery\": \"$AUTORECOV\" },"
+	fi 	
 
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
@@ -5638,7 +5647,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		if false && test -n "$EIP" -a "$ECSID" != "null"; then
 			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
 		fi
-		if test -n "$AUTORECOV"; then setAutoRecov $ECSID; fi
+		#if test -n "$AUTORECOV"; then setAutoRecov $ECSID; fi
 	fi
 
 	WaitForTask $ECSTASKID 5
