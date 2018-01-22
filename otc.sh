@@ -54,7 +54,7 @@ warn_too_open()
 {
 	PERM=$(stat -Lc "%a" "$1")
 	if test "${PERM:2:1}" != "0"; then
-		echo "Warning: $1 permissions too open ($PERM)" 1>&2
+		echo "#Warning: $1 permissions too open ($PERM)" 1>&2
 	fi
 }
 
@@ -62,7 +62,7 @@ may_read_env_files()
 {
 	for file in "$@"; do
 		if test -r "$file"; then
-			echo "Note: Reading environment from $file ..." 1>&2
+			echo "#Note: Reading environment from $file ..." 1>&2
 			source "$file"
 			warn_too_open "$file"
 			if test -n "$OS_PASSWORD" -a -n "$OS_USERNAME"; then break; fi
@@ -76,7 +76,7 @@ if test -r ~/.otc_env.sh; then
 	source ~/.otc_env.sh
 	warn_too_open ~/.otc_env.sh
 #else
-#	echo "Note: No ~/.otc_env.sh found, no defaults for ECS creation" 1>&2
+#	echo "#Note: No ~/.otc_env.sh found, no defaults for ECS creation" 1>&2
 fi
 # Parse standard OpenStack environment setting files if needed
 if test -z "$OS_PASSWORD" -o -z "$OS_USERNAME"; then
@@ -104,12 +104,12 @@ if test -z "$MAXGETKB"; then
 fi
 # S3 environment
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc.$OTC_TENANT; then
-	echo "Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..." 1>&2
+	echo "#Note: Reading S3 environment from ~/.s3rc.$OTC_TENANT ..." 1>&2
 	source ~/.s3rc.$OTC_TENANT
 	warn_too_open ~/.s3rc.$OTC_TENANT
 fi
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/.s3rc; then
-	echo "Note: Reading S3 environment from ~/.s3rc ..." 1>&2
+	echo "#Note: Reading S3 environment from ~/.s3rc ..." 1>&2
 	source ~/.s3rc
 	warn_too_open ~/.s3rc
 fi
@@ -120,7 +120,7 @@ else
 	CRED=credentials.csv
 fi
 if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
-	echo -n "Note: Parsing S3 $CRED ... " 1>&2
+	echo -n "#Note: Parsing S3 $CRED ... " 1>&2
 	LN=$(tail -n1 ~/$CRED | sed 's/"//g')
 	UNM=${LN%%,*}
 	LN=${LN#*,}
@@ -192,7 +192,7 @@ docurl()
 	local ANS RC TMPHDR
 	if test -n "$DEBUG"; then
 		TKNDEB=$(echo "$@" | hashtoken)
-		echo "DEBUG: docurl $INS $@" | sed -e "s/-Token: MII[^ ]*/-Token: MII$TKNDEB/g" -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
+		echo "#DEBUG: docurl $INS $@" | sed -e "s/-Token: MII[^ ]*/-Token: MII$TKNDEB/g" -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
 			TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
@@ -206,7 +206,7 @@ docurl()
 			RC=$?
 		fi
 		TKNDEB=$(echo "$ANS" | hashtoken)
-		echo "DEBUG: ($RC) $ANS" | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
+		echo "#DEBUG: ($RC) $ANS" | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
 		#echo "$ANS"
 	else
 		ANS=`curl $INS "$@"`
@@ -226,7 +226,7 @@ docurl()
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
 			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
-				echo "$MSG -> Retry" 1>&2
+				echo "#Note: $MSG -> Retry" 1>&2
 				local OLDDC=$DISCARDCACHE
 				DISCARDCACHE=1
 				if test -n "$PRJ_ID_UNSET"; then unset OS_PROJECT_ID; fi
