@@ -917,6 +917,7 @@ ecsHelp()
 	echo "                                          #   example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
 	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
+	echo "    --autorecovery true/false             # set autorecovery (Xen only)"
 	echo "    --[no]wait"
 	echo
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
@@ -3856,6 +3857,12 @@ ECSStop()
 	#return $?
 }
 
+setAutoRecov()
+{
+	if test "$AUTORECOV" != "true" -a "$AUTORECOV" != "True" -a "$AUTORECOV" != "false" -a "$AUTORECOV" != "False"; then echo "ERROR: --autorecovery needs to be set to true or false" 1>&2; exit 1; fi
+	curlputauth $TOKEN "{ \"support_auto_recovery\": \"$AUTORECOV\" }" "$AUTH_URL_ECS_CLOUD/$1/autorecovery"
+}
+
 appendparm()
 {
 	if test -z "$PARMS"; then
@@ -3907,6 +3914,7 @@ ECSUpdate()
 			done
 		fi
 	fi
+	if test -n "$AUTORECOV"; then setAutoRecov $ECS_ID; fi
 	return $RC
 }
 
@@ -5390,6 +5398,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				VBD=1;;
 			--datadisks)
 				DATADISKS="$2"; shift;;
+			--autorecovery)
+				AUTORECOV="$2"; shift;;
 			--tags)
 				TAGS="$2"; shift;;
 			--metadata-json)
@@ -5628,6 +5638,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		if false && test -n "$EIP" -a "$ECSID" != "null"; then
 			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
 		fi
+		if test -n "$AUTORECOV"; then setAutoRecov $ECSID; fi
 	fi
 
 	WaitForTask $ECSTASKID 5
