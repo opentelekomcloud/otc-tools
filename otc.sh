@@ -198,7 +198,7 @@ docurl()
 			ANS=`curl $INS -D $TMPHDR "$@"`
 			RC=$?
 			TKNDEB=$(cat $TMPHDR | hashtoken)
-			echo -n "DEBUG: Header" 1>&2
+			echo -n "#DEBUG: Header" 1>&2
 			cat $TMPHDR  | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
 			rm $TMPHDR
 		else
@@ -392,7 +392,7 @@ curladdorreplace()
 	local VAL
 	if test -z "$4"; then CTYPE="application/json"; else CTYPE="$4"; fi
 	VAL=$(curlgetauth "$TKN" "$1" | jq ".$2"; return ${PIPESTATUS[0]})
-	echo "DEBUG: /$2: $VAL -> $3" 1>&2
+	echo "#DEBUG: /$2: $VAL -> $3" 1>&2
 	if test "$VAL" = "null"; then
 		if test -z "$3"; then
 			echo "WARN: Nothing to do, /$2 already non-existent" 1>&2
