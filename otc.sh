@@ -4089,6 +4089,7 @@ EVSUpdate()
 	fi
 	if test -n $TAGS; then
 		if test -z "$VOLUME_DESC"; then VOLUME_DESC=" "; fi
+		echo "#Warning: Updating tags not supported" 1>&2
 		curlputauth $TOKEN "{ \"volume\": { \"description\": \"$VOLUME_DESC\", \"tags\": { $(keyval2json $TAGS) } } }" $AUTH_URL_CVOLUMES/$EVS_ID | jq -r '.'
 	fi
 	return ${PIPESTATUS[0]}
