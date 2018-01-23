@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.8
+VERSION=0.8.9
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1624,7 +1624,7 @@ convertSECUGROUPNameToId()
 		exit 3
 	fi
 	if test `echo "$SECUGROUP" | wc -w` != 1; then
-		echo "Warn: Non-unique Security Group mapping: $1 -> $SECUGROUP" 1>&2
+		echo "#Warning: Non-unique Security Group mapping: $1 -> $SECUGROUP" 1>&2
 		SECUGROUP=`echo "$SECUGROUP" | head -n 1`
 	fi
 	export SECUGROUP
@@ -1650,7 +1650,7 @@ convertIMAGENameToId()
 	fi
 	if test "$(echo "$IMAGE_ID" | wc -w)" != "1"; then
 		IMAGE_ID=$(echo "$IMAGE_ID" | head -n1)
-		echo "Warn: Multiple images found by that name; using $IMAGE_ID" 1>&2
+		echo "#Warning: Multiple images found by that name; using $IMAGE_ID" 1>&2
 	fi
 	#if test -n "$DEBUG"; then echo "Image ID: $IMAGE_ID" 1>&2; fi
 	export IMAGE_ID
@@ -1670,7 +1670,7 @@ convertECSNameToId()
 	fi
 	if test "$(echo "$ECS_ID" | wc -w)" != "1"; then
 		ECS_ID=$(echo "$ECS_ID" | head -n1)
-		echo "Warn: Multiple VMs found by that name; using $ECS_ID" 1>&2
+		echo "#Warning: Multiple VMs found by that name; using $ECS_ID" 1>&2
 	fi
 	export ECS_ID
 	return $RC
@@ -1689,7 +1689,7 @@ convertEVSNameToId()
 	fi
 	if test "$(echo "$EVS_ID" | wc -w)" != "1"; then
 		EVS_ID=$(echo "$EVS_ID" | head -n1)
-		echo "Warn: Multiple volumes found by that name; using $EVS_ID" 1>&2
+		echo "#Warning: Multiple volumes found by that name; using $EVS_ID" 1>&2
 	fi
 	export EVS_ID
 	return $RC
@@ -1708,7 +1708,7 @@ convertBackupNameToId()
 	fi
 	if test "$(echo "$BACK_ID" | wc -w)" != "1"; then
 		BACK_ID=$(echo "$BACK_ID" | head -n1)
-		echo "Warn: Multiple backups found by that name; using $BACK_ID" 1>&2
+		echo "#Warning: Multiple backups found by that name; using $BACK_ID" 1>&2
 	fi
 	export BACK_ID
 	return $RC
@@ -1726,7 +1726,7 @@ convertBackupPolicyNameToId()
 	fi
 	if test "$(echo "$BACKPOL_ID" | wc -w)" != "1"; then
 		BACKPOL_ID=$(echo "$BACKPOL_ID" | head -n1)
-		echo "Warn: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
+		echo "#Warning: Multiple backups found by that name; using $BACKPOL_ID" 1>&2
 	fi
 	export BACKPOL_ID
 	return $RC
@@ -1745,7 +1745,7 @@ convertSnapshotNameToId()
 	fi
 	if test "$(echo "$SNAP_ID" | wc -w)" != "1"; then
 		SNAP_ID=$(echo "$SNAP_ID" | head -n1)
-		echo "Warn: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
+		echo "#Warning: Multiple snapshots found by that name; using $SNAP_ID" 1>&2
 	fi
 	export SNAP_ID
 	return $RC
@@ -2560,7 +2560,7 @@ deleteRDSInstanceImpl()
 	local numberOfManualBackupsToKeep=$2
 	local URI="${AUTH_URL_RDS_DOMAIN}/instances/${instanceid}"
 	#local URI="${AUTH_URL_RDS_PROJECT}/instances/${instanceid}"
-	echo "Note: Try deleting instance $instanceid" 1>&2
+	echo "#Note: Try deleting instance $instanceid" 1>&2
 	#echo "URI: $URI"
 	#echo "TOKEN: $TOKEN"
 	curldeleteauthwithjsonparameter \
@@ -3577,7 +3577,7 @@ ECSDetachVolumeListName()
 	for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 		volume_az=$(getEVSDetail ${dev_vol#*:} | jq .availability_zone)
 		#if [ $AZ != ${volume_az//\"/} ]; then
-		#	echo "WARNING: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT DETACHING" 1>&2
+		#	echo "#Warning: availablity zone of ECS ${ecs} does not correspond to availabilty zone of volume ${dev_vol}, NOT DETACHING" 1>&2
 		#fi
 		ECSDetachVolumeName "$ecs" $dev_vol
 	done
@@ -4277,7 +4277,7 @@ WaitForTask()
 	else
 		getECSJOBList $1
 		echo "#$ECSJOBSTATUSJSON" 1>&2
-		echo "Note: Not waiting for completion, use otc task show $1 to monitor and otc task wait to wait)"
+		echo "#Note: Not waiting for completion, use otc task show $1 to monitor and otc task wait to wait)"
 	fi
 }
 
@@ -5225,7 +5225,7 @@ getMeta()
 # Package dependency #####################################################################
 
 # check libs3 installed
-command -v s3 >/dev/null 2>&1 || { echo -n>&2 "Note: otc requires libs3 package to be installed for object storage operations.
+command -v s3 >/dev/null 2>&1 || { echo -n>&2 "#Note: otc requires libs3 package to be installed for object storage operations.
 Please install libs3 or libs3-2 using yum/apt-get/zypper.
 Continuing anyway ..."; }
 
