@@ -973,6 +973,7 @@ evsHelp()
 	echo "    --multiattach               # create shareable volume"
 	echo "    --crypt CRYPTKEYID          # encryption"
 	echo "    --scsi/--vbd                # SCSI passthrough or plain VBD attachment"
+	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
 	echo "otc evs update                  # change volume setting (name, descr, type, ...)"
 	echo "otc evs delete                  # delete volume"
 	echo
@@ -1264,7 +1265,7 @@ iamHelp()
 	echo "otc iam listusers       # get user list"
 	echo "otc iam adduser USER    # create user with username USER"
 	echo "   --password PWD       # password"
-	echo "   --en/disabled	      # disabled/enabled(default)"
+	echo "   --en/disabled        # disabled/enabled(default)"
 	echo "   --default-project ID # set default project ID"
 	echo "   --description DESC   # description of user"
 	echo "   --name USER          # change username"
@@ -1377,7 +1378,7 @@ otcnewHelp()
 	echo "otc antiddos list       # List AntiDDOS policies"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc shares list         # List shared filesystems"
-	echo "otc tags list           # List shared filesystems"
+	echo "otc tags list           # List tags"
 	echo "otc cache list          # List distributed cache instances"
 	echo "otc dws list            # List data warehous clusters"
 	echo "otc serverbackup list   # List server backup checkpoints"
@@ -2165,6 +2166,15 @@ getEVSDetail()
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1200" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
+	return ${PIPESTATUS[0]}
+}
+
+getEVSDetailExt()
+{
+	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
+	setlimit; setapilimit 2400 30 volumes
+	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES_DETAILS$PARAMSTRING" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	#curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4015,6 +4025,10 @@ EVSCreate()
 		OPTIONAL="$OPTIONAL
 			\"backup_id\": \"$BACKUPID\","
 	fi
+	if test -n "$TAGS"; then
+		OPTIONAL="$OPTIONAL
+			\"tags\": { $(keyval2json $TAGS) },"
+	fi
 	if test -n "$CRYPTKEYID"; then META="$META \"__system__encrypted\": \"1\", \"__system__cmkid\": \"$CRYPTKEYID\","; fi
 	if test -n "$SCSI"; then META="$META \"hw:passthrough\": \"true\",";  fi
 	if test -n "$VBD";  then META="$META \"hw:passthrough\": \"false\","; fi
@@ -4066,9 +4080,17 @@ EVSUpdate()
 	if test -n "$VOLUME_NAME"; then OPTIONAL="$OPTIONAL \"name\": \"$VOLUME_NAME\","; fi
 	if test -n "$VOLUME_DESC"; then OPTIONAL="$OPTIONAL \"description\": \"$VOLUME_DESC\","; fi
 
-	if test -z "$OPTIONAL"; then echo "WARN: No changes specified" 1>&2; exit 1; fi
+	if test -z "$OPTIONAL" -a -z "$TAGS"; then
+		echo "WARN: No changes specified" 1>&2; exit 1
+	fi
 
-	curlputauth $TOKEN "{ \"volume\": { ${OPTIONAL%,} } }" "$AUTH_URL_VOLS/$EVS_ID" | jq -r '.'
+	if test -n "$OPTIONAL"; then
+		curlputauth $TOKEN "{ \"volume\": { ${OPTIONAL%,} } }" "$AUTH_URL_VOLS/$EVS_ID" | jq -r '.'
+	fi
+	if test -n $TAGS; then
+		if test -z "$VOLUME_DESC"; then VOLUME_DESC=" "; fi
+		curlputauth $TOKEN "{ \"volume\": { \"description\": \"$VOLUME_DESC\", \"tags\": { $(keyval2json $TAGS) } } }" $AUTH_URL_CVOLUMES/$EVS_ID | jq -r '.'
+	fi
 	return ${PIPESTATUS[0]}
 }
 
@@ -6063,6 +6085,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "describe-volumes" ] ||
      [ "$MAINCOM" == "evs" -a "$SUBCOM" == "show" ]; then
 	getEVSDetail $1
+elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "describe" ]; then
+	getEVSDetailExt $1
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
