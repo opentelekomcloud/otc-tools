@@ -5589,6 +5589,7 @@ if [ "$MAINCOM" = "datawarehouse" ]; then MAINCOM="dws"; fi
 if [ "$MAINCOM" = "csbs" ]; then MAINCOM="serverbackup"; fi
 if [ "$MAINCOM" = "maas" ]; then MAINCOM="migration"; fi
 if [ "$MAINCOM" = "designate" ]; then MAINCOM="domain"; fi
+if [ "$MAINCOM" = "tag" ]; then MAINCOM="tags"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
