@@ -1839,25 +1839,24 @@ handleCustom()
 getECSVM()
 {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
-	#echo -n "{ \"server\": "
-	ECSJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'`
-	local RC=${PIPESTATUS[0]}
+	local ECSJSON IFACEJSON AUTOREC MYTAGS RC
+	ECSJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'; exit ${PIPESTATUS[0]}`
+	RC=$?
 	if test $RC != 0; then echo "$ECSJSON"; return $RC; fi
-	#echo -n ", \"interfaceAttachments\": "
-	IFACEJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'`
-	if test ${PIPESTATUS[0]} != 0; then
+	IFACEJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'; exit ${PIPESTATUS[0]}`
+	if test $? != 0; then
 		IFACEJSON=""
 	else
 		IFACEJSON=", \"interfaceAttachments\": $IFACEJSON"
 	fi
 	AUTOREC=$(curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/$ECS_ID/autorecovery")
-	if test ${PIPESTATUS[0]} != 0 || ! echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
+	if test $? != 0 || ! echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
 		AUTOREC=""
 	else
 		AUTOREC=", \"autorecovery\": $AUTOREC"
 	fi
 	MYTAGS=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/tags")
-	if test ${PIPESTATUS[0]} != 0; then # -o "$MYTAGS" == '{"tags": []}'; then
+	if test $? != 0; then # -o "$MYTAGS" == '{"tags": []}'; then
 		MYTAGS=""
 	else
 		MYTAGS="${MYTAGS%\}}"
@@ -2185,12 +2184,13 @@ getEVSDetailExt()
 {
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
 	TAGS=`curlgetauth $TOKEN "${AUTH_URL_VOLS%/volumes}/os-vendor-tags/volumes/$EVS_ID"`
+	local RC=$?
 	TAGS="${TAGS#\{}"; TAGS="${TAGS%\}}"
 	if test -n "$TAGS"; then TAGS=",\n  $TAGS"; fi
 	setlimit; setapilimit 2400 30 volumes
 	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES_DETAILS$PARAMSTRING" | jq '.volumes[] | select(.id == "'$EVS_ID'")' | sed "s/^  }$/  }$TAGS/" | jq -r '.'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
-	return ${PIPESTATUS[0]}
+	return $(($RC+${PIPESTATUS[0]}))
 }
 
 getSnapshotList()
