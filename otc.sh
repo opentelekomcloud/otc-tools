@@ -927,11 +927,12 @@ ecsHelp()
 	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
 	echo "otc ecs start-instances <id>    # start ecs instance <id>"
 	echo "otc ecs delete                  # delete VM"
-	#echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
+	echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
+	echo "    --rename                    # prepend DEL_ to ECS names prior to queuing for deletion"
 	echo "    --[no]wait                  # wait for completion (default: no)"
 	echo "    --keepEIP                   # default: delete EIP too"
 	echo "    --delVolume                 # default: delete only system volume, not any volume attached"
-	echo "    <ecs> <ecs> ...             # you could give IDs or names"
+	echo "    <ecs> <ecs> ...             # specify IDs or names"
 	echo "otc ecs job <id>                # show status of job <id>"
 	echo "otc ecs limits                  # display project quotas"
 	echo "otc ecs az-list                 # list availability zones"
@@ -3948,14 +3949,17 @@ ECSDelete()
 			--delVolume) delete_volume="true"   ; shift  ;;
 			--wait)      WAIT_FOR_JOB="true"    ; shift  ;;
 			--nowait)    WAIT_FOR_JOB="false"   ; shift  ;;
+			--rename)    DELRENAME="true"       ; shift  ;;
 			*)           break;;
 		esac
 	done
 	ERR=0
 	for ecs in $@; do
+		unset NAME
 		if ! is_uuid "$ecs"; then
-			NAME="${ecs// /%20}"
-			ecs=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$ecs'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
+			NAME=$ecs
+			QNAME="${NAME// /%20}"
+			ecs=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$QNAME" | jq '.servers[] | select(.name == "'$NAME'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 			if test $? != 0 -o -z "$ecs" -o "$ecs" = "null"; then
 				echo "ERROR: ECSDelete: No such VM $NAME" 1>&2
 				let ERR+=1
@@ -3966,6 +3970,10 @@ ECSDelete()
 		for id in $ecs; do
 			IDS="$IDS { \"id\": \"$id\" },"
 			[ -n "$DEV_VOL" ] && ECSDetachVolumeListName "$id" "$DEV_VOL" ##### detach some external volumes before deleting the vm
+			if [ -n "$DELRENAME" ]; then
+				if test -z "$NAME"; then NAME=`curlgetauth $TOKEN "$AUTH_URL_ECS/$id" | jq '.server.name' | tr -d '"'`; fi
+				curlputauth $TOKEN "{ \"server\": { \"name\": \"DEL_$NAME\" } }" "$AUTH_URL_ECS/$id" >/dev/null
+			fi
 		done
 	done
 	##### TODO: we have to wait here until detachments were finished -- otherwize we run into a deadlock!
