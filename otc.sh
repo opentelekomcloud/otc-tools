@@ -1839,22 +1839,32 @@ handleCustom()
 getECSVM()
 {
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
-	echo -n "{ \"server\": "
-	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'
+	#echo -n "{ \"server\": "
+	ECSJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID" | jq -r '.[]'`
 	local RC=${PIPESTATUS[0]}
-	if test $RC != 0; then echo "}"; return $RC; fi
-	echo -n ", \"interfaceAttachments\": "
-	curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'
-	if test $RC != 0; then echo "}"; return $RC; fi
+	if test $RC != 0; then echo "$ECSJSON"; return $RC; fi
+	#echo -n ", \"interfaceAttachments\": "
+	IFACEJSON=`curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/os-interface" | jq -r '.[]'`
+	if test ${PIPESTATUS[0]} != 0; then
+		IFACEJSON=""
+	else
+		IFACEJSON=", \"interfaceAttachments\": $IFACEJSON"
+	fi
 	AUTOREC=$(curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/$ECS_ID/autorecovery")
-	if test $? = 0 && echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
-		echo ", \"autorecovery\": $AUTOREC"
+	if test ${PIPESTATUS[0]} != 0 || ! echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
+		AUTOREC=""
+	else
+		AUTOREC=", \"autorecovery\": $AUTOREC"
 	fi
 	MYTAGS=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECS_ID/tags")
-	if test $? != 0 -o -z "$MYTAGS" -o "$MYTAGS" = "\"tags\": []"; then echo "}"; return $RC; fi
-	echo ", \"tags\": $(echo $MYTAGS | jq -r '.[]')"
-	echo "}"
-	return ${PIPESTATUS[0]}
+	if test ${PIPESTATUS[0]} != 0; then # -o "$MYTAGS" == '{"tags": []}'; then
+		MYTAGS=""
+	else
+		MYTAGS="${MYTAGS%\}}"
+		MYTAGS=", ${MYTAGS#\{}"
+	fi
+	echo "{ \"server\": $ECSJSON $IFACEJSON $AUTOREC $MYTAGS }" | jq -r '.'
+	return $RC
 }
 
 getShortECSList()
