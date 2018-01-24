@@ -966,6 +966,7 @@ evsHelp()
 	echo "otc evs list [FILTERS]          # list all volumes (only id and name)"
 	echo "otc evs details [FILTERS]       # detailed list all volumes (opt. key=value filters)"
 	echo "otc evs show <id>               # show details of volume <id>"
+	echo "otc evs describe <id>           # old iface for vol details, includes tags"
 	echo "otc evs create                  # create a volume"
 	echo "    --volume-name         <NAME>"
 	echo "    --disksize            <DISKGB>"
@@ -2173,8 +2174,11 @@ getEVSDetail()
 getEVSDetailExt()
 {
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
+	TAGS=`curlgetauth $TOKEN "${AUTH_URL_VOLS%/volumes}/os-vendor-tags/volumes/$EVS_ID"`
+	TAGS="${TAGS#\{}"; TAGS="${TAGS%\}}"
+	if test -n "$TAGS"; then TAGS=",\n  $TAGS"; fi
 	setlimit; setapilimit 2400 30 volumes
-	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES_DETAILS$PARAMSTRING" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	curlgetauth_pag $TOKEN "$AUTH_URL_CVOLUMES_DETAILS$PARAMSTRING" | jq '.volumes[] | select(.id == "'$EVS_ID'")' | sed "s/^  }$/  }$TAGS/" | jq -r '.'
 	#curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
 	return ${PIPESTATUS[0]}
 }
@@ -4096,9 +4100,12 @@ EVSUpdate()
 		curlputauth $TOKEN "{ \"volume\": { ${OPTIONAL%,} } }" "$AUTH_URL_VOLS/$EVS_ID" | jq -r '.'
 	fi
 	if test -n $TAGS; then
-		if test -z "$VOLUME_DESC"; then VOLUME_DESC=" "; fi
-		echo "#Warning: Updating tags not supported" 1>&2
-		curlputauth $TOKEN "{ \"volume\": { \"description\": \"$VOLUME_DESC\", \"tags\": { $(keyval2json $TAGS) } } }" $AUTH_URL_CVOLUMES/$EVS_ID | jq -r '.'
+		#TAGS=`curlgetauth $TOKEN "${AUTH_URL_VOLS%/volumes}/os-vendor-tags/volumes/$EVS_ID"`
+		if test "$REPLACE" == "1"; then
+			curlputauth $TOKEN "{ \"tags\": { $(keyval2json $TAGS) } }" "${AUTH_URL_VOLS%/volumes}/os-vendor-tags/volumes/$EVS_ID" | jq -r '.'
+		else
+			curlpostauth $TOKEN "{ \"tags\": { $(keyval2json $TAGS) } }" "${AUTH_URL_VOLS%/volumes}/os-vendor-tags/volumes/$EVS_ID" | jq -r '.'
+		fi
 	fi
 	return ${PIPESTATUS[0]}
 }
