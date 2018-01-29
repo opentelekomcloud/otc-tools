@@ -5682,16 +5682,16 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 
 	ECSID="null"
 	if [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" -o "$WAIT_FOR_JOB" != "false" ]; then
-		WaitForSubTask $ECSTASKID 5    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
+		WaitForSubTask $ECSTASKID 4    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
 		declare -i ctr=0
 		while [ null = "$ECSID" -a $ctr -le 400 ]; do
 			echo -n "."
 			let ctr+=1
-			sleep 5
+			sleep 4
 			getECSJOBList $ECSSUBTASKID
 			ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | tr -d '"')
 		done
-		if test $ctr -ge 400; then echo "TIMEOUT"; else echo; fi
+		if test $ctr -ge 500; then echo "TIMEOUT"; else echo; fi
 		#FIXME: Old code, disabled
 		if false && test -n "$EIP" -a "$ECSID" != "null"; then
 			BindPublicIpToCreatingVM || echo "ERROR binding external IP $EIP" >&2
@@ -5699,7 +5699,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		#if test -n "$AUTORECOV"; then setAutoRecov $ECSID; fi
 	fi
 
-	WaitForTask $ECSTASKID 5
+	WaitForTask $ECSTASKID 2
 	if [ "null" == "$ECSID" ]; then
 		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | tr -d '"')
 	fi
@@ -5762,7 +5762,7 @@ elif [ "$MAINCOM" == "task" -a "$SUBCOM" == "help" ]; then
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "delete" ]; then
 	ECSDelete $@
-	WaitForTask $ECSTASKID 5
+	WaitForTask $ECSTASKID 2
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "update" ]; then
 	ECSUpdate "$@"
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "az-list" ] ||
@@ -6117,14 +6117,14 @@ elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "describe" ]; then
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
-	#WaitForTask $EVSTASKID 5
+	#WaitForTask $EVSTASKID 2
 	WaitForTaskFieldOpt $EVSTASKID '.entities.volume_id' 5
 elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "update" ]; then
 	EVSUpdate "$@"
 elif [ "$MAINCOM" == "evs"  -a "$SUBCOM" == "delete" ]; then
 	EVSDelete "$@"
 	echo "Task ID: $EVSTASKID"
-	WaitForTask $EVSTASKID 5
+	WaitForTask $EVSTASKID 2
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "attach" ]; then
 	if [ "$1" = -n ] || [ "$1" = --name ]
 	then
