@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.10
+VERSION=0.8.11
 
 # Get Config ####################################################################
 warn_too_open()
@@ -219,10 +219,12 @@ docurl()
 			dumphtml "$ANS" 1>&2; return 9
 		fi
 		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
+		local ECODE=$(echo "$ANS"| jq '.error.error_code' 2>/dev/null)
 		if test "$CODE" == "null"; then
-			local CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
+			CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
 			if test "${CODE:0:4}" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
+		#if test -z "$CODE" -o "$CODE" == "null" && test "$ECODE" != "null"; then CODE="$ECODE"; fi
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
 			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
@@ -240,6 +242,7 @@ docurl()
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			if test "$ECODE" != "null"; then RC=9; fi
 		fi
 		# PUT/HEAD onlyreturn an HTTP header
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
@@ -871,6 +874,23 @@ keyval2json()
 	echo "${JSON%,}"
 }	
 
+keyval2keyvalue()
+{
+	local JSON=""
+	OLDIFS="$IFS"
+	IFS=","
+	for tag in $*; do
+		KEY="${tag%%=*}"
+		if test "$KEY" != "$tag"; then
+			VAL="$(jsonesc ${tag#*=})"
+			JSON="$JSON { \"key\": \"$KEY\", \"value\": $VAL },"
+		else
+			JSON="$JSON { \"key\": \"$KEY\" },"
+		fi
+	done
+	IFS="$OLDIFS"
+	echo "${JSON%,}"
+}
 
 # Usage
 ecsHelp()
@@ -1371,6 +1391,14 @@ customHelp()
 	echo "      e.g.: --jqfilter '.servers[] | .id+\\\"   \\\"+.name' GET \\\$NOVA_URL/servers"
 }
 
+tagHelp()
+{
+	echo "--- OTC2.x new services ---"
+	echo "otc tags list           # List predefined tags"
+	echo "otc tags create KEY=VAL [KEY2=VAL2 [...]] # Create tags"
+	echo "otc tags delete KEY=VAL [KEY2=VAL2 [...]] # Delete tags"
+}
+
 otcnewHelp()
 {
 	echo "--- OTC2.x new services ---"
@@ -1380,7 +1408,6 @@ otcnewHelp()
 	echo "otc antiddos list       # List AntiDDOS policies"
 	echo "otc kms list            # List keys from key management service"
 	echo "otc shares list         # List shared filesystems"
-	echo "otc tags list           # List tags"
 	echo "otc cache list          # List distributed cache instances"
 	echo "otc dws list            # List data warehous clusters"
 	echo "otc serverbackup list   # List server backup checkpoints"
@@ -1460,6 +1487,8 @@ printHelp()
 	smnHelp
 	echo
 	dmsHelp
+	echo
+	tagHelp
 	echo
 	otcnewHelp
 	echo
@@ -5169,10 +5198,22 @@ listShares()
 	curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.'
 }
 
+createTags()
+{
+	local KEYJSON=$(keyval2keyvalue "$@")
+	curlpostauth $TOKEN "{ \"action\": \"create\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action" 
+}
+
+deleteTags()
+{
+	local KEYJSON=$(keyval2keyvalue "$@")
+	curlpostauth $TOKEN "{ \"action\": \"delete\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action" 
+}
+
 listTags()
 {
 	# TODO: Translate into list format
-	curlgetauth $TOKEN "$AUTH_URL_TMS/predefine_tags" | jq -r '.'
+	curlgetauth $TOKEN "$AUTH_URL_TMS/predefine_tags" | jq -r '.tags[] | .key+"="+.value+"   ("+.update_time+")"'
 }
 
 listCaches()
@@ -6443,6 +6484,12 @@ elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "list" ]; then
 	listShares
 elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "list" ]; then
 	listTags
+elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "help" ]; then
+	tagHelp
+elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "create" ]; then
+	createTags "$@"
+elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "delete" ]; then
+	deleteTags "$@"
 elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "list" ]; then
 	listCaches
 elif [ "$MAINCOM" == "cache"  -a "$SUBCOM" == "products" ]; then
