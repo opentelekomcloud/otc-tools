@@ -140,7 +140,8 @@ fi
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
 if test -z "$VOLUMETYPE"; then 
 	if [[ "$INSTANCE_TYPE" == e1.* ]] || [[ "$INSTANCE_TYPE" == e2.* ]] || [[ "$INSTANCE_TYPE" == hl1.* ]]; then
-		VOLUMETYPE=co-p1
+		#VOLUMETYPE=co-p1
+		VOLUMETYPE="uh-l1"
 	else		
 		VOLUMETYPE="SATA"
 	fi
