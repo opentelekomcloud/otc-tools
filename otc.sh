@@ -138,7 +138,13 @@ fi
 
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
-if test -z "$VOLUMETYPE"; then VOLUMETYPE="SATA"; fi
+if test -z "$VOLUMETYPE"; then 
+	if [[ "$INSTANCE_TYPE" == e2.* ]] || [[ "$INSTANCE_TYPE" == hl1.* ]]; then
+		VOLUMETYPE=co-p1
+	else		
+		VOLUMETYPE="SATA"
+	fi
+fi
 
 test -n "$S3_HOSTNAME" || export S3_HOSTNAME=obs.otc.t-systems.com
 
