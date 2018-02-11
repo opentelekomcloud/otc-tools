@@ -233,8 +233,6 @@ docurl()
 			BODY=$(echo "$ANS" | sed "1,/^\s*$(printf '\r')*$/d")
 		else
 			BODY=$ANS
-		fi
-
 		if is_html_err "$BODY"; then
 			dumphtml "$BODY" 1>&2; return 9
 		fi
@@ -262,7 +260,7 @@ docurl()
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
-			if test "$ECODE" != "null"; then RC=9; fi
+			if test -n "$ECODE" -a "$ECODE" != "null"; then RC=9; fi
 		fi
 		# PUT/HEAD onlyreturn an HTTP header
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
