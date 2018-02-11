@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.11
+VERSION=0.8.12
 
 # Get Config ####################################################################
 warn_too_open()
@@ -5213,8 +5213,14 @@ listMigrations()
 
 listShares()
 {
-	# TODO: Translate into list format
-	curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.'
+	#curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.shares[] | .id+"   "+.name'
+	curlgetauth $TOKEN "$AUTH_URL_SFS/shares/detail" | jq -r 'def str(s): s|tostring; .shares[] | .id+"   "+.name+"   "+.status+"   "+.availability_zone+"   "+.share_proto+"   "+str(.size)+"   "+.export_location'
+}
+
+showShare()
+{
+	if ! is_uuid "$1"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_SFS/shares?name=$1" | jq '.shares[].id' | head -n1 | tr -d '"'); else ID=$1; fi 
+	curlgetauth $TOKEN "$AUTH_URL_SFS/shares/$ID" | jq -r '.'
 }
 
 createTags()
@@ -6501,6 +6507,8 @@ elif [ "$MAINCOM" == "antiddos"  -a "$SUBCOM" == "list" ]; then
 	listAntiDDoS
 elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "list" ]; then
 	listShares
+elif [ "$MAINCOM" == "shares"  -a "$SUBCOM" == "show" ]; then
+	showShare "$@"
 elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "list" ]; then
 	listTags
 elif [ "$MAINCOM" == "tags"  -a "$SUBCOM" == "help" ]; then
