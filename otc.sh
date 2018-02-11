@@ -138,11 +138,11 @@ fi
 
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
-if test -z "$VOLUMETYPE"; then 
+if test -z "$VOLUMETYPE"; then
 	if [[ "$INSTANCE_TYPE" == e1.* ]] || [[ "$INSTANCE_TYPE" == e2.* ]] || [[ "$INSTANCE_TYPE" == hl1.* ]]; then
 		#VOLUMETYPE=co-p1
 		VOLUMETYPE="uh-l1"
-	else		
+	else
 		VOLUMETYPE="SATA"
 	fi
 fi
@@ -258,7 +258,7 @@ docurl()
 				for a in "$@"; do ARGS[${#ARGS[@]}]=$(echo $a | sed "s/Token: MII[^ ]*/Token: $TOKEN/"); done
 				docurl "${ARGS[@]}"
 				return
-			fi	
+			fi
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
@@ -588,7 +588,7 @@ getIAMTokenKeystone()
 			 },
 			 '$SCOPE'
 			}
-		 } 
+		 }
 		 '
 		else
 		 IAM_REQ='{
@@ -605,7 +605,7 @@ getIAMTokenKeystone()
 			 },
 			 '$SCOPE'
 			}
-		 } 
+		 }
 		 '
 		fi
 		if test -n "$OS_PROJECT_DOMAIN_NAME"; then
@@ -644,7 +644,7 @@ getIAMToken()
 	fi
 
 	if test -z "$OS_PROJECT_ID"; then PRJ_ID_UNSET=1; fi
-  
+
    REQSCOPE=${1:-project}
 	local IAMRESP TKNFN=$(IAMTokenFilename)
 	export BASEURL="${IAM_AUTH_URL/:443\///}" # remove :443 port when present
@@ -892,7 +892,7 @@ keyval2json()
 	done
 	IFS="$OLDIFS"
 	echo "${JSON%,}"
-}	
+}
 
 keyval2keyvalue()
 {
@@ -2305,7 +2305,7 @@ createBackupPolicy()
 	if test -n "$OPTENABLE"; then OPTSTR=", \"status\": \"ON\""; else OPTSTR=", \"status\": \"OFF\""; fi
 	# "reNtention" is not a bug in the tool, but the API :-O
 	curlpostauth $TOKEN "{ \"backup_policy_name\": \"$NAME\", \"scheduled_policy\": { \"start_time\": \"$BKUPTIME\", \"frequency\": $BKUPFREQ, \"rentention_num\": $BKUPRETAIN, \"remain_first_backup_of_curMonth\": \"$BKUPRETFIRST\"$OPTSTR } }" "$AUTH_URL_CBACKUPPOLS" | jq -r '.'
-	return ${PIPESTATUS[0]} 
+	return ${PIPESTATUS[0]}
 }
 
 updateBackupPolicy()
@@ -3816,7 +3816,7 @@ ECSCreate()
 	if test -n "$AUTORECOV"; then
 		OPTIONAL="$OPTIONAL
 			\"extendparam\": { \"support_auto_recovery\": \"$AUTORECOV\" },"
-	fi 	
+	fi
 
 	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
 
@@ -4857,7 +4857,7 @@ createPROJECT()
 	if test "${NAME:0:$REGLN}" != "$REG"; then echo "WARN: Project creation: Start name with $REG" 1>&2; fi
 	if test -z "$DESCRIPTION" -a -n "$2"; then DESCRIPTION="$*"; fi
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
-	curlpostauth "$TOKEN" "{ \"project\": { \"name\": \"$NAME\"$DESC } }" "${IAM_AUTH_URL%/auth*}/projects" | jq -r '.' 
+	curlpostauth "$TOKEN" "{ \"project\": { \"name\": \"$NAME\"$DESC } }" "${IAM_AUTH_URL%/auth*}/projects" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -5200,20 +5200,20 @@ listKMS()
 
 # Unsupported
 listDirectConnects()
-{	
+{
 	# TODO: Translate into list format
 	curlgetauth $TOKEN "$AUTH_URL_DCAAS/direct-connects" | jq -r '.'
 }
 
 listMigrations()
-{	
+{
 	# TODO: Translate into list format
 	curlgetauth $TOKEN "$AUTH_URL_MAAS/objectstorage/task?start=0&limit=100" | jq -r '.'
 	#curlgetauth $TOKEN "$AUTH_URL_MAAS/objectstorage/task" | jq -r '.'
 }
 
 listShares()
-{	
+{
 	# TODO: Translate into list format
 	curlgetauth $TOKEN "$AUTH_URL_SFS/shares" | jq -r '.'
 }
@@ -5221,13 +5221,13 @@ listShares()
 createTags()
 {
 	local KEYJSON=$(keyval2keyvalue "$@")
-	curlpostauth $TOKEN "{ \"action\": \"create\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action" 
+	curlpostauth $TOKEN "{ \"action\": \"create\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action"
 }
 
 deleteTags()
 {
 	local KEYJSON=$(keyval2keyvalue "$@")
-	curlpostauth $TOKEN "{ \"action\": \"delete\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action" 
+	curlpostauth $TOKEN "{ \"action\": \"delete\", \"tags\": [ $KEYJSON ] }" "$AUTH_URL_TMS/predefine_tags/action"
 }
 
 listTags()
@@ -6244,7 +6244,7 @@ elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "show" ]; then
 elif [ "$MAINCOM" == "snapshot" -a "$SUBCOM" == "delete" ]; then
 	deleteSnapshot "$1"
 
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ] || 
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "help" ] ||
      [ "$MAINCOM" == "ulb" -a "$SUBCOM" == "help" ]; then
 	elbHelp
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "list" ]; then
@@ -6292,7 +6292,7 @@ elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "createcert" ]; then
 	createELBCert "$@"
 elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "updatecert" ]; then
 	modifyELBCert "$@"
-elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcert" ] || 
+elif [ "$MAINCOM" == "elb" -a "$SUBCOM" == "delcert" ] ||
      [ "$MAINCOM" == "elb" -a "$SUBCOM" == "deletecert" ]; then
 	deleteELBCert "$@"
 
@@ -6437,7 +6437,7 @@ elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "help" ]; then
 	otcnewHelp
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "list" ]; then
 	listTrackers
-	
+
 ### RLSH 2017-10-06 #########################################################
 elif [ "$MAINCOM" == "trace" -a "$SUBCOM" == "show" ]; then
 	listTraces $1
