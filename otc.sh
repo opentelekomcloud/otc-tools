@@ -222,18 +222,31 @@ docurl()
 	fi
 	if test $RC != 0; then echo "$ANS" 1>&2; return $RC
 	else
-		if is_html_err "$ANS"; then
-			dumphtml "$ANS" 1>&2; return 9
+		# Sometimes function is called with '-i' and the response contains HTTP headers
+		# For a proper response processing get the pure BODY
+		local BODY
+		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
+		if test -n "$HDR"; then
+			# strip off headers on the first empty string. It is still not 100% solution,
+			# but there is no way to access CURLOPT_HEADERFUNCTION from bash
+			# OS X sed seems to be not handling \r \s correctly, so one with printf should be added
+			BODY=$(echo "$ANS" | sed "1,/^\s*$(printf '\r')*$/d")
+		else
+			BODY=$ANS
 		fi
-		local CODE=$(echo "$ANS"| jq '.code' 2>/dev/null)
-		local ECODE=$(echo "$ANS"| jq '.error.error_code' 2>/dev/null)
+
+		if is_html_err "$BODY"; then
+			dumphtml "$BODY" 1>&2; return 9
+		fi
+		local CODE=$(echo "$BODY"| jq '.code' 2>/dev/null)
+		local ECODE=$(echo "$BODY"| jq '.error.error_code' 2>/dev/null)
 		if test "$CODE" == "null"; then
-			CODE=$(echo "$ANS"| jq '.[] | .code' 2>/dev/null)
+			CODE=$(echo "$BODY"| jq '.[] | .code' 2>/dev/null)
 			if test "${CODE:0:4}" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
 		#if test -z "$CODE" -o "$CODE" == "null" && test "$ECODE" != "null"; then CODE="$ECODE"; fi
 		if test "$INDMS" != 1; then
-			local MSG=$(echo "$ANS"| jq '.message' 2>/dev/null)
+			local MSG=$(echo "$BODY"| jq '.message' 2>/dev/null)
 			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
 				echo "#Note: $MSG -> Retry" 1>&2
 				local OLDDC=$DISCARDCACHE
