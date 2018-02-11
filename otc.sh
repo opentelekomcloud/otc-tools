@@ -233,6 +233,7 @@ docurl()
 			BODY=$(echo "$ANS" | sed "1,/^\s*$(printf '\r')*$/d")
 		else
 			BODY=$ANS
+		fi
 		if is_html_err "$BODY"; then
 			dumphtml "$BODY" 1>&2; return 9
 		fi
