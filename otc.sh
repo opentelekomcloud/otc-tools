@@ -3809,7 +3809,7 @@ ECSCreate()
 	fi
 	if test -n "$TAGS"; then
 		OPTIONAL="$OPTIONAL
-			\"tags\": [ $(keyval2list $TAGS) ],"
+			\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
 	fi
 
 	if test -n "$AUTORECOV"; then
