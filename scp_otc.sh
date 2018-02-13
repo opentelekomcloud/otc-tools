@@ -55,8 +55,10 @@ getvm()
 	if test -z "$MYVPC" -o "$MYVPC" == "null" || ! echo "$VMINFO" | grep "$MYVPC" >/dev/null 2>&1; then
 		PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
 		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
-		echo "Using EIP $EIP instead of IP $IP" 1>&2
-		IP=$EIP
+		if test -n "$EIP"; then
+			echo "Using EIP $EIP instead of IP $IP" 1>&2
+			IP=$EIP
+		fi
 	fi
 }
 
