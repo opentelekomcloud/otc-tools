@@ -68,7 +68,7 @@ getvm()
 		PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
 		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
 		if test -n "$EIP"; then
-			echo "Using EIP $EIP instead of IP $IP" 1>&2
+			echo "#Using EIP $EIP instead of IP $IP" 1>&2
 			IP=$EIP
 		fi
 	fi
@@ -84,7 +84,7 @@ getSSHkey()
 	SSHKEY=~/.ssh/"$KEYNAME.pem"
 	test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
 	if ! test -r $SSHKEY; then 
-		echo -e "${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
+		echo -e "#${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
 		unset SSHKEY
 	else 
 		SSHKEY="-i $SSHKEY"
