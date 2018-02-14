@@ -84,7 +84,7 @@ getSSHkey()
 	SSHKEY=~/.ssh/"$KEYNAME.pem"
 	test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
 	if ! test -r $SSHKEY; then 
-		echo -e "#${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
+		echo -e "${RED}#Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
 		unset SSHKEY
 	else 
 		SSHKEY="-i $SSHKEY"

@@ -106,7 +106,7 @@ getSSHkey()
 	SSHKEY=~/.ssh/"$KEYNAME.pem"
 	test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
 	if ! test -r $SSHKEY; then 
-		echo -e "#${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
+		echo -e "${RED}#Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
 		unset SSHKEY
 	else 
 		SSHKEY="-i $SSHKEY"
@@ -125,7 +125,7 @@ echo "ssh ${ARGS[@]} $SSHKEY $USER@$IP $@" 1>&2
 ssh ${ARGS[@]} $SSHKEY $USER@$IP $@
 RC=$?
 if test "$OS_USER_DOMAIN_NAME" == "OTC00000000001000000210" -o "$OS_USER_DOMAIN_NAME" == "OTC00000000001000010702" -o "$OS_USER_DOMAIN_NAME" == "OTC-AP-SG-00000000001000012052"; then
-	echo -e "#${YELLOW}Delete VM with otc.sh vm delete --rename $VM or nova delete $VM if you no longer need it.${NORM}" 1>&2
+	echo -e "${YELLOW}#Delete VM with otc.sh vm delete --rename $VM or nova delete $VM if you no longer need it.${NORM}" 1>&2
 fi
 exit $RC
 
