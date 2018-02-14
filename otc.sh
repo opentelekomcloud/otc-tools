@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.12
+VERSION=0.8.13
 
 # Get Config ####################################################################
 warn_too_open()
@@ -5281,6 +5281,18 @@ listServerBackups()
 	curlgetauth $TOKEN "$AUTH_URL_CSBS/checkpoint_items" | jq -r '.'
 }
 
+listVPN()
+{
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpn/ipsec-site-connections" | jq '.ipsec_site_connections[] | .id+"   "+.name+"   "+.status+"   "+.auth_mode+"   "+.route_mode+"   "+.peer_address+"   "+.ikepolicy_id+"   "+.ipsecpolicy_id' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+listFWRules()
+{
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/fwaas/firewall_rules" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 listDEH()
 {
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts" | jq 'def tostr(x): x|tostring; .dedicated_hosts[] | .dedicated_host_id+"   "+.name+"   "+.state+"   "+tostr(.instance_total)+"   "+.auto_placement+"   "+.availability_zone+"   "+.host_properties.host_type+"   "+tostr(.available_vcpus)+"   "+tostr(.available_memory)' | tr -d '"'
@@ -6541,6 +6553,10 @@ elif [ "$MAINCOM" == "migration"  -a "$SUBCOM" == "list" ]; then
 	listMigrations
 elif [ "$MAINCOM" == "kms"  -a "$SUBCOM" == "list" ]; then
 	listKMS
+elif [ "$MAINCOM" == "vpn"  -a "$SUBCOM" == "list" ]; then
+	listVPN
+elif [ "$MAINCOM" == "fw"  -a "$SUBCOM" == "list" ]; then
+	listFWRules
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "help" ]; then
 	otcnewHelp
 elif [ "$MAINCOM" == "mrs"  -a "$SUBCOM" == "clusterlist" -o "$SUBCOM" == "listclusters" ]; then
