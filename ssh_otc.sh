@@ -20,6 +20,7 @@ if test -z "$1"; then usage; fi
 
 NORM="\e[0;0m"
 YELLOW="\e[0;33m"
+RED="\e[0;31m"
 
 # FIXME: Should allow for options here ...
 SUSER=linux
@@ -44,15 +45,28 @@ if test "$USER" != "$VM"; then VM=${VM##*@}; else USER=$SUSER; fi
 is_uuid() { echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1; }
 is_ip() { echo "$1" | grep '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' >/dev/null 2>&1; }
 
-if is_ip "$VM"; then 
-	IP=$VM
-else
+getVPC()
+{
+	# By convention, VMs are normally tagged with the VPC in OTC
+	firsttag=$(echo "$VMINFO" | jq '.tags[0]' | tr -d '"')
+	# If not, then look for router ports
+	if is_uuid $firsttag; then echo $firsttag; return 0; fi
+	NET=$(echo "$VMINFO" | jq  '.interfaceAttachments[].net_id' | tr -d '"')
+	VPC=$(otc.sh custom GET "\$NEUTRON_URL/v2.0/ports.json?device_owner=network\:router_interface_distributed\&network_id=$NET" | jq '.ports[].device_id' | tr -d '"')
+	if is_uuid $VPC; then echo $VPC; return 0; fi
+	return 1
+}
+
+getvm()
+{
+	VM=$1
 	if ! is_uuid $VM; then
+		#echo "Looking up VM \"$VM\" ... " 1>&2
 		VM=$(otc.sh vm list name=$VM | head -n1 | awk '{ print $1; }')
-		if ! is_uuid $VM; then echo "No such VM" 1>&2 ; exit 2; fi
+		if ! is_uuid $VM; then echo "No such VM \"$1\"" 1>&2 ; exit 2; fi
 	fi
 
-	VMINFO=$(otc.sh vm show $VM) || { echo "No such VM" 1>&2; exit 2; }
+	VMINFO=$(otc.sh vm show $VM) || { echo "No such VM \"$VM\"" 1>&2; exit 2; }
 	IP=$(echo "$VMINFO" | jq '.interfaceAttachments[].fixed_ips[].ip_address' | tr -d '"' | head -n1)
 	NAME=$(echo "$VMINFO" | jq '.server.name' | tr -d '"')
 	FLAVOR=$(echo "$VMINFO" | jq '.server.flavor.id' | tr -d '"')
@@ -69,23 +83,43 @@ else
 	fi
 	if [[ "$OSVER" = "Ubuntu"* ]] && [ "$USER" == "linux" ]; then USER=ubuntu; fi
 	echo -e "${YELLOW}#VM Info: $VM $NAME $FLAVOR $IMGNAME $OSVER${NORM}" 1>&2
+
+	# Check VPC and use EIP if present and needed
+	MYVPC=$(otc.sh mds meta_data 2>/dev/null | jq .meta.vpc_id | tr -d '"')
+	if test -z "$MYVPC" -o "$MYVPC" == "null" || test "$(getVPC)" != "$MYVPC"; then
+		PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
+		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
+		if test -n "$EIP"; then
+			echo "Using EIP $EIP instead of IP $IP" 1>&2
+			IP=$EIP
+		fi
+	fi
+}
+
+getSSHkey()
+{
+	if test -n "$SSH_AUTH_SOCK"; then
+		KEYS=$(ssh-add -l)
+		if echo "$KEYS" | grep "$KEYNAME" >/dev/null 2>&1; then return; fi
+	fi
+	
+	SSHKEY=~/.ssh/"$KEYNAME.pem"
+	test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
+	if ! test -r $SSHKEY; then 
+		echo -e "${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
+		unset SSHKEY
+	else 
+		SSHKEY="-i $SSHKEY"
+	fi
+}
+
+if is_ip "$VM"; then 
+	IP=$VM
+else
+	getvm $VM
 fi
 
-# TODO: Check ssh-add -l on ssh auth agent
-SSHKEY=~/.ssh/"$KEYNAME.pem"
-test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
-if ! test -r $SSHKEY; then echo "Need ~/.ssh/$KEYNAME.pem" 1>&2; unset SSHKEY
-elif test "$ISET" != 1; then SSHKEY="-i $SSHKEY"; fi
-# Check VPC and use EIP if present and needed
-MYVPC=$(otc.sh mds meta_data 2>/dev/null | jq .meta.vpc_id | tr -d '"')
-if test -z "$MYVPC" -o "$MYVPC" == "null" || ! echo "$VMINFO" | grep "$MYVPC" >/dev/null 2>&1; then
-	PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
-	EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
-	if test -n "$EIP"; then
-		echo "Using EIP $EIP instead of IP $IP" 1>&2
-		IP=$EIP
-	fi
-fi
+if test "$ISET" != 1; then getSSHkey; fi
 
 echo "ssh ${ARGS[@]} $SSHKEY $USER@$IP $@" 1>&2
 ssh ${ARGS[@]} $SSHKEY $USER@$IP $@

@@ -19,9 +19,21 @@ SSHKEY=~/SSHkey-$OTC_TENANT.pem
 
 NORM="\e[0;0m"
 YELLOW="\e[0;33m"
+RED="\e[0;31m"
 
 is_uuid() { echo "$1" | grep '^[0-9a-f]\{8\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{4\}\-[0-9a-f]\{12\}$' >/dev/null 2>&1; }
 is_ip() { echo "$1" | grep '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' >/dev/null 2>&1; }
+getVPC()
+{
+	# By convention, VMs are normally tagged with the VPC in OTC
+	firsttag=$(echo "$VMINFO" | jq '.tags[0]' | tr -d '"')
+	# If not, then look for router ports
+	if is_uuid $firsttag; then echo $firsttag; return 0; fi
+	NET=$(echo "$VMINFO" | jq  '.interfaceAttachments[].net_id' | tr -d '"')
+	VPC=$(otc.sh custom GET "\$NEUTRON_URL/v2.0/ports.json?device_owner=network\:router_interface_distributed\&network_id=$NET" | jq '.ports[].device_id' | tr -d '"')
+	if is_uuid $VPC; then echo $VPC; return 0; fi
+	return 1
+}
 
 getvm()
 {
@@ -48,17 +60,34 @@ getvm()
 		OSVER=$(echo "$IMGINFO" | jq '.__os_version' | tr -d '"')
 	fi
 	if [[ "$OSVER" = "Ubuntu"* ]] && [ "$USER" == "linux" ]; then USER=ubuntu; fi
-	echo -e "${YELLOW}#VM Info: $VM $NAME $FLAVOR $IMGNAME $OSVER${NORM}"
+	echo -e "${YELLOW}#VM Info: $VM $NAME $FLAVOR $IMGNAME $OSVER${NORM}" 1>%2
 
 	# Check VPC and use EIP if present and needed
 	MYVPC=$(otc.sh mds meta_data 2>/dev/null | jq .meta.vpc_id | tr -d '"')
-	if test -z "$MYVPC" -o "$MYVPC" == "null" || ! echo "$VMINFO" | grep "$MYVPC" >/dev/null 2>&1; then
+	if test -z "$MYVPC" -o "$MYVPC" == "null" || test "$(getVPC)" != "$MYVPC"; then
 		PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
 		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
 		if test -n "$EIP"; then
 			echo "Using EIP $EIP instead of IP $IP" 1>&2
 			IP=$EIP
 		fi
+	fi
+}
+
+getSSHkey()
+{
+	if test -n "$SSH_AUTH_SOCK"; then
+		KEYS=$(ssh-add -l)
+		if echo "$KEYS" | grep "$KEYNAME" >/dev/null 2>&1; then return; fi
+	fi
+	
+	SSHKEY=~/.ssh/"$KEYNAME.pem"
+	test -r $SSHKEY || SSHKEY=~/"$KEYNAME.pem"
+	if ! test -r $SSHKEY; then 
+		echo -e "${RED}Need ~/.ssh/$KEYNAME.pem${NORM}" 1>&2
+		unset SSHKEY
+	else 
+		SSHKEY="-i $SSHKEY"
 	fi
 }
 
@@ -82,13 +111,8 @@ for no in $(seq 0 ${#ARGS[@]}); do
 	fi
 done		
 
-if test -z "$ISET"; then 
-	SSHKEY=~/.ssh/"$KEYNAME.pem"
-	test -r "$SSHKEY" || SSHKEY=~/"$KEYNAME.pem"
-	if ! test -r $SSHKEY; then echo "Need ~/.ssh/$KEYNAME.pem" 1>&2; unset SSHKEY
-	else IDENT="-i $SSHKEY"; fi
-fi
+if test "$ISET" != 1; then getSSHkey; fi
 
-echo "scp ${IDENT}${ARGS[@]}"
+echo "scp ${SSHKEY}${ARGS[@]}"
 	
-exec scp $IDENT "${ARGS[@]}"
+exec scp $SSHKEY "${ARGS[@]}"
