@@ -38,8 +38,15 @@ OLD_OS_PASSWORD="$OS_PASSWORD"
 #export HTTPS_PROXY=
 # And in case you don't have the root CA certs on your system
 #export OS_CACERT=/etc/ssl/OTC-API-GW-CA-Bundle.pem
-
 # ===
+
+# You can set 
+#OTC_TENANT=xxx
+# for otc.sh to read ~/.ostackrc.$OTC_TENANT as config
+
+# Set
+#OTC_NOVPCTAG=1
+# to avoid VMs automatically getting a tag with the VPCID
 
 # And display warning for common scenario
 if test -n "$OLD_OS_PASSWORD" -a "$OLD_OS_PASSWORD" != "$OS_PASSWORD"; then

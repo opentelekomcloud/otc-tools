@@ -3807,9 +3807,19 @@ ECSCreate()
 			\"metadata\": { $METADATA_JSON },"
 		echo "WARN: metadata passing not supported on ECS creation via Huawei API" 1>&2
 	fi
-	if test -n "$TAGS"; then
-		OPTIONAL="$OPTIONAL
-			\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
+	if test "$OTC_NOVPCTAG" != "1"; then
+		if test -n "$TAGS"; then
+			OPTIONAL="$OPTIONAL
+				\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
+		else
+			OPTIONAL="$OPTIONAL
+				\"tags\": [ \"$VPCID\" ],"
+		fi
+	else
+		if test -n "$TAGS"; then
+			OPTIONAL="$OPTIONAL
+				\"tags\": [ $(keyval2list $TAGS) ],"
+		fi
 	fi
 
 	if test -n "$AUTORECOV"; then
