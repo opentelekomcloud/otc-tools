@@ -52,7 +52,7 @@ getVPC()
 	# If not, then look for router ports
 	if is_uuid $firsttag; then echo $firsttag; return 0; fi
 	NET=$(echo "$VMINFO" | jq  '.interfaceAttachments[].net_id' | tr -d '"')
-	VPC=$(otc.sh custom GET "\$NEUTRON_URL/v2.0/ports.json?device_owner=network\:router_interface_distributed\&network_id=$NET" | jq '.ports[].device_id' | tr -d '"')
+	VPC=$(otc.sh custom GET "\$NEUTRON_URL/v2.0/ports.json?device_owner=network\:router_interface_distributed\&network_id=$NET" 2>/dev/null | jq '.ports[].device_id' | tr -d '"')
 	if is_uuid $VPC; then echo $VPC; return 0; fi
 	return 1
 }
