@@ -113,6 +113,6 @@ done
 
 if test "$ISET" != 1; then getSSHkey; fi
 
-echo "scp ${SSHKEY}${ARGS[@]}"
+echo "scp ${SSHKEY} ${ARGS[@]}"
 	
 exec scp $SSHKEY "${ARGS[@]}"
