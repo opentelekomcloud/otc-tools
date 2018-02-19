@@ -3973,7 +3973,6 @@ ECSUpdate()
 	local RC=0
 	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
 	if test -n "$INSTANCE_NAME"; then appendparm "\"name\": \"$INSTANCE_NAME\""; fi
-	if test -n "$INSTANCE_TYPE"; then appendparm "\"flavorRef\": \"$INSTANCE_TYPE\""; fi
 	#if test -n "$METADATA_JSON"; then appendparm "\"metadata\": { $METADATA_JSON }"; fi
 	#if test -n "$TAGS"; then appendparm "\"tags\": [ $(keyval2list $TAGS) ]"; fi
 	OLDIFS="$IFS"; IFS=","
@@ -4006,6 +4005,10 @@ ECSUpdate()
 			done
 		fi
 	fi
+	if test -n "$INSTANCE_TYPE"; then
+		curlpostauth $TOKEN "{ \"resize\": { \"flavorRef\": \"$INSTANCE_TYPE\" } }" "$AUTH_URL_ECS/$ECS_ID/action" | jq -r '.'
+		if test $RC = 0; then RC=${PIPESTATUS[0]}; fi
+   fi
 	if test -n "$AUTORECOV"; then setAutoRecov $ECS_ID; fi
 	return $RC
 }
