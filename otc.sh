@@ -4007,6 +4007,7 @@ ECSUpdate()
 	fi
 	if test -n "$INSTANCE_TYPE"; then
 		curlpostauth $TOKEN "{ \"resize\": { \"flavorRef\": \"$INSTANCE_TYPE\" } }" "$AUTH_URL_ECS/$ECS_ID/action" | jq -r '.'
+		#curlpostauth $TOKEN "{ \"resize\": { \"flavorRef\": \"$INSTANCE_TYPE\" } }" "$AUTH_URL_ECS_CLOUD/$ECS_ID/resize" | jq -r '.'
 		if test $RC = 0; then RC=${PIPESTATUS[0]}; fi
    fi
 	if test -n "$AUTORECOV"; then setAutoRecov $ECS_ID; fi
