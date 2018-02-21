@@ -580,33 +580,31 @@ getIAMTokenKeystone()
 
 	if [[ "$IAM_AUTH_URL" = *"v3/auth/tokens" ]]; then
 		if test -n "$OLDTOKEN" -a -n "$TOKENFROMTOKEN"; then
-		 IAM_REQ='{
-			"auth": {
-			 "identity": {
-				"methods": [ "token" ],
-				"token": { "id": "'"$OLDTOKEN"'" }
-			 },
-			 '$SCOPE'
-			}
-		 }
-		 '
-		else
-		 IAM_REQ='{
-			"auth": {
-			 "identity": {
-				"methods": [ "password" ],
-				"password": {
-					"user": {
-						'$USER',
-						"password": "'"$OS_PASSWORD"'",
-						"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
-					}
+			IAM_REQ='{
+				"auth": {
+					"identity": {
+					"methods": [ "token" ],
+					"token": { "id": "'"$OLDTOKEN"'" }
+				},
+				'$SCOPE'
 				}
-			 },
-			 '$SCOPE'
-			}
-		 }
-		 '
+			}'
+		else
+			IAM_REQ='{
+				"auth": {
+					"identity": {
+						"methods": [ "password" ],
+						"password": {
+						"user": {
+							'$USER',
+							"password": "'"$OS_PASSWORD"'",
+							"domain": { "name": "'"${OS_USER_DOMAIN_NAME}"'" }
+						}
+					}
+					},
+					'$SCOPE'
+				}
+			}'
 		fi
 		if test -n "$OS_PROJECT_DOMAIN_NAME"; then
 			IAM_REQ=$(echo "$IAM_REQ" | sed "/\"project\":/i\ \t\t\t\t\"domain\": { \"name\": \"$OS_PROJECT_DOMAIN_NAME\" },")
@@ -845,9 +843,9 @@ build_data_volumes_json()
 		info=(${disk//:/ })
 		if test -n "$DATA_VOLUMES"; then
 			DATA_VOLUMES="$DATA_VOLUMES,"
- 		fi
+		fi
 		DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
-   	done
+   done
 	echo $DATA_VOLUMES
 }
 
@@ -3750,10 +3748,10 @@ ECSCreate()
 		# TODO: have to got from param
 		OPTIONAL="$OPTIONAL
 			\"publicip\": {
-			 \"eip\": {
-				\"iptype\": \"5_bgp\",
-				\"bandwidth\": { \"size\": $BANDWIDTH, \"sharetype\": \"PER\", \"chargemode\": \"traffic\" }
-			 }
+				\"eip\": {
+					\"iptype\": \"5_bgp\",
+					\"bandwidth\": { \"size\": $BANDWIDTH, \"sharetype\": \"PER\", \"chargemode\": \"traffic\" }
+				}
 			},"
 	elif [ -n "$EIP" ]; then
 		convertEipToId $EIP
@@ -3772,24 +3770,24 @@ ECSCreate()
 	# --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
 	if test -n "$DEDICATED_HOST_ID"; then
 		is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
- 		if test -n "$TENANCY"; then
+		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
-			 \"os:scheduler_hints\": {
-			 \"tenancy\": \"$TENANCY\",
-			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+				\"os:scheduler_hints\": {
+				\"tenancy\": \"$TENANCY\",
+				\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
 			},"
 		else
 			OPTIONAL="$OPTIONAL
-			 \"os:scheduler_hints\": {
-			 \"tenancy\": \"dedicated\",
-			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+				\"os:scheduler_hints\": {
+				\"tenancy\": \"dedicated\",
+				\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
 			},"
 		fi
 	else
 		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
-			 \"os:scheduler_hints\": {
-			 \"tenancy\": \"$TENANCY\"
+				\"os:scheduler_hints\": {
+				\"tenancy\": \"$TENANCY\"
 			},"
 		fi
 	fi
@@ -4606,7 +4604,7 @@ listTraces()
 			;;
 		* )
 			otcnewHelp ;
-    		exit 0 ;
+			exit 0 ;
 	esac
 }
 #############################################################################
@@ -4906,30 +4904,30 @@ parseUserParm()
 	unset NONOPTARG PWDJSON NAMEJSON DESCJSON PRJJSON ENJSON
 	while test -n "$1"; do
 		case "$1" in
-		  --password|--passwd)
-			PWDJSON="\"password\": \"$2\","
-			shift; shift ;;
-		  --name|--user|--username)
-			NAMEJSON="\"name\": \"$2\","
-			shift; shift ;;
-		  --description|--desc)
-			DESCJSON="\"description\": \"$2\","
-			shift; shift ;;
-		  --default-project|--default-prj|--defaultproject|--defaultprj)
-			PRJJSON="\"default_project_id\": \"$2\","
-			shift; shift ;;
-		  --disabled|--disable)
-			ENJSON="\"enabled\": false,"
-			shift ;;
-		  --enabled|--enable)
-			ENJSON="\"enabled\": true,"
-			shift ;;
-		  --*)
-			echo "Unsupported parameter $1" 1>&2
-			exit 1 ;;
-		  *)
-			NONOPTARG="$1"
-			shift ;;
+			--password|--passwd)
+				PWDJSON="\"password\": \"$2\","
+				shift; shift ;;
+			--name|--user|--username)
+				NAMEJSON="\"name\": \"$2\","
+				shift; shift ;;
+			--description|--desc)
+				DESCJSON="\"description\": \"$2\","
+				shift; shift ;;
+			--default-project|--default-prj|--defaultproject|--defaultprj)
+				PRJJSON="\"default_project_id\": \"$2\","
+				shift; shift ;;
+			--disabled|--disable)
+				ENJSON="\"enabled\": false,"
+				shift ;;
+			--enabled|--enable)
+				ENJSON="\"enabled\": true,"
+				shift ;;
+			--*)
+				echo "Unsupported parameter $1" 1>&2
+				exit 1 ;;
+			*)
+				NONOPTARG="$1"
+				shift ;;
 		esac
 	done
 }
@@ -4996,21 +4994,21 @@ parseGroupParm()
 	unset NONOPTARG NAMEJSON DESCJSON DOMJSON
 	while test -n "$1"; do
 		case "$1" in
-		  --name|--group)
-			NAMEJSON="\"name\": \"$2\","
-			shift; shift ;;
-		  --description|--desc)
-			DESCJSON="\"description\": \"$2\","
-			shift; shift ;;
-		  --domain-id|domainid)
-			DOMJSON="\"domain_id\": \"$2\","
-			shift; shift ;;
-		  --*)
-			echo "Unsupported parameter $1" 1>&2
-			exit 1 ;;
-		  *)
-			NONOPTARG="$1"
-			shift ;;
+			--name|--group)
+				NAMEJSON="\"name\": \"$2\","
+				shift; shift ;;
+			--description|--desc)
+				DESCJSON="\"description\": \"$2\","
+				shift; shift ;;
+			--domain-id|domainid)
+				DOMJSON="\"domain_id\": \"$2\","
+				shift; shift ;;
+			--*)
+				echo "Unsupported parameter $1" 1>&2
+				exit 1 ;;
+			*)
+				NONOPTARG="$1"
+				shift ;;
 		esac
 	done
 }
@@ -5234,7 +5232,7 @@ listShares()
 
 showShare()
 {
-	if ! is_uuid "$1"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_SFS/shares?name=$1" | jq '.shares[].id' | head -n1 | tr -d '"'); else ID=$1; fi 
+	if ! is_uuid "$1"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_SFS/shares?name=$1" | jq '.shares[].id' | head -n1 | tr -d '"'); else ID=$1; fi
 	curlgetauth $TOKEN "$AUTH_URL_SFS/shares/$ID" | jq -r '.'
 }
 
@@ -6078,7 +6076,7 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "changeuser" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showuser" ]; then
 	showUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deluser" ] ||
-	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteuser" ]; then
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deleteuser" ]; then
 	delUser "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "roles" ]; then
    echo -n ""
@@ -6129,7 +6127,7 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listusergroup" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "checkgroup" ]; then
 	checkGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "delgroup" ] ||
-	  [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletegroup" ]; then
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "deletegroup" ]; then
 	delGroup "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "addgroupuser" ]; then
 	addGroupUser "$@"
@@ -6402,7 +6400,7 @@ elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "addrecord" ]; then
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "associate" ]; then
 	associateDomain "$@"
 elif [ "$MAINCOM" == "domain" -a "$SUBCOM" == "dissociate" ] ||
-	  [ "$MAINCOM" == "domain" -a "$SUBCOM" == "disassociate" ]; then
+      [ "$MAINCOM" == "domain" -a "$SUBCOM" == "disassociate" ]; then
 	dissociateDomain "$@"
 
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "help" ]; then
