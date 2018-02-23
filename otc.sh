@@ -263,7 +263,8 @@ docurl()
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			if test -n "$ECODE" -a "$ECODE" != "null"; then RC=9; fi
 		fi
-		# PUT/HEAD onlyreturn an HTTP header
+		# PUT/HEAD only return an HTTP header
+		if test -n "$CODE" && test "$CODE" -ge 400; then RC=9; fi
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
 		CODE=$(echo "$HDR" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
 		if test -n "$CODE" && test "$CODE" -ge 400; then echo "${HDR#* }" 1>&2; RC=9; fi
@@ -4419,8 +4420,56 @@ getUserDomainIdFromIamResponse()
 
 shortlistClusters()
 {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.az'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.az+"   "+.spec.clustertype'
 	return ${PIPESTATUS[0]}
+}
+
+createCluster()
+{
+	if test -z "$TYPE"; then
+		echo "ERROR: cluster create needs --type" 1>&2; exit 1
+	fi
+	if test -z "$NAME" -a -n "$1"; then NAME="$1"; shift; fi
+	REQ="{
+	\"kind\": \"cluster\",
+	\"apiVersion\": \"v1\""
+	if test -n "$NAME"; then
+		REQ="$REQ,
+	\"metadata\": { \"name\": \"$NAME\" }"
+	fi
+	if test -z "$VPCID" -a -n "$VPCNAME"; then convertVPCNameToId "$VPCNAME"; fi
+	if test -z "$VPCID"; then
+		echo "ERROR: cluster create needs --vpc-name/-id" 1>&2; exit 1
+	fi
+	if test -z "$SUBNETID" -a -n "$SUBNETNAME"; then convertSUBNETNameToId "$SUBNETNAME"; fi
+	if test -z "$SUBNETID"; then
+		echo "ERROR: cluster create needs --subnet-name/-id" 1>&2; exit 1
+	fi
+	if test -z "$AZ"; then
+		AZ="$SUBNETAZ"
+	fi
+	REQ="$REQ,
+	\"spec\": {
+		\"vpc\": \"$VPCID\",
+		\"subnet\": \"$SUBNETID\""
+	if test -n "$DESCRIPTION"; then
+		REQ="$REQ,
+		\"description\": \"$DESCRIPTION\""
+	fi
+	if test -n "$AZ"; then
+		REQ="$REQ,
+		\"az\": \"$AZ\""
+	fi
+	if test -n "$SECUGROUP"; then
+		REQ="$REQ,
+		\"security_group_id\": \"$SECUGROUP\""
+	fi
+	REQ="$REQ,
+		\"region\": \"$OS_REGION_NAME\",
+		\"clustertype\": \"$TYPE\"
+	}
+	}"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CCE/api/v1/clusters"
 }
 
 listClusters()
@@ -4429,22 +4478,35 @@ listClusters()
 	return ${PIPESTATUS[0]}
 }
 
+deleteCluster()
+{
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	curldeleteauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID"
+}
+
 showCluster()
 {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1" | jq '.'
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
 listClusterHosts()
 {
-	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq '.'
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq '.'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
 	return ${PIPESTATUS[0]}
 }
 
 showClusterHost()
 {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$1/hosts/$2" | jq '.'
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts/$2" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -5505,6 +5567,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				SUBNETNAME="$2"; shift;;
 			--nicsubs)
 				MORESUBNETS="$2"; shift;;
+			--type)
+				TYPE="$2"; shift;;
 			-v|--vpc-id)
 				VPCID="$2"; shift;;
 			--vpc-name)
@@ -6412,6 +6476,10 @@ elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "list-detail" ] ||
 	listClusters
 elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "show" ]; then
 	showCluster "$@"
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "create" ]; then
+	createCluster "$@"
+elif [ "$MAINCOM" == "cluster" -a "$SUBCOM" == "delete" ]; then
+	deleteCluster "$1"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
 	listClusterHosts "$@"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
