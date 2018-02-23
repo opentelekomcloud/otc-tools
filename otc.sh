@@ -5797,7 +5797,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	[ -n "$ECSID" -a "null" != "$ECSID" ] && echo "ECS ID: $ECSID"
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
-	if [ "$ECSJOBSTATUS" != "SUCCESS" ]; then
+	if [ "$ECSJOBSTATUS" != "SUCCESS" -a "$ECSJOBSTATUS" != "RUNNING" ]; then
 		exit 1
 	fi
 
