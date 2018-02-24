@@ -4525,18 +4525,20 @@ createClusterHosts()
 	fi
 	unset TP
 	DISKDESC="\"volume\": ["
-	OLDIFS="$IFS"; IFS=","
-	while read entry; do
+	DDISK="$DISKS"
+	while test -n "$DDISK"; do
+		entry=${DDISK%%,*}
+		if test "${DDISK#*,}" == "$DDISK"; then DDISK=""; else DDISK="${DDISK#*,}"; fi
 		if test -z "$TP"; then TP=root; else TP=data; fi
 		DISKDESC="$DISKDESC
-		{
+		  {
 			\"diskType\": \"$TP\",
 			\"diskSize\": ${entry##*:},
 			\"volumeType\": \"${entry%:*}\"
-		},"
-	done < <(echo $DISKS)
-	IFS="$OLDIFS"
-	DISKDESC="${DISKDESC%,} ]"
+		  },"
+	done
+	DISKDESC="${DISKDESC%,}
+		]"
 	if test -z "$KEYNAME"; then
 		echo "ERROR: host create needs --key-name" 1>&2; exit 1
 	fi
@@ -4547,8 +4549,7 @@ createClusterHosts()
 	\"kind\": \"host\",
 	\"apiVersion\": \"v1\",
 	\"spec\": {
-		\"flavor\": \"$INSTANCE_TYPE\"
-	"
+		\"flavor\": \"$INSTANCE_TYPE\""
 	if test -n "$NAME"; then
 		REQ="$REQ,
 		\"label\": \"$NAME\""
@@ -4566,14 +4567,14 @@ createClusterHosts()
 	fi
 	if test -n "$TAGS"; then
 		REQ="$REQ,
-		\"tags\": $(keyval2list $TAGS)"
+		\"tags\": [ $(keyval2list $TAGS) ]"
 	fi
 	REQ="$REQ
 	},
 	\"replicas\": $NO
 }"
+	#echo "$REQ"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts"
-	
 }
 
 # CES
@@ -5663,7 +5664,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 			--volumes)
 				DEV_VOL="$2"; shift;;
 			--disks)
-				DISCDESC="$2"; shift;;
+				DISKS="$2"; shift;;
 			--disktype|--disk-type)
 				VOLUMETYPE="$2"; shift;;
 			--disksize|--disk-size)
@@ -6554,6 +6555,8 @@ elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "list" ]; then
 	listClusterHosts "$@"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
 	showClusterHost "$@"
+elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "create" ]; then
+	createClusterHosts "$@"
 
 elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "help" ]; then
 	cesHelp
