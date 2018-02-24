@@ -1256,8 +1256,22 @@ cceHelp()
 	echo "otc cluster list                  # list container clusters (short)"
 	echo "otc cluster list-detail           # list container clusters (detailed)"
 	echo "otc cluster show <cid>            # show container cluster details of cid"
+	echo "otc cluster delete <cid>          # delete container cluster cid"
+	echo "otc cluster create [opts] <name>  # create new container cluster with name"
+	echo "   --type Single/HA               # Single Master or HA master (mandatory)"
+	echo "   --vpc-name <vpc> or --vpc-id <vpc>        # (mandatory)"
+	echo "   --subnet-name <sub> or --subnet-id <sub>  # (mandatory)"
+	echo "   --az <az> --description <dec>  # (optional)"
+	echo "   --security-group--name <sg>    # (optional)"
 	echo "otc host list <cid>               # list container hosts of cluster cid"
 	echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
+	echo "otc host create [opts] <cid> <nr> # deploy nr hosts in cluster cid"
+	echo "   --disks TYPE:SIZE,TYPE:SIZE,...# disk config (mand), SATA/SAS/SSD:GB"
+	echo "   --instance-type <flavor>       # VM flavors to deploy (mandtory)"
+	echo "   --key-name <key>               # SSH key to inject (mand)"
+	echo "   --name <label> --az <az>       # assign label and set AZ (both optional)"
+	echo "   --snat --tags <tag,tag=v,..>   # optional snat and tags"
+	echo "otc host delete <cid> <hid> [<hid> [...]] # remove hosts hid from cluster cid"
 }
 
 iamHelp()
@@ -4518,7 +4532,7 @@ createClusterHosts()
 	if test -z "$NO"; then NO=1; fi
 	if test -z "$DISKS"; then
 		if test -z "$ROOTDISKSIZE" -o -z "$VOLUMETYPE"; then
-			echo "ERROR: host create needs --disks (or --disktype + --disksize)" 1>&2; exit 1
+			echo "ERROR: host create needs --disks (or --disktype + --disksize + --datadisks)" 1>&2; exit 1
 		fi
 		DISKS=$VOLUMETYPE:$ROOTDISKSIZE
 		if test -n "$DATADISKS"; then DISKS="$DISKS,$DATADISKS"; fi
@@ -4576,6 +4590,20 @@ createClusterHosts()
 	#echo "$REQ"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts"
 }
+
+deleteClusterHosts()
+{
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	shift
+	REQ="{ \"hosts\": ["
+	for host in "$@"; do
+		REQ="$REQ { \"name\": \"$host\" },"
+	done
+	REQ="${REQ%,} ] }"
+	curldeleteauthwithjsonparameter $TOKEN "$REQ" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts"
+}
+
 
 # CES
 listMetrics()
@@ -6557,6 +6585,8 @@ elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "show" ]; then
 	showClusterHost "$@"
 elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "create" ]; then
 	createClusterHosts "$@"
+elif [ "$MAINCOM" == "host" -a "$SUBCOM" == "delete" ]; then
+	deleteClusterHosts "$@"
 
 elif [ "$MAINCOM" == "metrics" -a "$SUBCOM" == "help" ]; then
 	cesHelp
