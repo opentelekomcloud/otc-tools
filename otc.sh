@@ -1259,10 +1259,10 @@ cceHelp()
 	echo "otc cluster delete <cid>          # delete container cluster cid"
 	echo "otc cluster create [opts] <name>  # create new container cluster with name"
 	echo "   --type Single/HA               # Single Master or HA master (mandatory)"
-	echo "   --vpc-name <vpc> or --vpc-id <vpc>        # (mandatory)"
-	echo "   --subnet-name <sub> or --subnet-id <sub>  # (mandatory)"
-	echo "   --az <az> --description <dec>  # (optional)"
-	echo "   --security-group--name <sg>    # (optional)"
+	echo "   --vpc-name <vpc> or --vpc-id <vpc>        # VPC (mandatory)"
+	echo "   --subnet-name <sub> or --subnet-id <sub>  # SubNet (mandatory)"
+	echo "   --az <az> --description <dec>  # AZ and description (optional)"
+	echo "   --security-group-name <sg>     # Security Group (optional)"
 	echo "otc host list <cid>               # list container hosts of cluster cid"
 	echo "otc host show <cid> <hid>         # show host hid details (cluster cid)"
 	echo "otc host create [opts] <cid> <nr> # deploy nr hosts in cluster cid"
@@ -4496,6 +4496,7 @@ deleteCluster()
 {
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
 	curldeleteauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID"
 }
 
@@ -4511,6 +4512,7 @@ listClusterHosts()
 {
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
 	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq '.'
 	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
 	return ${PIPESTATUS[0]}
@@ -4528,6 +4530,7 @@ createClusterHosts()
 {
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
 	NO=$2
 	if test -z "$NO"; then NO=1; fi
 	if test -z "$DISKS"; then
@@ -4595,6 +4598,7 @@ deleteClusterHosts()
 {
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
 	shift
 	REQ="{ \"hosts\": ["
 	for host in "$@"; do
