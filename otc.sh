@@ -4510,6 +4510,72 @@ showClusterHost()
 	return ${PIPESTATUS[0]}
 }
 
+createClusterHosts()
+{
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
+	NO=$2
+	if test -z "$NO"; then NO=1; fi
+	if test -z "$DISKS"; then
+		if test -z "$ROOTDISKSIZE" -o -z "$VOLUMETYPE"; then
+			echo "ERROR: host create needs --disks (or --disktype + --disksize)" 1>&2; exit 1
+		fi
+		DISKS=$VOLUMETYPE:$ROOTDISKSIZE
+		if test -n "$DATADISKS"; then DISKS="$DISKS,$DATADISKS"; fi
+	fi
+	unset TP
+	DISKDESC="\"volume\": ["
+	OLDIFS="$IFS"; IFS=","
+	while read entry; do
+		if test -z "$TP"; then TP=root; else TP=data; fi
+		DISKDESC="$DISKDESC
+		{
+			\"diskType\": \"$TP\",
+			\"diskSize\": ${entry##*:},
+			\"volumeType\": \"${entry%:*}\"
+		},"
+	done < <(echo $DISKS)
+	IFS="$OLDIFS"
+	DISKDESC="${DISKDESC%,} ]"
+	if test -z "$KEYNAME"; then
+		echo "ERROR: host create needs --key-name" 1>&2; exit 1
+	fi
+	if test -z "$INSTANCE_TYPE"; then
+		echo "ERROR: host create needs --instance-type" 1>&2; exit 1
+	fi
+	REQ="{
+	\"kind\": \"host\",
+	\"apiVersion\": \"v1\",
+	\"spec\": {
+		\"flavor\": \"$INSTANCE_TYPE\"
+	"
+	if test -n "$NAME"; then
+		REQ="$REQ,
+		\"label\": \"$NAME\""
+	fi
+	REQ="$REQ,
+		$DISKDESC,
+		\"sshkey\": \"$KEYNAME\""
+	if test "$SNAT" == "1"; then
+		REQ="$REQ,
+		\"snat\": true"
+	fi
+	if test -n "$AZ"; then
+		REQ="$REQ,
+		\"az\": \"$AZ\""
+	fi
+	if test -n "$TAGS"; then
+		REQ="$REQ,
+		\"tags\": $(keyval2list $TAGS)"
+	fi
+	REQ="$REQ
+	},
+	\"replicas\": $NO
+}"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts"
+	
+}
+
 # CES
 listMetrics()
 {
@@ -5596,6 +5662,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				shift;;     # past argument
 			--volumes)
 				DEV_VOL="$2"; shift;;
+			--disks)
+				DISCDESC="$2"; shift;;
 			--disktype|--disk-type)
 				VOLUMETYPE="$2"; shift;;
 			--disksize|--disk-size)
@@ -5604,8 +5672,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				SHAREABLE="true";;
 			--crypt)
 				CRYPTKEYID=$2; shift;;
-			--scsi)
-				SCSI=1;;
+			--vbd)
+				VBD=1;;
 			--vbd)
 				VBD=1;;
 			--datadisks)
@@ -5614,6 +5682,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				AUTORECOV="$2"; shift;;
 			--tags)
 				TAGS="$2"; shift;;
+			--snat)
+				SNAT=1;;
 			--metadata-json)
 				METADATA_JSON="$2"; shift;;
 			--metadata)
