@@ -2023,6 +2023,7 @@ getVPCDetail()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_VPCS/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 getVPCDetail2()
@@ -2030,6 +2031,7 @@ getVPCDetail2()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 getVPCRoutes()
@@ -2173,7 +2175,7 @@ SECGROUPCreate()
 	if test -z "$SECUGROUPNAME" -a -n "$1"; then SECUGROUPNAME="$1"; fi
 	if test -n "$VPCID"; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
 	local DESCJSON=""
-	if test -n "$DESCRIPTION"; then DESCJSON=", \"description\": \$DESCRIPTION\""; fi
+	if test -n "$DESCRIPTION"; then DESCJSON=", \"description\": \"$DESCRIPTION\""; fi
 	local REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON $DESCJSON } }"
 	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
@@ -2189,7 +2191,7 @@ SECGROUPDelete()
 
 SECGROUPRULECreate()
 {
-	if test -n "$REMGROUPID" -a ! is_uuid "$REMGROUPID"; then
+	if test -n "$REMGROUPID" && ! is_uuid "$REMGROUPID"; then
 		OLDSG="$SECUGROUP"; convertSECUGROUPNameToId "$REMGROUPID"
 		REMGROUPID="$SECUGROUP"; SECUGROUP="$OLDSG"
 	fi
@@ -2506,6 +2508,7 @@ getSUBNETDetail()
 	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[]'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 SUBNETDelete()
@@ -4218,8 +4221,9 @@ VPCCreate()
 {
 	local TAGJSON=""
 	if test -z "$VPCNAME" -a -n "$1"; then VPCNAME="$1"; fi
+	# Description?
 	if test -n "$TAGS"; then TAGJSON=",
-			\"tags\": { $(keyval2json $TAGS) }"
+			\"tags\": [ $(keyval2list $TAGS) ] }"
 	fi
 	local REQ_CREATE_VPC='{
 		"vpc": {
@@ -4243,9 +4247,10 @@ SUBNETCreate()
 	fi
 	if test -n "$AZ"; then AZJSON="\"availability_zone\": \"$AZ\","; fi
 	local TAGJSON=""
-	if test -n "$TAGS"; then TAGJSON="\"tags\": { $(keyval2json $TAGS) },
+	if test -n "$TAGS"; then TAGJSON="\"tags\": [ $(keyval2list $TAGS) ],
 "
 	fi
+	# Description?
 	local REQ_CREATE_SUBNET='{
 		"subnet": {
 			"name": "'"$SUBNETNAME"'",
