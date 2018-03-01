@@ -927,7 +927,7 @@ ecsHelp()
 	echo "otc ecs create             # create vm example"
 	echo "    --count 1              # one instance (default)"
 	echo "    --public true          # with public ip"
-	echo "    --file1 /tmp/a=/otc/a  # attach local file /tmp/a to /otc/a in VM"
+	echo "    --file1 /tmp/A=/tmp/B  # inject local file /tmp/B to /tmp/A in VM"
 	echo "    --file2 ...            # Up to 5 files can be injected this way"
 	echo
 	echo "otc ecs create             # create vm (addtl. options)"
