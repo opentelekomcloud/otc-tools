@@ -134,7 +134,7 @@ if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
 	warn_too_open ~/$CRED
 fi
 
-# ENVIROMENT SETTINGS ####################################################################
+# ENVIRONMENT SETTINGS ####################################################################
 
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
@@ -2183,7 +2183,14 @@ SECGROUPCreate()
 	if test -n "$DESCRIPTION"; then DESCJSON=", \"description\": \"$DESCRIPTION\""; fi
 	local REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON $DESCJSON } }"
 	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
-	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
+	SGOUT=$(curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS")
+	RC=$?
+	if test -n "$DESCRIPTION"; then
+		SGID=$(echo "$SGOUT" | jq '.[] | .id' | tr -d '"')
+		OUT=$(curlputauth $TOKEN "{ \"security_group\": { \"description\": \"$DESCRIPTION\" } }" "$NEUTRON_URL/v2.0/security-groups/$SGID")
+		SGOUT=$(echo "$SGOUT" | sed "s/\"description\":\"[^\"]*\"/\"description\":\"$DESCRIPTION\"/")
+	fi
+	echo "$SGOUT" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
