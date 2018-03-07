@@ -1855,6 +1855,7 @@ handleCustom()
 		GET)
 			echo "#DEBUG: curl -X $METH $URL" 1>&2
 			curlgetauth $TOKEN "$URL" | eval "$JQ"
+			RC=${PIPESTATUS[0]}
 			;;
 		HEAD)
 			echo "#DEBUG: curl -X $METH --head $URL" 1>&2
@@ -1869,22 +1870,27 @@ handleCustom()
 		PUT)
 			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlputauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			RC=${PIPESTATUS[0]}
 			;;
 		POST)
 			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlpostauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			RC=${PIPESTATUS[0]}
 			;;
 		PATCH)
 			echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 			curlpatchauth $TOKEN "$ARGS" "$URL" | eval "$JQ"
+			RC=${PIPESTATUS[0]}
 			;;
 		DELETE)
 			if test -z "$ARGS"; then
 				echo "#DEBUG: curl -X $METH $URL" 1>&2
 				curldeleteauth $TOKEN "$URL" | eval "$JQ"
+				RC=${PIPESTATUS[0]}
 			else
 				echo "#DEBUG: curl -X $METH -d \"$ARGS\" $URL" 1>&2
 				curldeleteauthwithjsonparameter $TOKEN "$ARGS" "$URL" | eval "$JQ"
+				RC=${PIPESTATUS[0]}
 			fi
 			;;
 		*)
@@ -1892,7 +1898,6 @@ handleCustom()
 			exit 1
 			;;
 	esac
-	if test -z "$RC"; then RC=${PIPESTATUS[0]}; fi
 	if test -z "$JQFILTER"; then echo; fi
 	return $RC
 }
