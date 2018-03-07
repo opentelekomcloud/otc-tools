@@ -4550,7 +4550,7 @@ listClusterHosts()
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
 	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
 	#curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq '.'
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID/hosts" | jq -r '.spec.hostList[] | .spec.hostid+"   "+.message+"   "+.status+"   "+.spec.privateip+"   "+.spec.sshkey' 2>/dev/null
 	return ${PIPESTATUS[0]}
 }
 
