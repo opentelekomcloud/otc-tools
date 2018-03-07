@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.13
+VERSION=0.8.15
 
 # Get Config ####################################################################
 warn_too_open()
@@ -927,7 +927,7 @@ ecsHelp()
 	echo "otc ecs create             # create vm example"
 	echo "    --count 1              # one instance (default)"
 	echo "    --public true          # with public ip"
-	echo "    --file1 /tmp/a=/otc/a  # attach local file /tmp/a to /otc/a in VM"
+	echo "    --file1 /tmp/A=/tmp/B  # inject local file /tmp/B to /tmp/A in VM"
 	echo "    --file2 ...            # Up to 5 files can be injected this way"
 	echo
 	echo "otc ecs create             # create vm (addtl. options)"
@@ -955,7 +955,7 @@ ecsHelp()
 	echo "    --datadisks           <DATADISK>      # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                          #   example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
-	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
+	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
 	echo "    --autorecovery true/false             # set autorecovery (Xen only)"
 	echo "    --[no]wait"
 	echo
@@ -1014,7 +1014,7 @@ evsHelp()
 	echo "    --multiattach               # create shareable volume"
 	echo "    --crypt CRYPTKEYID          # encryption"
 	echo "    --scsi/--vbd                # SCSI passthrough or plain VBD attachment"
-	echo "    --tags KEY=VAL[,KEY=VAL[,...]]        # add key-value pairs as tags"
+	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
 	echo "otc evs update                  # change volume setting (name, descr, type, ...)"
 	echo "otc evs delete                  # delete volume"
 	echo
@@ -1062,6 +1062,7 @@ vpcHelp()
 	echo "otc vpc create                  # create vpc"
 	echo "    --vpc-name <vpcname>"
 	echo "    --cidr     <cidr>"
+	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
 	echo "otc vpc listroutes VPC          # list VPC routes"
 	echo "otc vpc addroute VPC DEST NHOP  # add a route to VPC router with dest and nexthop"
 	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
@@ -1084,6 +1085,7 @@ subnetHelp()
 	echo "    --secondary-dns     <sec-dns>"
 	echo "    --availability-zone <avalibility zone>"
 	echo "    --vpc-name          <vpcname>"
+	echo "    --tags KEY[=VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
 }
 
 eipHelp()
@@ -1106,6 +1108,7 @@ sgHelp()
 	echo "otc security-group create                 # create security group"
 	echo "    -g <groupname>"
 	echo "    --vpc-name <vpc name>"
+	echo "    --description <desc>			# optional description"
 	echo "otc security-group delete SGID            # delete security group"
 	echo "otc security-group-rules create           # create sec. group rule"
 	echo "    --security-group-name <secgroupname>"
@@ -1114,8 +1117,9 @@ sgHelp()
 	echo "    --ethertype           <ethtype: IPv4,IPv6>"
 	echo "    --portmin             <port range lower end>"
 	echo "    --portmax             <port range upper end>"
-	echo "    --remotegroup         <ID of remote security group>"
+	echo "    --remotegroup         <ID/name of remote security group>"
 	echo "    --remoteip            <CIDR of remote IP>"
+	echo "    --description         <desc>          # optional description"
 }
 
 imageHelp()
@@ -2024,6 +2028,7 @@ getVPCDetail()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_VPCS/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 getVPCDetail2()
@@ -2031,6 +2036,7 @@ getVPCDetail2()
 	if ! is_uuid "$1"; then convertVPCNameToId "$1"; else VPCID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_ROUTER/$VPCID" | jq -r '.'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 getVPCRoutes()
@@ -2173,7 +2179,9 @@ SECGROUPCreate()
 {
 	if test -z "$SECUGROUPNAME" -a -n "$1"; then SECUGROUPNAME="$1"; fi
 	if test -n "$VPCID"; then VPCJSON=", \"vpc_id\": \"$VPCID\""; fi
-	local REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON } }"
+	local DESCJSON=""
+	if test -n "$DESCRIPTION"; then DESCJSON=", \"description\": \"$DESCRIPTION\""; fi
+	local REQ_CREATE_SECGROUP="{ \"security_group\": { \"name\": \"$SECUGROUPNAME\"$VPCJSON $DESCJSON } }"
 	if test -n "$DEBUG"; then echo $REQ_CREATE_SECGROUP 1>&2; fi
 	curlpostauth "$TOKEN" "$REQ_CREATE_SECGROUP" "$AUTH_URL_SEC_GROUPS" | jq '.[]'
 	return ${PIPESTATUS[0]}
@@ -2188,6 +2196,10 @@ SECGROUPDelete()
 
 SECGROUPRULECreate()
 {
+	if test -n "$REMGROUPID" && ! is_uuid "$REMGROUPID"; then
+		OLDSG="$SECUGROUP"; convertSECUGROUPNameToId "$REMGROUPID"
+		REMGROUPID="$SECUGROUP"; SECUGROUP="$OLDSG"
+	fi
 	if test -n "$REMGROUPID"; then
 		REMOTE="\"remote_group_id\": \"$REMGROUPID\","
 	elif test -n "$REMIP"; then
@@ -2501,6 +2513,7 @@ getSUBNETDetail()
 	if ! is_uuid "$1"; then convertSUBNETNameToId "$1" "$VPCID"; else SUBNETID="$1"; fi
 	curlgetauth $TOKEN "$AUTH_URL_SUBNETS/$SUBNETID" | jq '.[]'
 	return ${PIPESTATUS[0]}
+	# FIXME: Add tag display?
 }
 
 SUBNETDelete()
@@ -4211,11 +4224,16 @@ EVSDelete()
 
 VPCCreate()
 {
+	local TAGJSON=""
 	if test -z "$VPCNAME" -a -n "$1"; then VPCNAME="$1"; fi
+	# Description?
+	if test -n "$TAGS"; then TAGJSON=",
+			\"tags\": [ $(keyval2list $TAGS) ] }"
+	fi
 	local REQ_CREATE_VPC='{
 		"vpc": {
 			"name": "'"$VPCNAME"'",
-			"cidr": "'"$CIDR"'"
+			"cidr": "'"$CIDR"'"'"$TAGJSON"'
 		}
 	}'
 	export REQ_CREATE_VPC
@@ -4233,6 +4251,11 @@ SUBNETCreate()
 		GWIP=${NETIP%.*}.$((LASTOCT+1))
 	fi
 	if test -n "$AZ"; then AZJSON="\"availability_zone\": \"$AZ\","; fi
+	local TAGJSON=""
+	if test -n "$TAGS"; then TAGJSON="\"tags\": [ $(keyval2list $TAGS) ],
+"
+	fi
+	# Description?
 	local REQ_CREATE_SUBNET='{
 		"subnet": {
 			"name": "'"$SUBNETNAME"'",
@@ -4242,6 +4265,7 @@ SUBNETCreate()
 			"primary_dns": "'"$PRIMARYDNS"'",
 			"secondary_dns": "'"$SECDNS"'",
 			'$AZJSON'
+			'$TAGJSON'
 			"vpc_id":"'"$VPCID"'"
 		}
 	}'
@@ -5735,7 +5759,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 			--protocol)
 				PROTOCOL="$2"; shift;;
 			--remotegroup|--remote-group)
-				REMGORUPID="$2"; shift;;
+				REMGROUPID="$2"; shift;;
 			--remoteip|--remote-ip)
 				REMIP="$2"; shift;;
 			--ethertype|--ether-type)
