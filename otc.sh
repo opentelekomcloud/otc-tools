@@ -4470,7 +4470,7 @@ getUserDomainIdFromIamResponse()
 
 shortlistClusters()
 {
-	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.clusterStatus.status+"   "+.spec.az+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.clustertype+"   "+.k8s_version'
+	curlgetauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters" | jq -r '.[] | .metadata.uuid+"   "+.metadata.name+"   "+.clusterStatus.status+"   "+.spec.az+"   "+.spec.vpc+"   "+.spec.subnet+"   "+.spec.clustertype+"   "+.k8s_version' 2>/dev/null
 	return ${PIPESTATUS[0]}
 }
 
