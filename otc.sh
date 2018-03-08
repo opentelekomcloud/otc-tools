@@ -693,6 +693,7 @@ getIAMToken()
 			CEILOMETER_URL=$(getcatendpoint "$CATJSON" metering $OS_PROJECT_ID)
 			IRONIC_URL=$(getcatendpoint "$CATJSON" baremetal $OS_PROJECT_ID)
 			MANILA_URL=$(getcatendpoint "$CATJSON" sharev2 $OS_PROJECT_ID)
+			KARBOR_URL=$(getcatendpoint "$CATJSON" data-protect $OS_PROJECT_ID)
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.'; fi
 			if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.id+"   "+.type+"   "+.name+"   "+.endpoints[].url+"   "+.endpoints[].region+"   "+.endpoints[].interface' | tr -d '"' | sort -k2 -u; fi
 			#if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq 'def str(s): s|tostring; .id+"   "+.type+"   "+.name+"   "+str(.endpoints[])' | sed 's/\\"url\\"://' | tr -d '"'; fi
@@ -716,6 +717,7 @@ getIAMToken()
 			CEILOMETER_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" metering $OS_PROJECT_ID)
 			IRONIC_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" baremetal $OS_PROJECT_ID)
 			MANILA_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" sharev2 $OS_PROJECT_ID)
+			KARBOR_URL=$(getendpoint "$SERVICES" "$ENDPOINTS" data-protect $OS_PROJECT_ID)
 		fi
 		if test -n "$OUTPUT_DOM"; then echo "$IAMRESP" | tail -n1 | jq '.token.project.domain.id' | tr -d '"'; fi
 	else
@@ -742,6 +744,7 @@ getIAMToken()
 		CEILOMETER_URL=$(getv2endpoint "$IAMJSON" metering $OS_PROJECT_ID)
 		IRONIC_URL=$(getv2endpoint "$IAMJSON" baremetal $OS_PROJECT_ID)
 		MANILA_URL=$(getv2endpoint "$IAMJSON" sharev2 $OS_PROJECT_ID)
+		KARBOR_URL=$(getv2endpoint "$IAMJSON" data-protect $OS_PROJECT_ID)
 		if test -n "$OUTPUT_CAT"; then echo "$CATJSON" | jq '.endpoints[].id+"   "+.type+"   "+.name+"   "+.endpoints[].publicURL+"   "+.endpoints[].region+"   public"' | tr -d '"' | sort -k2 -u; fi
 		if test -n "$OUTPUT_ROLES"; then echo "$ROLEJSON" | jq '.metadata.roles[]+"   "+.user.roles[].name' | tr -d '"'; fi
 	fi
@@ -755,8 +758,10 @@ getIAMToken()
 		DESIGNATE_URL=${BASEURL/iam/dns}
 		NOVA_URL=${BASEURL/iam/ecs}/v2/$OS_PROJECT_ID
 		HEAT_URL=${BASEURL/iam/rts}/v1/$OS_PROJECT_ID
-		TROVE_URL=${BASEURL/iam/rds}
+		TROVE_URL=${BASEURL/iam/rds}/v1.0
 		IRONIC_URL=${BASEURL/iam/bms}
+		MANILA_URL=${BASEURL/iam/sfs}/v2/$OS_PROJECT_ID
+		KARBOR_URL=${BASEURL/iam/csbs}/v1/$OS_PROJECT_ID
 	fi
 
 	# DEBUG only: echo "$IAMRESP" | tail -n1 | jq -C .
@@ -828,7 +833,13 @@ getIAMToken()
 	else
 		AUTH_URL_SFS="${BASEURL/iam/sfs}/v2/$OS_PROJECT_ID"	# shares
 	fi
-	AUTH_URL_CSBS="${BASEURL/iam/csbs}/v1/$OS_PROJECT_ID"
+	# Catalog bug!
+	if echo "$KARBOR_URL" | grep ' ' >/dev/null; then
+		echo "WARNING: Wrong CSBS URL: $KARBOR_URL, fixing up ..." 1>&2
+		KARBOR_URL="${KARBOR_URL/ /}"
+	fi
+	#AUTH_URL_CSBS="${BASEURL/iam/csbs}/v1/$OS_PROJECT_ID"
+	if test -n "$KARBOR_URL"; then AUTH_URL_CSBS="$KARBOR_URL"; else AUTH_URL_CSBS=${BASE_URL/iam/csbs}/v1/$OS_PROJECT_ID; fi
 	AUTH_URL_DWS="${BASEURL/iam/dws}/v1.0/$OS_PROJECT_ID"
 	AUTH_URL_TMS="${BASEURL/iam/tms}/v1.0"
 	AUTH_URL_MAAS="${BASEURL/iam/maas}/v1/$OS_PROJECT_ID"
@@ -1449,6 +1460,16 @@ otcnewHelp()
 	echo "otc dws list            # List data warehous clusters"
 	echo "otc serverbackup list   # List server backup checkpoints"
 	echo "otc migration list      # List migration tasks"
+}
+
+otcnew3Help()
+{
+	echo "--- OTC3.x new services ---"
+	echo "NOTE: These are not complete and some list output is JSON, not list format"
+	echo "otc natgw list          # List NAT gateways"
+	echo "otc dcaas list          # List Direct Connections"
+	echo "otc dis list            # List Data Ingestion Streams"
+	echo "otc product list        # List products from marketplace"
 }
 
 dehHelp()
