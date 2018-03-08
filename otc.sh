@@ -5991,6 +5991,7 @@ if [ "$MAINCOM" = "designate" ]; then MAINCOM="domain"; fi
 if [ "$MAINCOM" = "tag" ]; then MAINCOM="tags"; fi
 if [ "$MAINCOM" = "product" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
+if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
