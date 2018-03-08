@@ -6086,7 +6086,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		exit 1
 	fi
 
-elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ] ||
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot" ]; then
 	export ECSACTION="reboot"
 	export ECSACTIONSERVERID=$1
 
@@ -6098,7 +6099,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ]; then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start-instances" ] ||
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start" ]; then
 	ECSACTION="os-start"
 	ECSACTIONSERVERID=$1
 	if [ "$ECSACTIONSERVERID" == "" ]; then
@@ -6109,7 +6111,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "start-instances" ]; then
 
 	ECSAction
 
-elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "stop-instances" ]; then
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "stop-instances" ] ||
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "stop" ]; then
 	ECSACTION="os-stop"
 	ECSACTIONSERVERID=$1
 
