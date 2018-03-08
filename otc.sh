@@ -965,13 +965,14 @@ ecsHelp()
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
-	echo "    --tenancy             <TENANCY>       # use 'dedicated' for auto-placement on matching DedicatedHost"
-	echo "    --dedicated-host      <HOST>          # use ID/Name of preexisting DedicatedHost for direct placement"
-	echo "    --datadisks           <DATADISK>      # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
-	echo "                                          #   example: SSD:20,SATA:50"
+	echo "    --tenancy             <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
+	echo "    --dedicated-host      <HOST>    # use ID/Name of preexisting DedicatedHost for direct placement"
+	echo "    --datadisks           <DATADISK># format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
+	echo "                                    #   example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
-	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]      # add key-value pairs as tags"
-	echo "    --autorecovery true/false             # set autorecovery (Xen only)"
+	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]# add key-value pairs as tags"
+	echo "    --inherit-tags                  # tag created rootdisk as well"
+	echo "    --autorecovery true/false       # set autorecovery (Xen only)"
 	echo "    --[no]wait"
 	echo
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
@@ -1020,6 +1021,7 @@ evsHelp()
 	echo "otc evs list [FILTERS]          # list all volumes (only id and name)"
 	echo "otc evs details [FILTERS]       # detailed list all volumes (opt. key=value filters)"
 	echo "otc evs show <id>               # show details of volume <id>"
+	echo "otc evs tags <id>               # show tags of volume <id>"
 	echo "otc evs describe <id>           # old iface for vol details, includes tags"
 	echo "otc evs create                  # create a volume"
 	echo "    --volume-name         <NAME>"
@@ -2294,6 +2296,14 @@ getEVSDetail()
 	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
 	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1200" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
 	curlgetauth $TOKEN "$AUTH_URL_VOLS/$EVS_ID" | jq '.volume'
+	return ${PIPESTATUS[0]}
+}
+
+getEVSTags()
+{
+	if ! is_uuid "$1"; then convertEVSNameToId "$1"; else EVS_ID="$1"; fi
+	#curlgetauth $TOKEN "$AUTH_URL_CVOLUMES_DETAILS?limit=1200" | jq '.volumes[] | select(.id == "'$EVS_ID'")'
+	curlgetauth $TOKEN "$CINDER_URL/os-vendor-tags/volumes/$EVS_ID" | jq '.tags'
 	return ${PIPESTATUS[0]}
 }
 
@@ -5830,6 +5840,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				AUTORECOV="$2"; shift;;
 			--tags)
 				TAGS="$2"; shift;;
+			--inherit-tags)
+				INHERIT_TAGS=1;;
 			--snat)
 				SNAT=1;;
 			--metadata-json)
@@ -6079,7 +6091,15 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	if [ "null" == "$ECSID" ]; then
 		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | tr -d '"')
 	fi
-	[ -n "$ECSID" -a "null" != "$ECSID" ] && echo "ECS ID: $ECSID"
+	if [ -n "$ECSID" -a "null" != "$ECSID" ]; then
+		echo "ECS ID: $ECSID"
+		if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
+			ROOTVOL=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tail -n1 | tr -d '"')
+			echo "Root volume $ROOTVOL"
+			TAGJSON="$(keyval2json $TAGS)"
+			curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$ROOTVOL" 
+		fi
+	fi
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
 	if [ "$ECSJOBSTATUS" != "SUCCESS" -a "$ECSJOBSTATUS" != "RUNNING" ]; then
@@ -6493,6 +6513,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "volume-show" ] ||
 	getEVSDetail $1
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "describe" ]; then
 	getEVSDetailExt $1
+elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "tags" ]; then
+	getEVSTags $1
 elif [ "$MAINCOM" == "evs" -a "$SUBCOM" == "create" ]; then
 	EVSCreate
 	echo "Task ID: $EVSTASKID"
