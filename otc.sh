@@ -843,6 +843,10 @@ getIAMToken()
 	AUTH_URL_DWS="${BASEURL/iam/dws}/v1.0/$OS_PROJECT_ID"
 	AUTH_URL_TMS="${BASEURL/iam/tms}/v1.0"
 	AUTH_URL_MAAS="${BASEURL/iam/maas}/v1/$OS_PROJECT_ID"
+	AUTH_URL_NAT="${NEUTRON_URL/vpc/nat}/v2.0"
+	AUTH_URL_DIS="${AUTH_URL_MRS/mrs/dis}/v2/$OS_PROJECT_ID"
+	AUTH_URL_DCAAS="${NEUTRON_URL/vpc/dcaas}/v2.0/dcaas"
+	AUTH_URL_MKT="${BASEURL/iam/marketplace}/v1"
 }
 
 build_data_volumes_json()
@@ -1467,9 +1471,13 @@ otcnew3Help()
 	echo "--- OTC3.x new services ---"
 	echo "NOTE: These are not complete and some list output is JSON, not list format"
 	echo "otc natgw list          # List NAT gateways"
+	echo "otc natgw rules         # List SNAT rules"
 	echo "otc dcaas list          # List Direct Connections"
+	echo "otc dcaas gateways      # List Virtual Gateways"
+	echo "otc dcaas interfaces    # List Virtual Interfaces"
+	echo "otc dcaas endpoints     # List Endpoint Groups"
 	echo "otc dis list            # List Data Ingestion Streams"
-	echo "otc product list        # List products from marketplace"
+	echo "otc product categories  # List products from marketplace"
 }
 
 dehHelp()
@@ -1549,6 +1557,8 @@ printHelp()
 	tagHelp
 	echo
 	otcnewHelp
+	echo
+	otcnew3Help
 	echo
 	dehHelp
 	echo
@@ -5566,6 +5576,47 @@ listDEHtypes()
 	return ${PIPESTATUS[0]}
 }
 
+# 3.0
+listNATGW()
+{
+	curlgetauth $TOKEN "$AUTH_URL_NAT/nat_gateways" | jq '.'
+}
+
+listNATRules()
+{
+	curlgetauth $TOKEN "$AUTH_URL_NAT/snat_rules" | jq '.'
+}
+
+listDCAASConn()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DCAAS/direct-connects" | jq '.'
+}
+
+listDCAASVGW()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DCAAS/virtual-gateways" | jq '.'
+}
+
+listDCAASVIF()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DCAAS/virtual-interfaces" | jq '.'
+}
+
+listDCAASEPGrp()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DCAAS/dc-endpoint-groups" | jq '.'
+}
+
+listDIS()
+{
+	curlgetauth $TOKEN "$AUTH_URL_DIS/streams" | jq '.'
+}
+
+listProductCats()
+{
+	curlgetauth $TOKEN "$AUTH_URL_MKT/products/categories" | jq '.'
+}
+
 
 getMeta()
 {
@@ -5938,6 +5989,8 @@ if [ "$MAINCOM" = "csbs" ]; then MAINCOM="serverbackup"; fi
 if [ "$MAINCOM" = "maas" ]; then MAINCOM="migration"; fi
 if [ "$MAINCOM" = "designate" ]; then MAINCOM="domain"; fi
 if [ "$MAINCOM" = "tag" ]; then MAINCOM="tags"; fi
+if [ "$MAINCOM" = "product" ]; then MAINCOM="products"; fi
+if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -6836,6 +6889,29 @@ elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "user_data" ]; then
 elif [ "$MAINCOM" == "mds" -a "$SUBCOM" == "password" ]; then
 	getMeta password "$@"
 
+elif [ "$MAINCOM" == "nat" -a "$SUBCOM" == "help" ]   ||
+     [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "help" ] ||
+     [ "$MAINCOM" == "dis" -a "$SUBCOM" == "help" ]   ||
+     [ "$MAINCOM" == "products" -a "$SUBCOM" == "help" ]; then
+	otcnew3Help
+elif [ "$MAINCOM" == "nat" -a "$SUBCOM" == "list" ]; then
+	listNATGW "$@"
+elif [ "$MAINCOM" == "nat" -a "$SUBCOM" == "rules" ]; then
+	listNATRules "$@"
+elif [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "list" ] ||
+     [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "connections" ]; then
+	listDCAASConn "$@"
+elif [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "gateways" ]; then
+	listDCAASVGW "$@"
+elif [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "interfaces" ]; then
+	listDCAASVIF "$@"
+elif [ "$MAINCOM" == "dcaas" -a "$SUBCOM" == "endpoints" ]; then
+	listDCAASEPGrp "$@"
+elif [ "$MAINCOM" == "dis" -a "$SUBCOM" == "list" ]; then
+	listDIS "$@"
+elif [ "$MAINCOM" == "products" -a "$SUBCOM" == "categories" ]; then
+	listProductCats "$@"
+
 elif [ "$MAINCOM" == "custom" -a "$SUBCOM" == "help" ]; then
 	customHelp
 elif [ "$MAINCOM" == "custom" ]; then
@@ -6846,6 +6922,9 @@ else
 	fi
 	printHelp
 fi
+
+
+
 
 # Collect status for pieces that might have been performed in MAIN
 RC=$?
