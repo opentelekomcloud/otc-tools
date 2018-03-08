@@ -951,7 +951,7 @@ ecsHelp()
 	echo "    --disksize            <DISKGB>"
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
 	echo "    --tenancy             <TENANCY>       # use 'dedicated' for auto-placement on matching DedicatedHost"
-	echo "    --dedicated-host-id   <HOSTID>        # use UUID of preexisting DedicatedHost for direct placement"
+	echo "    --dedicated-host      <HOST>          # use ID/Name of preexisting DedicatedHost for direct placement"
 	echo "    --datadisks           <DATADISK>      # format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                          #   example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
@@ -1455,7 +1455,7 @@ dehHelp()
 {
 	echo "--- Dedicated Host (DEH) ---"
 	echo "otc deh list            # List Dedicated Hosts"
-	echo "otc deh show <id>       # Show Dedicated Host Details"
+	echo "otc deh show <id>       # Show Dedicated Host Details (specify ID or name)"
 	echo "otc deh listvm <id>     # List VMs on Dedicated Host"
 	echo "otc deh create NAME TYPE NUM      # Allocate Dedicated Hosts"
 	echo "    --az AZ"
@@ -3809,6 +3809,7 @@ ECSCreate()
 	# --tenancy $TENANCY
 	# --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
 	if test -n "$DEDICATED_HOST_ID"; then
+		is_uuid "$DEDICATED_HOST_ID" || DEDICATED_HOST_ID=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$$DEDICATED_HOST_ID" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"')
 		is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
 		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
@@ -5501,13 +5502,17 @@ listDEH()
 
 showDEH()
 {
-	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1" | jq -r '.'
+	DEH=$1
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 listDEHservers()
 {
-	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1/servers" | jq '.servers[] | .id+"   "+.name+"   "+.status+"   "+.flavor.id' | tr -d '"'
+	DEH=$1
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH/servers" | jq '.servers[] | .id+"   "+.name+"   "+.status+"   "+.flavor.id' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
@@ -5527,7 +5532,9 @@ createDEH()
 
 deleteDEH()
 {
-	curldeleteauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$1"
+	DEH=$1
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	curldeleteauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH"
 }
 
 # Not yet implemented: updateDEH
