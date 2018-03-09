@@ -876,9 +876,9 @@ build_data_volumes_json()
 	for disk in "${disks[@]}"; do
 		info=(${disk//:/ })
 		if test -n "$DATA_VOLUMES"; then
-			DATA_VOLUMES="$DATA_VOLUMES,"
+			DATA_VOLUMES="$DATA_VOLUMES, "
 		fi
-		DATA_VOLUMES="$DATA_VOLUMES{\"volumetype\":\"${info[0]}\",\"size\":${info[1]}}"
+		DATA_VOLUMES="$DATA_VOLUMES{ \"volumetype\": \"${info[0]}\", \"size\": ${info[1]} }"
    done
 	echo $DATA_VOLUMES
 }
@@ -3830,7 +3830,7 @@ ECSCreate()
 	getPersonalizationJSON
 
 	if [ -n "$ROOTDISKSIZE" ]; then
-		DISKSIZE=', "size": "'$ROOTDISKSIZE'"'
+		DISKSIZE=', "size": '$ROOTDISKSIZE''
 	else
 		unset DISKSIZE
 	fi
@@ -6137,7 +6137,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	fi
 	if [ -n "$ECSID" -a "null" != "$ECSID" ]; then
 		if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
-			local VOLS=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | rev | tr -d '"')
+			VOLS=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tr -d '"')
 			echo "Note: Tag volumes $VOLS" 1>&2
 			TAGJSON="$(keyval2json $TAGS)"
 			for VOL in $VOLS; do
