@@ -4458,6 +4458,11 @@ WaitForTaskField()
 		else
 			echo -n "." 1>&2
 		fi
+		if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+			#echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
+			#echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
+			return 8
+		fi
 		let ctr+=1
 	done
 	echo $FIELD
@@ -4501,6 +4506,11 @@ WaitForTask()
 				echo -n "." 1>&2
 			fi
 			let ctr+=1
+			if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+				#echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
+				#echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
+				return 8
+			fi
 		done
 		if [ $ctr -gt $TOUT ]; then echo "WARN: Task $1 timed out after 2hrs" 1>&2;
 		elif [ -n "$FIELD" -a "$FIELD" != "null" ]; then echo "$FIELD"; fi
@@ -6098,7 +6108,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	echo "Task ID: $ECSTASKID"
 
 	ECSID="null"
-	if [ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" -o "$WAIT_FOR_JOB" != "false" ]; then
+	if [ "$NUMCOUNT" == 1 ] && [ -n "$DEV_VOL" -o "$WAIT_FOR_JOB" != "false" ]; then
 		WaitForSubTask $ECSTASKID 4    ##### => generate $ECSSUBTASKID (to get server_id=ECSID)
 		declare -i ctr=0
 		while [ null = "$ECSID" -a $ctr -le 400 ]; do
