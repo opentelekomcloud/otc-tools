@@ -6092,13 +6092,13 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | tr -d '"')
 	fi
 	if [ -n "$ECSID" -a "null" != "$ECSID" ]; then
-		echo "ECS ID: $ECSID"
 		if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
 			ROOTVOL=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tail -n1 | tr -d '"')
 			echo "Root volume $ROOTVOL"
 			TAGJSON="$(keyval2json $TAGS)"
 			curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$ROOTVOL" 
 		fi
+		echo "ECS ID: $ECSID"
 	fi
 	echo "ECS Creation status: $ECSJOBSTATUS"
 	[ "$NUMCOUNT" = 1 ] && [ -n "$DEV_VOL" ] && ECSAttachVolumeListName "$ECSID" "$DEV_VOL"
