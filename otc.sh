@@ -4458,7 +4458,7 @@ WaitForTaskField()
 		else
 			echo -n "." 1>&2
 		fi
-		if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+		if test "$(echo $ECSJOBSTATUSJSON | jq '.status' | tr -d '"')" == "FAIL"; then
 			#echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
 			#echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
 			return 8
@@ -4506,7 +4506,7 @@ WaitForTask()
 				echo -n "." 1>&2
 			fi
 			let ctr+=1
-			if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+			if test "$(echo $ECSJOBSTATUSJSON | jq '.status' | tr -d '"')" == "FAIL"; then
 				#echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
 				#echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
 				return 8
@@ -6117,7 +6117,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 			sleep 4
 			getECSJOBList $ECSSUBTASKID
 			ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | tr -d '"')
-			if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+			if test "$(echo $ECSJOBSTATUSJSON | jq '.status' | tr -d '"')" == "FAIL"; then
 				echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
 				echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
 				exit 8
@@ -6137,10 +6137,12 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	fi
 	if [ -n "$ECSID" -a "null" != "$ECSID" ]; then
 		if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
-			ROOTVOL=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tail -n1 | tr -d '"')
-			echo "Root volume $ROOTVOL"
+			local VOLS=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | rev | tr -d '"')
+			echo "Note: Tag volumes $VOLS" 1>&2
 			TAGJSON="$(keyval2json $TAGS)"
-			curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$ROOTVOL" 
+			for VOL in $VOLS; do
+				curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$VOL" >/dev/null
+			done
 		fi
 		echo "ECS ID: $ECSID"
 	fi
