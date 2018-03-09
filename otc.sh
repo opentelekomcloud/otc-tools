@@ -2019,8 +2019,8 @@ getECSDetails()
 	setlimit; setapilimit 2000 40 servers id
 	if test -n "$1"; then
 		if is_uuid "$1"; then
-			#curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL?id=$1$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
-			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | select (.id == "'$1'")'
+			curlgetauth $TOKEN "$AUTH_URL_ECS/$1" | jq '.server'
+			#curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | select (.id == "'$1'")'
 		else
 			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.name|test("'$1'"))'
 		fi
