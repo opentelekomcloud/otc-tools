@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.16
+VERSION=0.8.17
 
 # Get Config ####################################################################
 warn_too_open()
@@ -4565,7 +4565,7 @@ createCluster()
 	if test -z "$SUBNETID"; then
 		echo "ERROR: cluster create needs --subnet-name/-id" 1>&2; exit 1
 	fi
-	if test -z "$AZ"; then
+	if test -z "$AZ" -a -n "$SUBNETAZ"; then
 		AZ="$SUBNETAZ"
 	fi
 	REQ="$REQ,
@@ -6107,6 +6107,11 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 			sleep 4
 			getECSJOBList $ECSSUBTASKID
 			ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.server_id' 2>/dev/null | tr -d '"')
+			if test "$(echo $ECSJOBSTATUSJSON | jq '.status')" == "\"FAIL\""; then
+				echo "ERROR: Job $ECSSUBTASKID failed" 1>&2
+				echo "$ECSJOBSTATUSJSON" | jq '.' 1>&2
+				exit 8
+			fi
 		done
 		if test $ctr -ge 500; then echo "TIMEOUT"; else echo; fi
 		#FIXME: Old code, disabled
@@ -6475,10 +6480,12 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "projects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects" | jq '.' #'.[]'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listproject" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "project-list" ] ||
      [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listprojects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.description' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listextproject" ] ||
+     [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "project-list-ext" ] ||
      [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "listextprojects" ]; then
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}-ext/auth/projects" | jq '.projects[] | .id+"   "+.name+"   "+.status+"   "+.description' | tr -d '"'
 	ERR=${PIPESTATUS[0]}
