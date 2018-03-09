@@ -184,6 +184,24 @@ is_html_err()
 	echo "$1" | grep '<[tT][iT][tT][lL][eE]> *[45][012][0-9] [A-Z]' 2>&1 >/dev/null
 }
 
+uriencode()
+{
+	local OUT
+	OUT="${*//%/%25}"
+	OUT="${OUT// /%20}"
+	OUT="${OUT//\?/%3F}"
+	OUT="${OUT//=/%3D}"
+	OUT="${OUT//&/%26}"
+	OUT="${OUT//\"/%22}"
+	OUT="${OUT//\//%2F}"
+	OUT="${OUT//,/%2C}"
+	OUT="${OUT//;/%3B}"
+	OUT="${OUT//!/%21}"
+	OUT="${OUT//:/%3A}"
+	OUT="${OUT//#/%23}"
+	echo "$OUT"
+}
+
 hashtoken()
 {
 	while read ln; do
@@ -1738,10 +1756,11 @@ convertIMAGENameToId()
 	#IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES" | jq '.images[] | select(.name == "'$IMAGENAME'") | .id' | tr -d '" ,'`
 	#setlimit 800
 	#setlimit; setapilimit 1600 100 images
-	NAME="${1// /%20}"
+	local FILT=""
+	NAME="$(uriencode $1)"
 	if [[ "$INSTANCE_TYPE" = "physical"* ]]; then
 		FILT="&virtual_env_type=Ironic"
-	else
+	elif [ -n "$INSTANCE_TYPE" ]; then
 		FILT="&virtual_env_type=FusionCompute"
 	fi
 	IMAGE_ID=`curlgetauth $TOKEN "$AUTH_URL_IMAGES?name=$NAME$FILT" | find_id images "$1"; return ${PIPESTATUS[0]}`
@@ -1763,7 +1782,7 @@ convertECSNameToId()
 {
 	#setlimit 1600
 	#setlimit; setapilimit 420 40 servers id
-	NAME="${1// /%20}"
+	NAME="$(uriencode $1)"
 	ECS_ID=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$NAME" | jq '.servers[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$ECS_ID"; then
@@ -1782,7 +1801,7 @@ convertEVSNameToId()
 {
 	#setlimit 1600
 	#setlimit; setapilimit 400 30 volumes
-	NAME="${1// /%20}"
+	NAME="$(uriencode $1)"
 	EVS_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$NAME" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$EVS_ID"; then
@@ -1801,7 +1820,7 @@ convertBackupNameToId()
 {
 	#setlimit 1600
 	#setlimit; setapilimit 1280 30 backups
-	NAME="${1// /%20}"
+	NAME="$(uriencode $1)"
 	BACK_ID=`curlgetauth $TOKEN "$AUTH_URL_BACKS?name=$NAME" | jq '.backups[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$BACK_ID"; then
@@ -1838,7 +1857,7 @@ convertSnapshotNameToId()
 {
 	#setlimit 1600
 	#setlimit; setapilimit 440 30 snapshots
-	NAME="${1// /%20}"
+	NAME="$(uriencode $1)"
 	SNAP_ID=`curlgetauth $TOKEN "$AUTH_URL_SNAPS?name=$NAME" | jq '.snapshots[] | select(.name == "'$1'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 	local RC=$?
 	if test -z "$SNAP_ID"; then
@@ -2000,7 +2019,8 @@ getECSDetails()
 	setlimit; setapilimit 2000 40 servers id
 	if test -n "$1"; then
 		if is_uuid "$1"; then
-			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
+			#curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL?id=$1$PARAMSTRING" | jq '.servers[] | select (.id == "'$1'")'
+			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL" | jq '.servers[] | select (.id == "'$1'")'
 		else
 			curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING" | jq '.servers[] | select (.name|test("'$1'"))'
 		fi
@@ -2891,9 +2911,10 @@ createDomain()
 domainNameID()
 {
 	if is_id "$1"; then echo "$1"; return; fi
-	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$1" | jq '.zones[].id' | tr -d '"')
+	local NAME=$(uriencode $1)
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$NAME" | jq '.zones[].id' | tr -d '"')
 	if is_id "$ID"; then echo "$ID"; return; fi
-	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$1" | jq '.zones[].id' | tr -d '"')
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$NAME" | jq '.zones[].id' | tr -d '"')
 	if is_id "$ID"; then echo "$ID"; return; fi
 	echo "No such zone $1" 1>&2
 	exit 2
@@ -2957,7 +2978,8 @@ listRecords()
 	if test -z "$1"; then
 		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	else
-		ID=$1
+		ID="$1"
+		#ID="$(uriencode $1)"
 		if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
 		if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
 		curlgetauth $TOKEN "$AUTH_URL_DNS/$ID/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
@@ -3564,7 +3586,7 @@ listELBCert()
 # API not implemented (irregularity)
 showELBCert()
 {
-	ID="$1"
+	ID="$(uriencode $1)"
 	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
 	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
 	return ${PIPESTATUS[0]}
@@ -3603,7 +3625,7 @@ getULBList()
 
 getULBDetail()
 {
-	local ID="$1"
+	local ID="$(uriencode $1)"
 	if ! is_uuid "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers?name=$ID" | jq '.loadbalancers[].id' | tr -d '"'`; fi
 	#setlimit; setapilimit 880 40 loadbalancers
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers/$ID" | jq -r '.'
@@ -3612,7 +3634,7 @@ getULBDetail()
 
 getULBFullDetail()
 {
-	local ID="$1"
+	local ID="$(uriencode $1)"
 	if ! is_uuid "$ID"; then ID=`curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers?name=$ID" | jq '.loadbalancers[].id' | tr -d '"'`; fi
 	#setlimit; setapilimit 880 40 loadbalancers
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/lbaas/loadbalancers/$ID/statuses" | jq -r '.'
@@ -3850,8 +3872,14 @@ ECSCreate()
 	# --tenancy $TENANCY
 	# --dedicated-host|dedicated-host-id $DEDICATED_HOST_ID
 	if test -n "$DEDICATED_HOST_ID"; then
-		is_uuid "$DEDICATED_HOST_ID" || DEDICATED_HOST_ID=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$$DEDICATED_HOST_ID" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"')
-		is_uuid "$DEDICATED_HOST_ID" || ( echo "$DEDICATED_HOST_ID is not a valid UUID" ; exit 1 )
+		if ! is_uuid "$DEDICATED_HOST_ID"; then
+			local DEH="$(uriencode $DEDICATED_HOST_ID)"
+			DEDICATED_HOST_ID=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$DEH" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"')
+			if !  is_uuid "$DEDICATED_HOST_ID"; then
+				echo "$DEDICATED_HOST_ID is not a valid UUID"
+				exit 1
+			fi
+		fi
 		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
 				\"os:scheduler_hints\": {
@@ -4114,8 +4142,8 @@ ECSDelete()
 	for ecs in $@; do
 		unset NAME
 		if ! is_uuid "$ecs"; then
-			NAME=$ecs
-			QNAME="${NAME// /%20}"
+			NAME="$ecs"
+			QNAME="$(uriencode $NAME)"
 			ecs=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$QNAME" | jq '.servers[] | select(.name == "'$NAME'") | .id' | tr -d '" ,'; return ${PIPESTATUS[0]}`
 			if test $? != 0 -o -z "$ecs" -o "$ecs" = "null"; then
 				echo "ERROR: ECSDelete: No such VM $NAME" 1>&2
@@ -5192,7 +5220,7 @@ addUser()
 changeUser()
 {
 	parseUserParm "$@"
-	local USID="$NONOPTARG"
+	local USID="$(uriencode $NONOPTARG)"
 	if test -z "$USID"; then echo "Need to specify UserID or UserName" 1>&2; exit 1; fi
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
@@ -5211,7 +5239,7 @@ changeUser()
 
 showUser()
 {
-	local USID=$1
+	local USID="$(uriencode $1)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID | jq -r '.'
@@ -5220,7 +5248,7 @@ showUser()
 
 delUser()
 {
-	local USID=$1
+	local USID="$(uriencode $1)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/users/$USID
@@ -5270,7 +5298,7 @@ addGroup()
 changeGroup()
 {
 	parseGroupParm "$@"
-	local GRID="$NONOPTARG"
+	local GRID="$(uriencode $NONOPTARG)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group" 1>&2; exit 2; fi
@@ -5287,7 +5315,7 @@ changeGroup()
 
 showGroup()
 {
-	local GRID="$1"
+	local GRID="$(uriencode $1)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
@@ -5297,7 +5325,7 @@ showGroup()
 
 listGroup()
 {
-	local GRID="$1"
+	local GRID="$(uriencode $1)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
@@ -5307,11 +5335,11 @@ listGroup()
 
 checkGroup()
 {
-	local GRID="$1"
+	local GRID="$(uriencode $1)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
-	local USID=$2
+	local USID="$(uriencode $2)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
 	HDR=$(curlheadauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID)
@@ -5328,11 +5356,11 @@ delGroup()
 
 addGroupUser()
 {
-	local GRID="$1"
+	local GRID="$(uriencode $1)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
-	local USID=$2
+	local USID="$(uriencode $2)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
 	curlputauth $TOKEN "" ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID
@@ -5340,11 +5368,11 @@ addGroupUser()
 
 delGroupUser()
 {
-	local GRID="$1"
+	local GRID="$(uriencode $1)"
 	if test -z "$GRID"; then echo "Need to specify GroupID or GroupName" 1>&2; exit 1; fi
 	if ! is_id $GRID; then GRID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups?name=$GRID | jq '.groups[].id' | tr -d '"'); fi
 	if test -z "$GRID"; then echo "No such group $1" 1>&2; exit 2; fi
-	local USID=$2
+	local USID="$(uriencode $2)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $2" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN ${IAM_AUTH_URL%/auth*}/groups/$GRID/users/$USID
@@ -5354,7 +5382,7 @@ delGroupUser()
 ROLEDISPLAY='def tostr(v): v|tostring; .roles[] | .id+"   "+.name+"   "+.catalog+"   "+.display_name+"   "+.type+"   "+tostr(.policy.Statement)+"   "+tostr(.policy.Depends)'
 listRoleAssign()
 {
-	local USID=$1
+	local USID="$(uriencode $1)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/users?name=$USID | jq '.users[].id' | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such user $1" 1>&2; exit 2; fi
 	if test "$2" == "--effective"; then EFF="&effective"; fi
@@ -5367,7 +5395,7 @@ listRoleUser()
 	local SCPID=$OS_USER_DOMAIN_ID
 	if test "$1" == "listrolegroup"; then OBJ=group; else OBJ=user; fi; shift
 	if test "$1" == "--project"; then SCP=project; SCPID=$2; shift; shift; fi
-	local USID=$1
+	local USID="$(uriencode $1)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such $OBJ $1" 1>&2; exit 2; fi
 	if test "$2" == "--project"; then SCP=project; SCPID=$3; fi
@@ -5381,10 +5409,10 @@ addRoleUser()
 	local SCPID=$OS_USER_DOMAIN_ID
 	if test "$1" == "addrolegroup"; then OBJ=group; else OBJ=user; fi; shift
 	if test "$1" == "--project"; then SCP=project; SCPID=$2; shift; shift; fi
-	local RID=$1
+	local RID="$(uriencode $1)"
 	if ! is_id $RID; then RID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/roles?name=$RID | jq '.roles[].id' | tr -d '"'); fi
 	if test -z "$RID"; then echo "Need to specify valid role" 1>&2; exit 2; fi
-	local USID=$2
+	local USID="$(uriencode $2)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such $OBJ $2" 1>&2; exit 2; fi
 	if test "$3" == "--project"; then SCP=project; SCPID=$4; fi
@@ -5397,10 +5425,10 @@ delRoleUser()
 	local SCPID=$OS_USER_DOMAIN_ID
 	if test "$1" == "delrolegroup" -o "$1" == "deleterolegroup"; then OBJ=group; else OBJ=user; fi; shift
 	if test "$1" == "--project"; then SCP=project; SCPID=$OS_PROJECT_ID; shift; fi
-	local RID=$1
+	local RID="$(uriencode $1)"
 	if ! is_id $RID; then RID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/roles?name=$RID | jq '.roles[].id' | tr -d '"'); fi
 	if test -z "$RID"; then echo "Need to specify valid role" 1>&2; exit 2; fi
-	local USID=$2
+	local USID="$(uriencode $2)"
 	if ! is_id $USID; then USID=$(curlgetauth $TOKEN ${IAM_AUTH_URL%/auth*}/${OBJ}s?name=$USID | jq ".${OBJ}s[].id" | tr -d '"'); fi
 	if test -z "$USID"; then echo "No such $OBJ $2" 1>&2; exit 2; fi
 	if test "$3" == "--project"; then SCP=project; SCPID=$4; shift; fi
@@ -5471,7 +5499,8 @@ listShares()
 
 showShare()
 {
-	if ! is_uuid "$1"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_SFS/shares?name=$1" | jq '.shares[].id' | head -n1 | tr -d '"'); else ID=$1; fi
+	ID="$(uriencode $1)"
+	if ! is_uuid "$1"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_SFS/shares?name=$ID" | jq '.shares[].id' | head -n1 | tr -d '"'); else ID=$1; fi
 	curlgetauth $TOKEN "$AUTH_URL_SFS/shares/$ID" | jq -r '.'
 }
 
@@ -5543,16 +5572,16 @@ listDEH()
 
 showDEH()
 {
-	DEH=$1
-	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	DEH="$(uriencode $1)"
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$DEH" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 listDEHservers()
 {
-	DEH=$1
-	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	DEH="$(uriencode $1)"
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$DEH" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
 	curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH/servers" | jq '.servers[] | .id+"   "+.name+"   "+.status+"   "+.flavor.id' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
@@ -5573,8 +5602,8 @@ createDEH()
 
 deleteDEH()
 {
-	DEH=$1
-	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$1" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
+	DEH="$(uriencode $1)"
+	if ! is_uuid $1; then DEH=$(curlgetauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts?name=$DEH" | jq '.dedicated_hosts[].dedicated_host_id' | tr -d '"'); fi
 	curldeleteauth $TOKEN "$AUTH_URL_DEH/v1.0/$OS_PROJECT_ID/dedicated-hosts/$DEH"
 }
 
@@ -6462,13 +6491,13 @@ elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "cleanproject" ]; then
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "recoverproject" ]; then
 	recoverPROJECText "$@"
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showproject" ]; then
-   ID="$1"
+	ID="$(uriencode $1)"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
 	if test -z "$ID"; then echo "No such project" 1>&2; exit 2; fi
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}/projects/$ID" | jq -r '.'
 	ERR=${PIPESTATUS[0]}
 elif [ "$MAINCOM" == "iam"  -a "$SUBCOM" == "showextproject" ]; then
-   ID="$1"
+	ID="$(uriencode $1)"
 	if ! is_id "$ID"; then ID=`curlgetauth "$TOKEN" "${IAM_AUTH_URL%/auth*}/projects?name=$ID" | jq '.projects[].id' | tr -d '"'`; fi
 	if test -z "$ID"; then echo "No such project" 1>&2; exit 2; fi
 	curlgetauth $TOKEN "${IAM_AUTH_URL%/auth*}-ext/projects/$ID" | jq -r '.'
