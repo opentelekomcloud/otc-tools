@@ -15,7 +15,7 @@ usage()
 if test -z "$1"; then usage; fi
 
 OTC_TENANT=${OTC_TENANT:-210}
-SSHKEY=~/SSHkey-$OTC_TENANT.pem
+#SSHKEY=~/SSHkey-$OTC_TENANT.pem
 
 NORM="\e[0;0m"
 YELLOW="\e[0;33m"
@@ -78,7 +78,7 @@ getSSHkey()
 {
 	if test -n "$SSH_AUTH_SOCK"; then
 		KEYS=$(ssh-add -l)
-		if echo "$KEYS" | grep "$KEYNAME" >/dev/null 2>&1; then return; fi
+		if echo "$KEYS" | grep "$KEYNAME" >/dev/null 2>&1; then unset SSHKEY; return; fi
 	fi
 	
 	SSHKEY=~/.ssh/"$KEYNAME.pem"
