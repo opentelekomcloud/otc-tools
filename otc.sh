@@ -198,7 +198,7 @@ uriencode()
 	OUT="${OUT//;/%3B}"
 	OUT="${OUT//!/%21}"
 	OUT="${OUT//:/%3A}"
-	OUT="${OUT//#/%23}"
+	OUT="${OUT//\#/%23}"
 	echo "$OUT"
 }
 
