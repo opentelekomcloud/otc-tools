@@ -392,7 +392,11 @@ curlgetauth_pag()
 curldeleteauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+	if test -n "$2"; then
+		docurl -sS -X DELETE -H "Accept: application/json" -H "$2" -H "X-Auth-Token: $TKN" "$1"
+	else
+		docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+	fi
 }
 
 curldeleteauth_language()
@@ -4613,7 +4617,7 @@ deleteCluster()
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_CCE/api/v1/clusters" | jq ".[].metadata | select(.name == \"$ID\") | .uuid" | tr -d '"'); fi
 	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such cluster $1" 1>&2; exit 3; fi
-	curldeleteauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID"
+	curldeleteauth "$TOKEN" "$AUTH_URL_CCE/api/v1/clusters/$ID" "Content-Type: application/json"
 }
 
 showCluster()
