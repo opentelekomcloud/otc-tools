@@ -50,6 +50,7 @@
 VERSION=0.8.17
 
 # Get Config ####################################################################
+if test -z "OTC_FORCEVPCTAG"; then OTC_NOVPCTAG=1: fiOTC_NOVPCTAG=1: fi
 warn_too_open()
 {
 	PERM=$(stat -Lc "%a" "$1")
