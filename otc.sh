@@ -47,10 +47,9 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.17
+VERSION=0.8.18
 
 # Get Config ####################################################################
-if test -z "OTC_FORCEVPCTAG"; then OTC_NOVPCTAG=1: fiOTC_NOVPCTAG=1: fi
 warn_too_open()
 {
 	PERM=$(stat -Lc "%a" "$1")
@@ -858,7 +857,7 @@ getIAMToken()
 	fi
 	# Catalog bug!
 	if echo "$KARBOR_URL" | grep ' ' >/dev/null; then
-		echo "WARNING: Wrong CSBS URL: $KARBOR_URL, fixing up ..." 1>&2
+		echo "WARN: Wrong CSBS URL: $KARBOR_URL, fixing up ..." 1>&2
 		KARBOR_URL="${KARBOR_URL/ /}"
 	fi
 	#AUTH_URL_CSBS="${BASEURL/iam/csbs}/v1/$OS_PROJECT_ID"
@@ -3921,7 +3920,7 @@ ECSCreate()
 			\"metadata\": { $METADATA_JSON },"
 		echo "WARN: metadata passing not supported on ECS creation via Huawei API" 1>&2
 	fi
-	if test "$OTC_NOVPCTAG" != "1"; then
+	if test "$OTC_FORCEVPCTAG" == "1"; then
 		if test -n "$TAGS"; then
 			OPTIONAL="$OPTIONAL
 				\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
@@ -5883,7 +5882,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 			--autorecovery)
 				AUTORECOV="$2"; shift;;
 			--tags)
-				TAGS="$2"; shift;;
+				TAGS="$2"; shift
+				if test "$TAGS" != "${TAGS//@/_at_}"; then
+					echo "WARN: \"@\" no longer allowed in tags" 1>&2
+				fi;;
 			--inherit-tags)
 				INHERIT_TAGS=1;;
 			--snat)
