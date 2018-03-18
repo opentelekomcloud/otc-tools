@@ -257,10 +257,12 @@ docurl()
 		fi
 		local CODE=$(echo "$BODY"| jq '.code' 2>/dev/null)
 		local ECODE=$(echo "$BODY"| jq '.error.error_code' 2>/dev/null)
+		local ERROR=$(echo "$BODY"| jq '.error' 2>/dev/null)
 		if test "$CODE" == "null"; then
 			CODE=$(echo "$BODY"| jq '.[] | .code' 2>/dev/null)
 			if test "${CODE:0:4}" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
+		if test "$ERROR" != "null"; then echo "$ERROR" 1>&2; fi
 		#if test -z "$CODE" -o "$CODE" == "null" && test "$ECODE" != "null"; then CODE="$ECODE"; fi
 		if test "$INDMS" != 1; then
 			local MSG=$(echo "$BODY"| jq '.message' 2>/dev/null)
