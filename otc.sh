@@ -242,7 +242,7 @@ docurl()
 	else
 		# Sometimes function is called with '-i' and the response contains HTTP headers
 		# For a proper response processing get the pure BODY
-		local BODY
+		local BODY HDR2 CODE2 JBODY ERROR CODE ECODE MSG
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
 		if test -n "$HDR"; then
 			# strip off headers on the first empty string. It is still not 100% solution,
@@ -252,20 +252,24 @@ docurl()
 		else
 			BODY=$ANS
 		fi
+		HDR2=$(echo "$BODY" | head -n1 | grep '^HTTP')
+		CODE2=$(echo "$HDR2" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
 		if is_html_err "$BODY"; then
 			dumphtml "$BODY" 1>&2; return 9
 		fi
-		local CODE=$(echo "$BODY"| jq '.code' 2>/dev/null)
-		local ECODE=$(echo "$BODY"| jq '.error.error_code' 2>/dev/null)
-		local ERROR=$(echo "$BODY"| jq '.error' 2>/dev/null)
+		if echo "$BODY" | grep '{' >/dev/null; then JBODY="{${BODY#*\{}"; else JBODY=""; fi
+		ERROR=$(echo "$JBODY" | jq '.error' 2>/dev/null | tr -d '"')
+		if test "$ERROR" != "null"; then echo "$ERROR" 1>&2; fi
+		CODE=$(echo "$JBODY"| jq '.code' 2>/dev/null)
+		ECODE=$(echo "$JBODY"| jq '.error.error_code' 2>/dev/null)
 		if test "$CODE" == "null"; then
-			CODE=$(echo "$BODY"| jq '.[] | .code' 2>/dev/null)
+			CODE=$(echo "$JBODY"| jq '.[] | .code' 2>/dev/null)
 			if test "${CODE:0:4}" == "null" -o "${CODE:0:2}" == "[]"; then CODE=""; fi
 		fi
-		if test "$ERROR" != "null"; then echo "$ERROR" 1>&2; fi
+		#echo -e "docurl DEBUG: HDR=$HDR\nHDR2=$HDR2\nBODY=$BODY\nERROR=$ERROR\nCODE=$CODE\nECODE=$ECODE" 1>&2 
 		#if test -z "$CODE" -o "$CODE" == "null" && test "$ECODE" != "null"; then CODE="$ECODE"; fi
 		if test "$INDMS" != 1; then
-			local MSG=$(echo "$BODY"| jq '.message' 2>/dev/null)
+			MSG=$(echo "$JBODY"| jq '.message' 2>/dev/null)
 			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
 				echo "#Note: $MSG -> Retry" 1>&2
 				local OLDDC=$DISCARDCACHE
@@ -279,17 +283,19 @@ docurl()
 				return
 			fi
 			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
-			local MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
+			MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			if test -n "$ECODE" -a "$ECODE" != "null"; then RC=9; fi
 		fi
 		# PUT/HEAD only return an HTTP header
-		if test -n "$CODE" && test "$CODE" -ge 400; then RC=9; fi
+		if test -n "$CODE" && test "$CODE" -ge 400; then RC=9; echo "$HDR" | sed 's/^HTTP\/[0-9.]* //' 1>&2; fi
+		if test -n "$CODE2" && test "$CODE2" -ge 400; then RC=9; echo "$HDR2" | sed 's/^HTTP\/[0-9.]* //' 1>&2; fi
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
 		CODE=$(echo "$HDR" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
 		if test -n "$CODE" && test "$CODE" -ge 400; then echo "${HDR#* }" 1>&2; RC=9; fi
 	fi
 	echo "$ANS"
+	#echo "docurl Return code: $RC" 1>&2
 	return $RC
 }
 
