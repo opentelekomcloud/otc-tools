@@ -845,7 +845,7 @@ getIAMToken()
 
 	# FIXME: Use full URLs that point to the service
 	AUTH_URL_AS="${HEAT_URL/rts/as}"
-	AUTH_URL_AS="${AUTH_URL_AS%%/v[12]*}"
+	AUTH_URL_AS="${AUTH_URL_AS%%/v[12]*}/autoscaling-api/v1/$OS_PROJECT_ID"
 
 	AUTH_URL_CES="$CEILOMETER_URL"
 	AUTH_URL_CCE="${BASEURL/iam/cce}"
@@ -1244,6 +1244,21 @@ elbHelp()
 	echo "otc ulb list            # list all unified load balancers"
 }
 
+asHelp()
+{
+	echo "--- Autoscaling Help (AS) ---"
+	echo "otc asgroup list        # list all autoscaling groups"
+	echo "otc asgroup show AGID   # show details of autoscaling group AGID"
+	echo "otc asgroup vms AGID    # show instances of autoscaling group AGID"
+	echo "otc asgroup log AGID    # get action log of autoscaling group AGID"
+	echo "otc asconfig list       # list all autoscaling configurations"
+	echo "otc asconfig show ACID  # show details of autscaling config ACID"
+	echo "otc aspolicy list       # list all autoscaling configurations"
+	echo "otc aspolicy show APID  # show details of autscaling config APID"
+	echo "otc as limits           # show quotas for autoscaling"
+	echo "otc as tags TYPE        # list tags for AS typs"
+}
+
 rdsHelp()
 {
 	echo "--- Relational Database Service (RDS) ---"
@@ -1569,6 +1584,8 @@ printHelp()
 	imageHelp
 	echo
 	elbHelp
+	echo
+	asHelp
 	echo
 	rdsHelp
 	echo
@@ -3653,6 +3670,24 @@ getULBFullDetail()
 	return ${PIPESTATUS[0]}
 }
 
+# Autoscaling
+listASGroup()
+{
+	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
+	setlimit; setapilimit 3200 96 scaling_groups
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq '.scaling_groups[]'
+}
+
+showASGroup()
+{
+	ID=$1
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
+	if ! is_uuid "$ID"; then echo "ERROR: AS Group $1 not found" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group/$ID" | jq '.'
+}
+
+
+# ECS helpsers
 getECSJOBList()
 {
 	if test -z "$1"; then echo
@@ -6058,6 +6093,7 @@ if [ "$MAINCOM" = "tag" ]; then MAINCOM="tags"; fi
 if [ "$MAINCOM" = "product" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
+if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 
 
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
@@ -7001,6 +7037,29 @@ elif [ "$MAINCOM" == "dis" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "products" -a "$SUBCOM" == "categories" ]; then
 	listProductCats "$@"
 
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "help" ]; then
+	asHelp
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "list" ]; then
+	listASGroup "$@"
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "show" ]; then
+	showASGroup "$@"
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "vms" ]; then
+	listASGroupVMs "$@"
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "log" ]; then
+	getASGroupLog "$@"
+elif [ "$MAINCOM" == "asconfig" -a "$SUBCOM" == "list" ]; then
+	listASConfig "$@"
+elif [ "$MAINCOM" == "asconfig" -a "$SUBCOM" == "show" ]; then
+	showASConfig "$@"
+elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "list" ]; then
+	listASPolicy "$@"
+elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "show" ]; then
+	showASPolicy "$@"
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "limits" ]; then
+	listASQuota"$@"
+elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "tags" ]; then
+	listASTags "$@"
+
 elif [ "$MAINCOM" == "custom" -a "$SUBCOM" == "help" ]; then
 	customHelp
 elif [ "$MAINCOM" == "custom" ]; then
@@ -7011,9 +7070,6 @@ else
 	fi
 	printHelp
 fi
-
-
-
 
 # Collect status for pieces that might have been performed in MAIN
 RC=$?
