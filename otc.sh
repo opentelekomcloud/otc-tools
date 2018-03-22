@@ -1142,6 +1142,7 @@ eipHelp()
 	echo "otc publicip create             # create a publicip"
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
+	echo "    --ipv6                      # create a nat64 address"
 	echo "otc publicip delete <id>        # delete a publicip (EIP)"
 	echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
 	echo "otc publicip unbind <publicip-id>         # unbind a publicip"
@@ -4401,9 +4402,10 @@ SUBNETCreate()
 PUBLICIPSCreate()
 {
 	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
+	if test -n "$DOIPV6"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
 	local REQ_CREATE_PUBLICIPS='{
 		"publicip": {
-			"type": "5_bgp"
+			"type": "'$EIPTP'"
 		},
 		"bandwidth": {
 			"name": "'"$BANDWIDTH_NAME"'",
@@ -5843,6 +5845,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				ADMINPASS="$2"; shift;;
 			-n|--instance-name)
 				INSTANCE_NAME="$2"; shift;;
+			-6|--ipv6)
+				DOIPV6=1;;
 			-t|--instance-id)
 				INSTANCE_ID="$2"; shift;;
 			--volume-name)
@@ -6310,7 +6314,7 @@ elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "show" ]; then
 	getPUBLICIPSDetail $1
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "create" ]; then
-	PUBLICIPSCreate
+	PUBLICIPSCreate "$@"
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "delete" ]; then
 	PUBLICIPSDelete $@
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
