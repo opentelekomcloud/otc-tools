@@ -3676,7 +3676,7 @@ listASGroup()
 {
 	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
 	setlimit; setapilimit 3200 96 scaling_groups scaling_group_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuation_id+"   "+.scaling_configuration_name+"   "+tostr(.current_istance_number)+"/"+tostr(.desired_instance_number)+"("tostr(.min_instance_number)+"-"+tostr(.max_instance_number)+")   "+.lbListener_id+"   ".detail' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuation_id+"   "+.scaling_configuration_name+"   "+str(.current_istance_number)+"/"+str(.desired_instance_number)+"("+str(.min_instance_number)+"-"+str(.max_instance_number)+")   "+.lbListener_id+"   "+.detail' | tr -d '"'
 }
 
 showASGroup()
@@ -3745,7 +3745,7 @@ listASPolicy()
 {
 	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
 	setlimit; setapilimit 3200 96 scaling_policies scaling_policy_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+tostr(.cool_down_time)' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+str(.cool_down_time)' | tr -d '"'
 }
 
 showASPolicy()
