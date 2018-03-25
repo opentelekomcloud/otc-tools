@@ -1254,7 +1254,7 @@ asHelp()
 	echo "otc asgroup log AGRP    # get action log of autoscaling group AGRP"
 	echo "otc asconfig list       # list all autoscaling configurations"
 	echo "otc asconfig show ACFG  # show details of autscaling config ACFG"
-	echo "otc aspolicy list       # list all autoscaling configurations"
+	echo "otc aspolicy list AGRP  # list all autoscaling policies for AGRP"
 	echo "otc aspolicy show APOL  # show details of autscaling config APOL"
 	echo "otc as limits [AGRP]    # show quotas for autoscaling"
 	echo "otc as tags TYPE [RID]  # list tags for AS TYPE"
@@ -3676,7 +3676,7 @@ listASGroup()
 {
 	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
 	setlimit; setapilimit 3200 96 scaling_groups scaling_group_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuation_id+"   "+.scaling_configuration_name+"   "+str(.current_istance_number)+"/"+str(.desired_instance_number)+"("+str(.min_instance_number)+"-"+str(.max_instance_number)+")   "+.lbListener_id+"   "+.detail' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuration_id+"   "+.scaling_configuration_name+"   "+str(.current_instance_number)+"/"+str(.desire_instance_number)+"("+str(.min_instance_number)+"-"+str(.max_instance_number)+")   "+.lbListener_id+"   "+.detail' | tr -d '"'
 }
 
 showASGroup()
@@ -3690,20 +3690,21 @@ showASGroup()
 listASGroupVMs()
 {
 	ID=$1
-	if test -n "$2"; then APPEND="?$2"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
 	if ! is_uuid "$ID"; then echo "ERROR: AS Group $1 not found" 1>&2; exit 2; fi
-	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group_instance/$ID/list&limit=100$APPEND" | jq 'def str(v): v|tostring; .scaling_group_instances | .instance_id+"   "+.instance_name+"   ".life_cycle_state+"   "+.health_status+"   ".scaling_configuration_name' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group_instance/$ID/list?limit=100$APPEND" | jq 'def str(v): v|tostring; .scaling_group_instances[] | .instance_id+"   "+.instance_name+"   "+.life_cycle_state+"   "+.health_status+"   "+.scaling_configuration_name' | tr -d '"'
 }
 
 
 getASGroupLog()
 {
 	ID=$1
-	if test -n "$2"; then APPEND="?$2"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
-	setlimit; setapilimit 3200 96 'scaling_activity_log[]'
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID$APPEND" | jq '.scaling_activity_log[]'
+	#setlimit; setapilimit 3200 96 'scaling_activity_log[]'
+	#curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID&limit=100$APPEND" | jq '.scaling_activity_log[]'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID?limit=100$APPEND" | jq '.scaling_activity_log[]'
 }
 
 getASQuota()
@@ -3738,14 +3739,18 @@ showASConfig()
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_configuration?scaling_policy_name=$(uriencode $ID)" | jq '.scaling_configurations[] | .scaling_configuration_id' | tr -d '"' | head -n1); fi
 	if ! is_uuid "$ID"; then echo "ERROR: AS Config $1 not found" 1>&2; exit 2; fi
-	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_policy/$ID" | jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_configuration/$ID" | jq '.'
 }
 
 listASPolicy()
 {
-	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
+	ID=$1
+	if test -z "$1"; then echo "ERROR: Need to specify AS Group" 1>&2; exit 2; fi
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
+	if ! is_uuid "$ID"; then echo "ERROR: AS Group $1 not found" 1>&2; exit 2; fi
 	setlimit; setapilimit 3200 96 scaling_policies scaling_policy_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+str(.cool_down_time)' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy/$ID/list$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+str(.cool_down_time)' | tr -d '"'
 }
 
 showASPolicy()
@@ -7129,7 +7134,7 @@ elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "show" ]; then
 	showASPolicy "$@"
 elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "limits" ]; then
-	getASQuota"$@"
+	getASQuota "$@"
 elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "tags" ]; then
 	listASTags "$@"
 
