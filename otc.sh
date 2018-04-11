@@ -1085,17 +1085,17 @@ backupHelp()
 	echo "otc snapshot delete snapid             # delete snapshot snapid"
 	echo "otc backuppolicy list                  # list backup policies"
 	echo "otc backuppolicy show NAME|ID          # details of backup policy"
-	echo "otc backuppolicy create NAME           # create backup policy"
-	echo "    --time HH:mm                       # UTC time to start backup"
+	echo "otc backuppolicy create [options] NAME # create backup policy"
+	echo "    --time HH:mm                       # option: UTC time to start backup"
 	echo "    --freq N                           # no of days b/w backups"
 	echo "    --retain N                         # no of backups to retain (min 2)"
 	echo "    --retain1st Y/N                    # retain first backup of curr month"
 	echo "    --enable/disable                   # enable/disable (def: enable)"
-	echo "otc backuppolicy update ID             # update backup policy (same params as above)"
-	echo "otc backuppolicy delete ID             # delete backup policy"
-	echo "otc backuppolicy add ID VOLID [VOLID [...]]       # add volumes to policy"
-	echo "otc backuppolicy remove ID VOLID [VOLID [...]]    # remove vols from policy"
-	echo "otc backuppolicy execute ID            # trigger backup policy to run once"
+	echo "otc backuppolicy update NAME|ID        # update backup policy (same params as above)"
+	echo "otc backuppolicy delete ID             # delete backup policy (by NAME or ID)"
+	echo "otc backuppolicy add ID VOLID [VOLID [...]]       # add volumes to policy (dito)"
+	echo "otc backuppolicy remove ID VOLID [VOLID [...]]    # remove vols from policy (...)"
+	echo "otc backuppolicy execute ID            # trigger backup policy to run once (...)"
 	echo "otc backuppolicy showtasks ID          # show jobs triggered by policy (JSON)"
 	echo "otc backuppolicy listtasks ID          # show jobs triggered by policy (list)"
 }
@@ -1302,7 +1302,7 @@ dnsHelp()
 	echo "otc domain list         # show all zones/domains"
 	echo "otc domain show zid     # show details of zone/domain <zid>"
 	echo "otc domain delete zid   # deleted zone/domain <zid>"
-	echo "otc domain create domain [desc [type [mail [ttl]]]]"
+	echo "otc domain create [options] domain [desc [type [mail [ttl]]]]"
 	echo "                        # create zone for domain (name. or ...in-addr.arpa.)"
 	echo "                        # desc, public/private, mail, ttl (def: 300s) optional"
 	echo "otc domain addrecord	zid name. type ttl val [desc]"
@@ -2419,9 +2419,9 @@ createBackupPolicy()
 {
 	local NAME="$1"; shift
 	# Optional pos params (convenience)
-	if test -z "$BKUPTIME" -a -n "$1"; then BKUPTIME="$1";
-		if test -z "$BKUPFREQ" -a -n "$2"; then BKUPFREQ=$2;
-			if test -z "$BKUPRETAIN" -a -n "$3"; then BKUPRETAIN=$3; fi
+	if test -z "$BKUPTIME" -a -n "$1"; then if "$1" == "--time"; then shift; fi; BKUPTIME="$1";
+		if test -z "$BKUPFREQ" -a -n "$2"; then if test "$2" == "--freq"; then shift; fi; BKUPFREQ=$2;
+			if test -z "$BKUPRETAIN" -a -n "$3"; then if test "$3" == "--retain"; then shift; fi; BKUPRETAIN=$3; fi
 		fi
 	fi
 	if test -z "$BKUPRETAIN" -o -z "$BKUPFREQ" -o -z "$BKUPTIME"; then
@@ -2920,15 +2920,20 @@ createDomain()
 	if test "${1: -1:1}" != "."; then
 		echo "WARN: Zone/Domain name should end in '.'" 1>&2
 	fi
-	local REQ="{ \"name\": \"$1\""
-	if test -n "$2"; then REQ="$REQ, \"description\": \"$2\""; fi
-	if test -n "$3"; then REQ="$REQ, \"zone_type\": \"$3\""; fi
-	if test -n "$4"; then REQ="$REQ, \"email\": \"$4\""; fi
-	if test -n "$5"; then REQ="$REQ, \"ttl\": $5"; fi
-	if test "$3" == "private"; then
+	local REQ="{ \"name\": \"$1\""; shift
+	if test -n "$1"; then REQ="$REQ, \"description\": \"$1\""; shift; fi
+	if test -n "$1"; then REQ="$REQ, \"zone_type\": \"$1\""; PP="$1"; shift; fi
+	if test -n "$1"; then REQ="$REQ, \"email\": \"$1\""; shift; fi
+	if test -n "$1"; then REQ="$REQ, \"ttl\": $1"; shift; fi
+	# FIXME: Add tagging support
+	if test "$PP" == "private"; then
 		if test -z "$VPCID" -a -z "$VPCNAME"; then
-			echo "Need to specify VPC (--vpc-id or --vpc-name) for private domain" 1>&2;
-			exit 1;
+			if test "$1" == "--vpc-id"; then VPCID="$2"; shift; shift
+			elif test "$1" == "--vpc-name"; then VPCNAME="$2"; shift; shift
+			else
+				echo "Need to specify VPC (--vpc-id or --vpc-name) for private domain" 1>&2;
+				exit 1;
+			fi
 		fi
 		if test -z "$VPCID"; then convertVPCNameToId $VPCNAME; fi
 		REQ="$REQ, \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" }"
