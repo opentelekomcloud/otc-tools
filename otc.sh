@@ -1187,8 +1187,8 @@ imageHelp()
 	echo "otc images create NAME          # create image from ECS instance (snapshot)"
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
-	echo "    --description  <description># optional"
-	echo "otc image copy     <imageid> <new image name>   # copy an IMS image within a Region"
+	echo "    --description  <descriptionf># optional"
+	echo "otc images copy IMAGEID IMAGENAME   # copy an IMS image within a Region"
 	echo "    --description  <description># optional"	
 	echo "    --cmk_id  <encryption key id># optional"	
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
@@ -5932,7 +5932,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -6079,7 +6079,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 			--min-ram)
 				MINRAM=$2; shift;;
 			--cmk_id)
-				CMKID=$2; shift;;			
+				CMKID=$2;  shift;;			
 			--disk-format|--diskformat)
 				DISKFORMAT=$2; shift;;
 			--os-version)
@@ -6486,6 +6486,8 @@ elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "upload" ]; then
 	fi
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "create" ]; then
 	createIMAGE "$1"
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "copy" ]; then
+	copyIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "register" ]; then
 	registerIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "delete" ]; then
