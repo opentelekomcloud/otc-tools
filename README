@@ -30,6 +30,10 @@ When managing multipe OTC domains, you may create ~/.ostackrc.SUFFIX and
 Please have a look the otc_env.sh file and look at the output from otc help --
 this provides sufficient information to get doing.
 
+otc.sh relies on a GNU date, so if you are running it on MacOS X, please install
+GNU date by running `brew install gdate` and make it first in the PATH:
+`ln -sf /usr/local/bin/gdate /usr/local/bin/date`
+
 Limitations
 -----------
 This tool does not try to cover all functionality of OTC. Rather it tries to
