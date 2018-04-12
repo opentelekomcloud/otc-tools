@@ -1187,7 +1187,10 @@ imageHelp()
 	echo "otc images create NAME          # create image from ECS instance (snapshot)"
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
-	echo "    --description  <description># optional"
+	echo "    --description  <descriptionf># optional"
+	echo "otc images copy IMAGEID IMAGENAME   # copy an IMS image within a Region"
+	echo "    --description  <description># optional"	
+	echo "    --cmk_id  <encryption key id># optional"	
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
 	echo "    --property, --min-disk, --os-version and --wait supported"
 	echo "otc images update <id>          # change properties, --image-name, --min-*"
@@ -1254,7 +1257,7 @@ asHelp()
 	echo "otc asgroup log AGRP    # get action log of autoscaling group AGRP"
 	echo "otc asconfig list       # list all autoscaling configurations"
 	echo "otc asconfig show ACFG  # show details of autscaling config ACFG"
-	echo "otc aspolicy list       # list all autoscaling configurations"
+	echo "otc aspolicy list AGRP  # list all autoscaling policies for AGRP"
 	echo "otc aspolicy show APOL  # show details of autscaling config APOL"
 	echo "otc as limits [AGRP]    # show quotas for autoscaling"
 	echo "otc as tags TYPE [RID]  # list tags for AS TYPE"
@@ -3153,6 +3156,26 @@ createIMAGE()
 	fi
 }
 
+
+copyIMAGE()
+{
+    if test -z "$1"; then echo "ERROR: Need to specify source IMAGE ID" 1>&2; exit 2; fi
+    if test -z "$2"; then echo "ERROR: Need to specify a destination IMAGE NAME" 1>&2; exit 2; fi
+    # create image copy request
+		
+	local REQ="{ \"name\": \"$2\" }"
+	if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+    if test -n "$CMKID"; then REQ="${REQ%\}}, \"cmk_id\": \"$CMKID\" }"; fi
+	RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV1/$1/copy" | jq '.'; return ${PIPESTATUS[0]})
+	RC=$?
+	echo "$RESP"
+	IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
+	IMGID=`WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 120 | tail -n1`
+	if is_uuid "$IMGID"; then getIMAGEDetail $IMGID; fi
+	return $RC
+    
+}
+
 deleteIMAGE()
 {
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
@@ -3681,7 +3704,7 @@ listASGroup()
 {
 	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
 	setlimit; setapilimit 3200 96 scaling_groups scaling_group_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuation_id+"   "+.scaling_configuration_name+"   "+tostr(.current_istance_number)+"/"+tostr(.desired_instance_number)+"("tostr(.min_instance_number)+"-"+tostr(.max_instance_number)+")   "+.lbListener_id+"   ".detail' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_group$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_groups[] | .scaling_group_id+"   "+.scaling_group_name+"   "+.scaling_group_status+"   "+.scaling_configuration_id+"   "+.scaling_configuration_name+"   "+str(.current_instance_number)+"/"+str(.desire_instance_number)+"("+str(.min_instance_number)+"-"+str(.max_instance_number)+")   "+.lbListener_id+"   "+.detail' | tr -d '"'
 }
 
 showASGroup()
@@ -3695,20 +3718,21 @@ showASGroup()
 listASGroupVMs()
 {
 	ID=$1
-	if test -n "$2"; then APPEND="?$2"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
 	if ! is_uuid "$ID"; then echo "ERROR: AS Group $1 not found" 1>&2; exit 2; fi
-	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group_instance/$ID/list&limit=100$APPEND" | jq 'def str(v): v|tostring; .scaling_group_instances | .instance_id+"   "+.instance_name+"   ".life_cycle_state+"   "+.health_status+"   ".scaling_configuration_name' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group_instance/$ID/list?limit=100$APPEND" | jq 'def str(v): v|tostring; .scaling_group_instances[] | .instance_id+"   "+.instance_name+"   "+.life_cycle_state+"   "+.health_status+"   "+.scaling_configuration_name' | tr -d '"'
 }
 
 
 getASGroupLog()
 {
 	ID=$1
-	if test -n "$2"; then APPEND="?$2"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
-	setlimit; setapilimit 3200 96 'scaling_activity_log[]'
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID$APPEND" | jq '.scaling_activity_log[]'
+	#setlimit; setapilimit 3200 96 'scaling_activity_log[]'
+	#curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID&limit=100$APPEND" | jq '.scaling_activity_log[]'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_activity_log/$ID?limit=100$APPEND" | jq '.scaling_activity_log[]'
 }
 
 getASQuota()
@@ -3743,14 +3767,18 @@ showASConfig()
 	ID=$1
 	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_configuration?scaling_policy_name=$(uriencode $ID)" | jq '.scaling_configurations[] | .scaling_configuration_id' | tr -d '"' | head -n1); fi
 	if ! is_uuid "$ID"; then echo "ERROR: AS Config $1 not found" 1>&2; exit 2; fi
-	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_policy/$ID" | jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_configuration/$ID" | jq '.'
 }
 
 listASPolicy()
 {
-	if test -n "$1"; then APPEND="&$1"; else APPEND=""; fi
+	if test -n "$2"; then APPEND="&$2"; else APPEND=""; fi
+	ID=$1
+	if test -z "$1"; then echo "ERROR: Need to specify AS Group" 1>&2; exit 2; fi
+	if ! is_uuid "$ID"; then ID=$(curlgetauth $TOKEN "$AUTH_URL_AS/scaling_group?scaling_group_name=$(uriencode $ID)" | jq '.scaling_groups[] | .scaling_group_id' | tr -d '"' | head -n1); fi
+	if ! is_uuid "$ID"; then echo "ERROR: AS Group $1 not found" 1>&2; exit 2; fi
 	setlimit; setapilimit 3200 96 scaling_policies scaling_policy_id
-	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+tostr(.cool_down_time)' | tr -d '"'
+	curlgetauth_pag $TOKEN "$AUTH_URL_AS/scaling_policy/$ID/list$PARAMSTRING$APPEND" | jq 'def str(v): v|tostring; .scaling_policies[] | .scaling_policy_id+"   "+.scaling_policy_name+"   "+.policy_status+"   "+.scaling_group_id+"   "+.scaling_policy_type+"   "+str(.cool_down_time)' | tr -d '"'
 }
 
 showASPolicy()
@@ -5909,7 +5937,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -6055,6 +6083,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				MINDISK=$2; shift;;
 			--min-ram)
 				MINRAM=$2; shift;;
+			--cmk_id)
+				CMKID=$2;  shift;;			
 			--disk-format|--diskformat)
 				DISKFORMAT=$2; shift;;
 			--os-version)
@@ -6461,6 +6491,8 @@ elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "upload" ]; then
 	fi
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "create" ]; then
 	createIMAGE "$1"
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "copy" ]; then
+	copyIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "register" ]; then
 	registerIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "delete" ]; then
@@ -7134,7 +7166,7 @@ elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "list" ]; then
 elif [ "$MAINCOM" == "aspolicy" -a "$SUBCOM" == "show" ]; then
 	showASPolicy "$@"
 elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "limits" ]; then
-	getASQuota"$@"
+	getASQuota "$@"
 elif [ "$MAINCOM" == "asgroup" -a "$SUBCOM" == "tags" ]; then
 	listASTags "$@"
 
