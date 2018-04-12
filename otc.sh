@@ -1174,10 +1174,10 @@ imageHelp()
 {
 	echo "--- Image Management Service (IMS) ---"
 	echo "otc images list [FILTERS]       # list all images (optionally use prop filters)"
-	echo "otc images show <id>            # show image details"
-	echo "otc images upload <id> filename           # upload image file (OTC-1.1+)"
-	echo "otc images upload <id> bucket:objname     # specify image upload src (via s3)"
-	echo "otc images download <id> bucket:objname   # export priv image into s3 object"
+	echo "otc images show <img>           # show image details"
+	echo "otc images upload <img> filename          # upload image file (OTC-1.1+)"
+	echo "otc images upload <img> bucket:objname    # specify image upload src (via s3)"
+	echo "otc images download <img> bucket:objname  # export priv image into s3 object"
 	echo "otc images create NAME          # create (private) image with name"
 	echo "    --disk-format  <disk-format>"
 	echo "    --min-disk     <GB>"
@@ -1188,20 +1188,20 @@ imageHelp()
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
 	echo "    --description  <descriptionf># optional"
-	echo "otc images copy IMAGEID IMAGENAME   # copy an IMS image within a Region"
-	echo "    --description  <description># optional"	
-	echo "    --cmk_id  <encryption key id># optional"	
+	echo "otc images copy SRCIMAGE NEWIMAGENAME     # copy an IMS image within a region"
+	echo "    --description  <description>          # optional"
+	echo "    --cmk_id  <encryption key id>         # optional"
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
 	echo "    --property, --min-disk, --os-version and --wait supported"
-	echo "otc images update <id>          # change properties, --image-name, --min-*"
-	echo "otc images delete <id>          # delete (private) image by ID"
+	echo "otc images update <img>         # change properties, --image-name, --min-*"
+	echo "otc images delete <img>         # delete (private) image by ID/name"
 	echo
-	echo "otc images listshare <id>       # list projects image id is shared with"
-	echo "otc images showshare <id> <prj> # show detailed image sharing status"
-	echo "otc images share <id> <prj>     # share image id with prj"
-	echo "otc images unshare <id> <prj>   # stop sharing img id with prj"
-	echo "otc images acceptshare <id> [<prj>]       # accept image id shared into prj (default to self)"
-	echo "otc images rejectshare <id> [<prj>]       # reject image id shared into prj"
+	echo "otc images listshare <img>      # list projects image id is shared with"
+	echo "otc images showshare <img> <prj># show detailed image sharing status"
+	echo "otc images share <img> <prj>    # share image id with prj"
+	echo "otc images unshare <img> <prj>  # stop sharing img id with prj"
+	echo "otc images acceptshare <img> [<prj>]      # accept image id shared into prj (default to self)"
+	echo "otc images rejectshare <img> [<prj>]      # reject image id shared into prj"
 }
 
 elbHelp()
@@ -3075,7 +3075,7 @@ getIMAGEDetail()
 {
 	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 	#curlgetauth $TOKEN "$AUTH_URL_IMAGES?limit=800"| jq '.images[] | select(.id == "'$IMAGE_ID'")'
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID"| jq '.'
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -3159,14 +3159,15 @@ createIMAGE()
 
 copyIMAGE()
 {
-    if test -z "$1"; then echo "ERROR: Need to specify source IMAGE ID" 1>&2; exit 2; fi
-    if test -z "$2"; then echo "ERROR: Need to specify a destination IMAGE NAME" 1>&2; exit 2; fi
-    # create image copy request
+	if test -z "$1"; then echo "ERROR: Need to specify source IMAGE" 1>&2; exit 2; fi
+	if test -z "$2"; then echo "ERROR: Need to specify a destination IMAGE NAME" 1>&2; exit 2; fi
+	# create image copy request
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 		
 	local REQ="{ \"name\": \"$2\" }"
 	if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
-    if test -n "$CMKID"; then REQ="${REQ%\}}, \"cmk_id\": \"$CMKID\" }"; fi
-	RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV1/$1/copy" | jq '.'; return ${PIPESTATUS[0]})
+	if test -n "$CMKID"; then REQ="${REQ%\}}, \"cmk_id\": \"$CMKID\" }"; fi
+	RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV1/$IMAGE_ID/copy" | jq '.'; return ${PIPESTATUS[0]})
 	RC=$?
 	echo "$RESP"
 	IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
@@ -3187,12 +3188,13 @@ uploadIMAGEobj()
 {
 	local ANS
 	# The image upload via s3 bucket has been moved to v1 endpoint
-	ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$1/upload")
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	ANS=$(curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGESV1/$IMAGE_ID/upload")
 	RC=$?
 	# Fall back to intermediate solution which abused the v2 OpenStack API
 	case "$ANS" in
 	*"Api does not exist"*)
-		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$1/file"
+		curlputauth $TOKEN "{ \"image_url\":\"$2\" }" "$AUTH_URL_IMAGES/$IMAGE_ID/file"
 		RC=$?
 		;;
 	*)
@@ -3205,8 +3207,9 @@ uploadIMAGEobj()
 uploadIMAGEfile()
 {
 	local sz=$(stat -c "%s" "$2")
-	echo "INFO: Uploading $sz bytes from $2 to image $1 ..." 1>&2
-	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$1/file"
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	echo "INFO: Uploading $sz bytes from $2 to image $IMAGE_ID ..." 1>&2
+	curlputauthbinfile $TOKEN "$2" "$AUTH_URL_IMAGES/$IMAGE_ID/file"
 	#return $?
 }
 
@@ -3214,8 +3217,9 @@ IMGJOBID=""
 downloadIMAGE()
 {
 	local IMSANS
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 	if test -z "$DISKFORMAT"; then DISKFORMAT="${2##*.}"; fi
-	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$1/file"`
+	IMSANS=`curlpostauth $TOKEN "{ \"bucket_url\": \"$2\", \"file_format\": \"$DISKFORMAT\" }" "$AUTH_URL_IMAGESV1/$IMAGE_ID/file"`
 	RC=$?
 	echo "$IMSANS"
 	IMGJOBID=`echo "$IMSANS" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '`
@@ -3226,58 +3230,65 @@ updateIMAGE()
 {
 	# FIXME: This only updates one single value at a time, could be optimized a lot
 	local OLDIFS="$IFS"; IFS=","
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
 	for prop in $PROPS; do
-		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "${prop%%=*}" "${prop#*=}" "application/openstack-images-v2.1-json-patch"
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID" "${prop%%=*}" "${prop#*=}" "application/openstack-images-v2.1-json-patch"
 	done
 	IFS="$OLDIFS"
 	# NOW handle min_disk, min_ram, name (if any change)
 	if test -n "$MINDISK"; then
-		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_disk" "$MINDISK" "application/openstack-images-v2.1-json-patch"
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID" "min_disk" "$MINDISK" "application/openstack-images-v2.1-json-patch"
 	fi
 	if test -n "$MINRAM"; then
-		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "min_ram" "$MINRAM" "application/openstack-images-v2.1-json-patch"
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID" "min_ram" "$MINRAM" "application/openstack-images-v2.1-json-patch"
 	fi
 	if test -n "$IMAGENAME"; then
-		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$1" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
+		curladdorreplace $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID" "name" "$IMAGENAME" "application/openstack-images-v2.1-json-patch"
 	fi
 	#return $?
 }
 
 getImgMemberList()
 {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID/members" | jq -r '.members[] | .member_id+"   "+.image_id+"   "+.status'
 	return ${PIPESTATUS[0]}
 }
 
 getImgMemberDetail()
 {
-	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2" | jq -r '.'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curlgetauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID/members/$2" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 ImgMemberCreate()
 {
-	curlpostauth $TOKEN "{ \"member\": \"$2\" }" "$AUTH_URL_IMAGES/$1/members" | jq -r '.'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curlpostauth $TOKEN "{ \"member\": \"$2\" }" "$AUTH_URL_IMAGES/$IMAGE_ID/members" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 ImgMemberDelete()
 {
-	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$1/members/$2"
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curldeleteauth $TOKEN "$AUTH_URL_IMAGES/$IMAGE_ID/members/$2"
 	#return $?
 }
 
 ImgMemberAccept()
 {
 	local PRJ=${2:-$OS_PROJECT_ID}
-	curlputauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curlputauth $TOKEN "{ \"status\": \"accepted\" }" "$AUTH_URL_IMAGES/$IMAGE_ID/members/$PRJ" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
 ImgMemberReject()
 {
 	local PRJ=${2:-$OS_PROJECT_ID}
-	curlputauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$1/members/$PRJ" | jq -r '.'
+	if ! is_uuid "$1"; then convertIMAGENameToId "$1"; else IMAGE_ID="$1"; fi
+	curlputauth $TOKEN "{ \"status\": \"rejected\" }" "$AUTH_URL_IMAGES/$IMAGE_ID/members/$PRJ" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
