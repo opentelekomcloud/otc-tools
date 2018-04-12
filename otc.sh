@@ -1091,6 +1091,7 @@ backupHelp()
 	echo "    --retain N                         # no of backups to retain (min 2)"
 	echo "    --retain1st Y/N                    # retain first backup of curr month"
 	echo "    --enable/disable                   # enable/disable (def: enable)"
+	echo "    --tags key=val,...                 # key-value pairs as tags (optional)"
 	echo "otc backuppolicy update NAME|ID        # update backup policy (same params as above)"
 	echo "otc backuppolicy delete ID             # delete backup policy (by NAME or ID)"
 	echo "otc backuppolicy add ID VOLID [VOLID [...]]       # add volumes to policy (dito)"
@@ -2434,8 +2435,9 @@ createBackupPolicy()
 	if test -z "$BKUPRETFIRST"; then echo "WARN: BackupPolicy: Default to retain 1st backup of cur month" 1>&2; BKUPRETFIRST="Y"; fi
 	if test -z "$OPTENABLE" -a -z "$OPTDISABLE"; then OPTENABLE=1; fi
 	if test -n "$OPTENABLE"; then OPTSTR=", \"status\": \"ON\""; else OPTSTR=", \"status\": \"OFF\""; fi
+	if test -n "$TAGS"; then OPTSTR2=", \"tags\": [ $(keyval2keyvalue $TAGS) ]"; fi
 	# "reNtention" is not a bug in the tool, but the API :-O
-	curlpostauth $TOKEN "{ \"backup_policy_name\": \"$NAME\", \"scheduled_policy\": { \"start_time\": \"$BKUPTIME\", \"frequency\": $BKUPFREQ, \"rentention_num\": $BKUPRETAIN, \"remain_first_backup_of_curMonth\": \"$BKUPRETFIRST\"$OPTSTR } }" "$AUTH_URL_CBACKUPPOLS" | jq -r '.'
+	curlpostauth $TOKEN "{ \"backup_policy_name\": \"$NAME\", \"scheduled_policy\": { \"start_time\": \"$BKUPTIME\", \"frequency\": $BKUPFREQ, \"rentention_num\": $BKUPRETAIN, \"remain_first_backup_of_curMonth\": \"$BKUPRETFIRST\"$OPTSTR } $OPTSTR2 }" "$AUTH_URL_CBACKUPPOLS" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
