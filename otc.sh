@@ -1187,7 +1187,10 @@ imageHelp()
 	echo "otc images create NAME          # create image from ECS instance (snapshot)"
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
-	echo "    --description  <description># optional"
+	echo "    --description  <descriptionf># optional"
+	echo "otc images copy IMAGEID IMAGENAME   # copy an IMS image within a Region"
+	echo "    --description  <description># optional"	
+	echo "    --cmk_id  <encryption key id># optional"	
 	echo "otc images register NAME FILE   # create (private) image with name and s3 file"
 	echo "    --property, --min-disk, --os-version and --wait supported"
 	echo "otc images update <id>          # change properties, --image-name, --min-*"
@@ -3146,6 +3149,26 @@ createIMAGE()
 		if is_uuid "$IMGID"; then getIMAGEDetail $IMGID; fi
 		return $RC
 	fi
+}
+
+
+copyIMAGE()
+{
+    if test -z "$1"; then echo "ERROR: Need to specify source IMAGE ID" 1>&2; exit 2; fi
+    if test -z "$2"; then echo "ERROR: Need to specify a destination IMAGE NAME" 1>&2; exit 2; fi
+    # create image copy request
+		
+	local REQ="{ \"name\": \"$2\" }"
+	if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
+    if test -n "$CMKID"; then REQ="${REQ%\}}, \"cmk_id\": \"$CMKID\" }"; fi
+	RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV1/$1/copy" | jq '.'; return ${PIPESTATUS[0]})
+	RC=$?
+	echo "$RESP"
+	IMGTASKID=`echo "$RESP" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
+	IMGID=`WaitForTaskFieldOpt $IMGTASKID '.entities.image_id' 5 120 | tail -n1`
+	if is_uuid "$IMGID"; then getIMAGEDetail $IMGID; fi
+	return $RC
+    
 }
 
 deleteIMAGE()
@@ -5909,7 +5932,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
@@ -6055,6 +6078,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" = "addlistener" -o "${SUBCOM:0:6}"
 				MINDISK=$2; shift;;
 			--min-ram)
 				MINRAM=$2; shift;;
+			--cmk_id)
+				CMKID=$2;  shift;;			
 			--disk-format|--diskformat)
 				DISKFORMAT=$2; shift;;
 			--os-version)
@@ -6461,6 +6486,8 @@ elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "upload" ]; then
 	fi
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "create" ]; then
 	createIMAGE "$1"
+elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "copy" ]; then
+	copyIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "register" ]; then
 	registerIMAGE "$1" "$2"
 elif [ "$MAINCOM" == "images"  -a "$SUBCOM" == "delete" ]; then
