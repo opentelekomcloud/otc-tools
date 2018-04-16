@@ -6216,7 +6216,10 @@ if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
 
+# help XXX is the same as XXX help
+if [ "$MAINCOM" = "help" -a -n "$SUBCOM" ]; then MAINCOM="$SUBCOM"; SUBCOM="help"; fi
 
+# Some IAM functions need special handling
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "roles" ]; then OUTPUT_ROLES=1; fi
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "domain" ]; then OUTPUT_DOM=1; fi
