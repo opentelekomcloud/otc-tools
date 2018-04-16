@@ -6158,6 +6158,9 @@ if [ "$MAINCOM" == "s3" ]; then
 	exit $?
 fi
 
+# help XXX is the same as XXX help
+if [ "$MAINCOM" = "help" -a -n "$SUBCOM" ]; then MAINCOM="$SUBCOM"; SUBCOM="help"; fi
+
 # Support aliases / alternative names
 if [ "$MAINCOM" = "server" ]; then MAINCOM="ecs"; fi
 if [ "$MAINCOM" = "vm" ]; then MAINCOM="ecs"; fi
@@ -6215,9 +6218,6 @@ if [ "$MAINCOM" = "product" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "marketplace" ]; then MAINCOM="products"; fi
 if [ "$MAINCOM" = "natgw" ]; then MAINCOM="nat"; fi
 if [ "$MAINCOM" = "as" ]; then MAINCOM="asgroup"; fi
-
-# help XXX is the same as XXX help
-if [ "$MAINCOM" = "help" -a -n "$SUBCOM" ]; then MAINCOM="$SUBCOM"; SUBCOM="help"; fi
 
 # Some IAM functions need special handling
 if [ "$MAINCOM" = "iam" -a "$SUBCOM" = "catalog" ]; then OUTPUT_CAT=1; fi
