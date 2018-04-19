@@ -1238,15 +1238,16 @@ elbHelp()
 	echo "otc elb delcheck <cid>"
 	#
 	echo "otc elb listcert                # Show certs for SSL termination"
-	echo "otc elb createcert CERT PRIV [NAME]       # SSL certificate creation (PEM files)"
-	echo "otc elb updatecert ID [NAME]    # Update certificate name/desc"
-	echo "    --name NAME --description DESC"
-	#echo "otc elb showcert ID             # SSL certificate details"
-	echo "otc elb deletecert ID           # SSL certificate deletion"
-	# not doc: modifycert
+	echo "otc elb createcert [opt] CERT PRIV [NAME [DOM]]   # SSL certificate creation (PEM files)"
+	echo "    --name NAME --description DESC --domain DOM   # domain needed for SNI"
+	echo "otc elb updatecert ID/NM [NEWNM]# Update cert name/desc (same opts as above)"
+	echo "otc elb showcert ID/NM          # SSL certificate details"
+	echo "otc elb deletecert ID/NM        # SSL certificate deletion"
 
 	echo "--- Unified Load Balancer (ULB aka LBaaSv2) ---"
 	echo "otc ulb list            # list all unified load balancers"
+	echo "otc ulb show ULB        # show details of ULB"
+	echo "otc ulb details ULB     # show more details of ULB"
 }
 
 asHelp()
@@ -3647,6 +3648,7 @@ createELBCert()
 	if test ! -r "$PRIV"; then echo "ELB PrivKey file $PRIV must be readable" 1>&2; exit 2; fi
 	PRIV=$(cat "$PRIV")
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
 	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
 	if test -n "$1" -a -z "$NAME"; then NAME="$*"; fi
 	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
@@ -3656,16 +3658,20 @@ createELBCert()
 
 listELBCert()
 {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq '.certificates[] | .id+"   "+.name+"   "+.certificate+"   "+.description' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq '.certificates[] | .id+"   "+.name+"   "+.domain+"   "+.description' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
 # API not implemented (irregularity)
 showELBCert()
 {
-	ID="$(uriencode $1)"
-	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
-	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
+	#ID="$(uriencode $1)"
+	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
+	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | select(.name == \"$1\") | .id" | tr -d '"'`; fi
+	#curlgetauth $TOKEN "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
+	local FILT
+	if is_id $1; then FILT="select(.id == \"$1\")"; else FILT="select(.name == \"$1\")"; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | $FILT"
 	return ${PIPESTATUS[0]}
 }
 
@@ -3674,6 +3680,7 @@ deleteELBCert()
 	local ID="$1"; shift
 	# Std Name -> ID conversion not working with Huawei custom API :-(
 	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
+	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | select(.name == \"$ID\") | .id" | tr -d '"'`; fi
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/certificate/$ID"
 }
 
@@ -3682,11 +3689,16 @@ modifyELBCert()
 	local ID="$1"; shift
 	# Std Name -> ID conversion not working with Huawei custom API :-(
 	#if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate&name=$ID" | jq '.certificates[].id' | tr -d '"'`; fi
-	if test -z "$NAME" -a -n "$1"; then NAME="$*"; fi
-	local DESC NM
-	NM="\"name\": \"$NAME\""
-	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
-	curlputauth	$TOKEN "{ $NM $DESC }" "$AUTH_URL_ELB/certificate/$ID" | jq -r '.'
+	if ! is_id "$ID"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | select(.name == \"$ID\") | .id" | tr -d '"'`; fi
+	if test -z "$ID" -o "$ID" = "null"; then echo "ERROR: No such ELB cert" 1>&2; exit 2; fi
+	if test -z "$NAME" -a -n "$1"; then NAME="$1"; if test "$NAME" == "--name"; then shift; NAME="$1"; fi; fi
+	if test -z "$DOMAIN" -a -n "$2"; then DOMAIN="$2"; if test "$DOMAIN" == "--domain"; then shift; DOMAIN="$2"; fi; fi
+	local DESC
+	if test -n "$DESCRIPTION"; then DESC="\"description\": \"$DESCRIPTION\""; fi
+	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
+	if test -n "$NAME"; then DESC="$DESC, \"name\": \"$NAME\""; fi
+	DESC="${DESC#,}"
+	curlputauth	$TOKEN "{ $NM $DESC }" "$AUTH_URL_ELB/certificate/$ID" | sed 's/\(-----BEGIN PRIVATE KEY-----\)[^-]*/\1MIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -6115,6 +6127,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				DESCRIPTION="$2"; shift;;
 			--name)
 				NAME="$2"; shift;;
+			--domain)
+				DOMAIN="$2"; shift;;
 			--timeout|--elbtimeout)
 				ELBTIMEOUT="$2"; shift;;
 			--cookieto|--cookietimeout)
