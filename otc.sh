@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.20
+VERSION=0.8.21
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1227,13 +1227,13 @@ elbHelp()
 	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1 (only HTTPS)"
 	echo "    --sslcipher <Kwd>           # Default or Strict or Extended (Ext for v1.2+1.1+1)"
 	#not implemented: modifylistener
-	echo "otc elb dellistener <lid>"
+	echo "otc elb dellistener <lid>       # delete listener by ID/NAME"
 	echo "otc elb listmember <lid>"
-	echo "otc elb showmember <lid> <mid>"
+	echo "otc elb showmember <lid> <mid>  # show member details by name/IP"
 	echo "otc elb addmember <lid> <vmid> <vmip>"
 	echo "otc elb delmember <lid> <mid> <vmip>"
-	#elb listcheck <lid> is missing (!)
-	echo "otc elb showcheck <cid>"
+	#elb listcheck <lid> is missing (!) from API
+	echo "otc elb showcheck <cid/lnm>     # show healtcheck by check ID / listener name"
 	echo "otc elb addcheck <lid> <proto> <port> <int> <to> <hthres> <uthres> [<uri>]"
 	echo "otc elb delcheck <cid>"
 	#
@@ -3508,7 +3508,7 @@ getELBList()
 getELBDetail()
 {
 	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
-	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB" 1>&2; exit 2; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB $1" 1>&2; exit 2; fi
 	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
@@ -3516,7 +3516,7 @@ getELBDetail()
 deleteELB()
 {
 	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
-	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB" 1>&2; exit 2; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB $1" 1>&2; exit 2; fi
 	export ELBJOBID
 	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$ID" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
 	#return ${PIPESTATUS[0]}
@@ -3525,20 +3525,26 @@ deleteELB()
 getListenerList()
 {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[]'
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB $1" 1>&2; exit 2; fi
 	# TODO limits?
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.loadbalancer_id' | tr -d '"'
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$ID" | jq 'def str(v): v|tostring; .[] | .id+"   "+.name+"   "+.status+"   "+.protocol+":"+str(.port)+"   "+.backend_protocol+":"+str(.backend_port)+"   "+.healthcheck_id' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
 getListenerDetail()
 {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners?loadbalancer_id=$1" | jq '.[] | select(.id = "$2")'
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1" | jq '.'
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
 deleteListener()
 {
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
 	curldeleteauth $TOKEN "$AUTH_URL_ELB/listeners/$1"
 	#return $?
 }
@@ -3585,6 +3591,7 @@ createListener()
 		fi
 	fi
 	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB $1" 1>&2; exit 2; fi
 	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
 	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
 	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$ID\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, \"lb_algorithm\": \"$ALG\"$OPTPAR$STICKY }" "$AUTH_URL_ELB/listeners" | jq -r '.'
@@ -3601,20 +3608,27 @@ createCheck()
 	local URI="$8"
 	if test "$2" = "HTTP" -o "$2" = "HTTPS" && test -z "$URI"; then URI="/"; fi
 	if test -n "$URI"; then URI="\"healthcheck_uri\": \"$URI\", "; fi
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
 
-	curlpostauth "$TOKEN" "{ \"listener_id\": \"$1\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
+	curlpostauth "$TOKEN" "{ \"listener_id\": \"$ID\", \"healthcheck_protocol\": \"$2\", $URI\"healthcheck_connect_port\": $3, \"healthcheck_interval\": $4, \"healthcheck_timeout\": $5, \"healthy_threshold\": $HTHR, \"unhealthy_threshold\": $UTHR }" "$AUTH_URL_ELB/healthcheck" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
 deleteCheck()
 {
-	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1"
+	#if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/healthchecks" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	#if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such healthcheck $1" 1>&2; exit 2; fi
+	curldeleteauth $TOKEN "$AUTH_URL_ELB/healthcheck/$ID"
 	#return $?
 }
 
 getCheck()
 {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$1" | jq '.'
+	if ! is_id "$1"; then 
+		ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .healthcheck_id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/healthcheck/$ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -3623,20 +3637,30 @@ getMemberList()
 {
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq '.'
 	#curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status+"   "+str(.listeners)' | tr -d '"'
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status' | tr -d '"'
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$ID/members" | jq 'def str(v): v|tostring; .[] | .id+"   "+.server_address+"   "+.status+"   "+.address+"   "+.health_status' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
 
 getMemberDetail()
 {
-	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$1/members" | jq ".[] | select(.id == \"$2\")"
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	if ! is_id "$2"; then FILT="select(.server_address == \"$2\")"; else FILT="select(.id == \"$2\")"; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$ID/members" | jq ".[] | $FILT"
 	return ${PIPESTATUS[0]}
 }
 
 #   echo "otc elb addmember <lid> <vmid> <vmip>"
 createMember()
 {
-	curlpostauth $TOKEN "[ { \"server_id\": \"$2\", \"address\": \"$3\" } ]" "$AUTH_URL_ELB/listeners/$1/members"
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	VMID=$(uriencode "$2")
+	if ! is_uuid "$2"; then VMID=`curlgetauth $TOKEN "$AUTH_URL_ECS?name=$VMID" | jq ".[] | select(.name == \"$2\") | .id" | tr -d '"'`; else VMID="$2"; fi
+	if test -z "$VMID" -o "$VMID" == "null"; then echo "ERROR: No such VM $2" 1>&2; exit 2; fi
+	curlpostauth $TOKEN "[ { \"server_id\": \"$VMID\", \"address\": \"$3\" } ]" "$AUTH_URL_ELB/listeners/$ID/members"
 	#TODO JOB_ID ...
 	#return $?
 }
@@ -3644,7 +3668,10 @@ createMember()
 #   echo "otc elb delmember <lid> <mid> <addr>"
 deleteMember()
 {
-	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$2\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$1/members/action"
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners" | jq ".[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such listener $1" 1>&2; exit 2; fi
+	if ! is_id "$2"; then MID=`curlgetauth $TOKEN "$AUTH_URL_ELB/listeners/$ID/members" | jq ".[] | select(.server_address == \"$3\") | .id" | tr -d '"'`; else MID="$2"; fi
+	curlpostauth $TOKEN "{ \"removeMember\": [ { \"id\": \"$MID\", \"address\": \"$3\" } ] }" "$AUTH_URL_ELB/listeners/$ID/members/action"
 	#TODO JOB_ID ...
 	#return $?
 }
