@@ -3652,7 +3652,7 @@ createELBCert()
 	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
 	if test -n "$1" -a -z "$NAME"; then NAME="$*"; fi
 	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
-	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | sed 's/\(-----BEGIN PRIVATE KEY-----\)[^-]*/\1MIIsecretsecret/g' | jq -r '.'
+	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | sed 's/\(-----BEGIN[A-Z ]*PRIVATE KEY-----\)[^-]*/\1\\nMIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -3698,7 +3698,7 @@ modifyELBCert()
 	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
 	if test -n "$NAME"; then DESC="$DESC, \"name\": \"$NAME\""; fi
 	DESC="${DESC#,}"
-	curlputauth	$TOKEN "{ $NM $DESC }" "$AUTH_URL_ELB/certificate/$ID" | sed 's/\(-----BEGIN PRIVATE KEY-----\)[^-]*/\1MIIsecretsecret/g' | jq -r '.'
+	curlputauth	$TOKEN "{ $NM $DESC }" "$AUTH_URL_ELB/certificate/$ID" | sed 's/\(-----BEGIN[A-Z ]*PRIVATE KEY-----\)[^-]*/\1\\nMIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
