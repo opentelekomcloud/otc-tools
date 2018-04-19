@@ -1223,7 +1223,7 @@ elbHelp()
 	echo "    --timeout <min>             # timeout in minutes(!) for TCP/UDP"
 	echo "    --cookieto <min>            # sticky session cookie timeout (min) (roundrobin HTTP/S)"
 	echo "    --drain <min>               # keep conn after member del in minutes(!) for TCP"
-	echo "    --sslcert <id>              # SSL certificate to use for HTTPS"
+	echo "    --sslcert <id>              # SSL cert to use for HTTPS, comma-sep list for SNI"
 	echo "    --sslproto <TLS>            # TLSv1.2 or TLSv1.2 TLSv1.1 TLSv1 (only HTTPS)"
 	echo "    --sslcipher <Kwd>           # Default or Strict or Extended (Ext for v1.2+1.1+1)"
 	#not implemented: modifylistener
