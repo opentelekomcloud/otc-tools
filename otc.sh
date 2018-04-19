@@ -1209,7 +1209,7 @@ elbHelp()
 {
 	echo "--- Elastic Load Balancer (ELB) ---"
 	echo "otc elb list            # list all load balancers"
-	echo "otc elb show <id>       # show elb details"
+	echo "otc elb show <eid>      # show elb details (eid can also be name)"
 	echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
 	echo "    --vpc-name <vpcname>"
 	echo "    --bandwidth <bandwidth>               # in Mbps"
@@ -3507,14 +3507,18 @@ getELBList()
 
 getELBDetail()
 {
-	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.'
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB" 1>&2; exit 2; fi
+	curlgetauth $TOKEN "$AUTH_URL_ELB_LB/$ID" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
 deleteELB()
 {
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
+	if test -z "$ID" -o "$ID" == "null"; then echo "ERROR: No such ELB" 1>&2; exit 2; fi
 	export ELBJOBID
-	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$1" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
+	ELBJOBID=`curldeleteauth $TOKEN "$AUTH_URL_ELB_LB/$ID" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
 	#return ${PIPESTATUS[0]}
 }
 
@@ -3565,14 +3569,25 @@ createListener()
 	fi
 	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then
 		if test "$SSLCERT" != "${SSLCERT//,/}"; then
-			OPTPAR="$OPTPAR, \"certificates\": [ \"${SSLCERT//,/\",\"}\" ]"
+			#OPTPAR="$OPTPAR, \"certificates\": [ \"${SSLCERT//,/\",\"}\" ]"
+			OPTPAR="$OPTPAR, \"certificates\": ["
+			while test -n "$SSLCERT"; do
+				CERT=${SSLCERT%%,*}
+				SSLCERT=${SSLCERT#$CRT}
+				SSLCERT=${SSLCERT#,}
+				if ! is_id "$CERT"; then CERT=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | select(.name == \"CERT\") | .id" | tr -d '"'`; fi
+				OPTPAR="$OPTPAR \"$CERT\","
+			done
+			OPTPAR="${OPTPAR%,} ]"
 		else
+			if ! is_id "$SSLCERT"; then SSLCERT=`curlgetauth $TOKEN "$AUTH_URL_ELB/certificate" | jq ".certificates[] | select(.name == \"$SSLCERT\") | .id" | tr -d '"'`; fi
 			OPTPAR="$OPTPAR, \"certificate_id\": \"$SSLCERT\""
 		fi
 	fi
+	if ! is_id "$1"; then ID=`curlgetauth $TOKEN "$AUTH_URL_ELB_LB" | jq ".loadbalancers[] | select(.name == \"$1\") | .id" | tr -d '"'`; else ID="$1"; fi
 	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
 	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
-	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, \"lb_algorithm\": \"$ALG\"$OPTPAR$STICKY }" "$AUTH_URL_ELB/listeners" | jq -r '.'
+	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$ID\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, \"lb_algorithm\": \"$ALG\"$OPTPAR$STICKY }" "$AUTH_URL_ELB/listeners" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 

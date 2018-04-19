@@ -54,6 +54,24 @@ to manually control the amount of information. You can also use --maxgetkb=
 to override the default API response limit (250kiB) when relying on
 autopagination.
 
+The command line parser is not overly smart.
+The general syntax is:
+  otc.sh [GLOBALOPTS] maincmd subcmd [LOCALOPTS] [POSPARAMS]
+See otc.sh help for full help and otc.sh maincmd help for help on a specific
+set of commands.
+
+Note that for most commands that have positional parameters, the command
+specific options (LOCALOPTS) need to precede the positional parameters.
+
+otc.sh does not do any kind of version discovery, but just assumes support
+for all commands that public OTC offers. This reduces complexity and
+increases performance, and is a deliberate choice.
+
+Some of otc.sh's functions will work with other OpenStack clouds; for
+testing, even some keystonev2 support has been added. But this is not at
+all meant to have production quality for any non-FusionSphere clouds.
+
+
 Output formatting
 -----------------
 otc tools tries to output things in a human readable format. It has three basic
@@ -104,6 +122,25 @@ Return codes
 Some work has been done in the 0.7.x series to tidy up the return of response
 codes; so otc.sh should really have a non-zero exit code if there were serious
 failures.
+
+Token cache
+-----------
+otc.sh does cache tokens (and the service catalog) in
+~/tmp/.otc.cache.$OS_USERNAME.$OS_USER_DOMAIN_NAME.$OS_PROJECT_NAME
+(for project-scoped tokens; domain-scoped tokens are without .$OS_PROJECT_NAME).
+otc.sh ensures these files have safe permission (0600), but if your home
+directory gets shared or backed up in unsafe ways, you might need to take
+addtitional caution. Note that tokens are normally valid for 24hrs on OTC.
+You can use the --nocache global option to not use the token cache.
+If you have trouble with existing cache entries you might also
+use --discardcache to force otc.sh to retrieve a new token (and store it).
+
+Note that you can force the usage of domain-scoped tokens using --domainscope,
+project-scoped tokens using --projectscope and unscoped using --unscoped.
+otc.sh normally knows what kind of token is needed for which command, but
+for the custom functions the default (project scoped tokens) may not always
+fit.
+
 
 Packages
 --------
