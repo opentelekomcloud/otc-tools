@@ -3562,7 +3562,13 @@ createListener()
 		if test "$3" = "TCP"; then OPTPAR="$OPTPAR, \"tcp_draining\": true, \"tcp_draining_timeout\": $ELBDRAIN";
 		else echo "WARN: ELB ignore --drain for $3" 1>&2; fi
 	fi
-	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"certificate_id\": \"$SSLCERT\""; fi
+	if test -n "$SSLCERT" -a "$3" = "HTTPS"; then
+		if test "$SSLCERT" != "${SSLCERT//,/}"; then
+			OPTPAR="$OPTPAR, \"certificates\": [ \"${SSLCERT//,/\",\"}\" ]"
+		else
+			OPTPAR="$OPTPAR, \"certificate_id\": \"$SSLCERT\""
+		fi
+	fi
 	if test -n "$SSLPROTO" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_protocols\": \"$SSLPROTO\""; fi
 	if test -n "$SSLCIPHER" -a "$3" = "HTTPS"; then OPTPAR="$OPTPAR, \"ssl_ciphers\": \"$SSLCIPHER\""; fi
 	curlpostauth $TOKEN "{ \"name\": \"$2\", \"loadbalancer_id\": \"$1\", \"protocol\": \"$3\", \"port\": $4, \"backend_protocol\": \"$BEPROTO\", \"backend_port\": $BEPORT, \"lb_algorithm\": \"$ALG\"$OPTPAR$STICKY }" "$AUTH_URL_ELB/listeners" | jq -r '.'
