@@ -3647,10 +3647,11 @@ createELBCert()
 	CERT=$(cat "$CERT")
 	if test ! -r "$PRIV"; then echo "ELB PrivKey file $PRIV must be readable" 1>&2; exit 2; fi
 	PRIV=$(cat "$PRIV")
+	if test -z "$NAME" -a -n "$1"; then NAME="$1"; if test "$NAME" == "--name"; then shift; NAME="$1"; fi; fi
+	if test -z "$DOMAIN" -a -n "$2"; then DOMAIN="$2"; if test "$DOMAIN" == "--domain"; then shift; DOMAIN="$2"; fi; fi
 	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
 	if test -n "$DOMAIN"; then DESC="$DESC, \"domain\": \"$DOMAIN\""; fi
 	if test -n "$KEYNAME" -a -z "$NAME"; then NAME="$KEYNAME"; fi
-	if test -n "$1" -a -z "$NAME"; then NAME="$*"; fi
 	if test -n "$NAME"; then NM=", \"name\": \"$NAME\""; fi
 	curlpostauth $TOKEN "{ \"certificate\": \"$CERT\", \"private_key\": \"$PRIV\" $NM $DESC }"  "$AUTH_URL_ELB/certificate" | sed 's/\(-----BEGIN[A-Z ]*PRIVATE KEY-----\)[^-]*/\1\\nMIIsecretsecret/g' | jq -r '.'
 	return ${PIPESTATUS[0]}
