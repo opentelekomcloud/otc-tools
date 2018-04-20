@@ -135,6 +135,7 @@ if test -z "$S3_ACCESS_KEY_ID" -a -r ~/$CRED; then
 fi
 
 # ENVIRONMENT SETTINGS ####################################################################
+unset FLAVORSET
 
 # Defaults
 if test -z "$BANDWIDTH"; then BANDWIDTH=25; fi
@@ -4338,7 +4339,7 @@ ECSUpdate()
 			done
 		fi
 	fi
-	if test -n "$INSTANCE_TYPE"; then
+	if test -n "$INSTANCE_TYPE" -a -n "$FLAVORSET"; then
 		curlpostauth $TOKEN "{ \"resize\": { \"flavorRef\": \"$INSTANCE_TYPE\" } }" "$AUTH_URL_ECS/$ECS_ID/action" | jq -r '.'
 		#curlpostauth $TOKEN "{ \"resize\": { \"flavorRef\": \"$INSTANCE_TYPE\" } }" "$AUTH_URL_ECS_CLOUD/$ECS_ID/resize" | jq -r '.'
 		if test $RC = 0; then RC=${PIPESTATUS[0]}; fi
@@ -6044,7 +6045,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 			--file5)
 				FILE5="$2"; shift;;
 			-t|--instance-type)
-				INSTANCE_TYPE="$2"; shift;;
+				INSTANCE_TYPE="$2"; FLAVORSET=1; shift;;
 			-i|--image-name)
 				IMAGENAME="$2"; shift;;
 			--image-id)
