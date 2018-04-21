@@ -1077,13 +1077,13 @@ backupHelp()
 {
 	echo "--- Elastic Volume Backups ---"
 	echo "otc backup list [FILTERS]              # List all backups (opt. key=value filters)"
-	echo "otc backup show backupid"
-	echo "otc backup create --name NAME volumeid # Create backup from volume"
-	echo "otc backup restore backupid volumeid   # restore backup to volume"
-	echo "otc backup delete backupid"
+	echo "otc backup show BACKUP"
+	echo "otc backup create --name NAME VOL      # Create backup from volume"
+	echo "otc backup restore BACKUP VOL          # restore backup to volume"
+	echo "otc backup delete BACKUP"
 	echo "otc snapshot list [FILTERS]            # list snapshots"
-	echo "otc snapshot show snapid               # details of snapshot snapid"
-	echo "otc snapshot delete snapid             # delete snapshot snapid"
+	echo "otc snapshot show SNAP                 # details of snapshot snapid"
+	echo "otc snapshot delete SNAP               # delete snapshot snapid"
 	echo "otc backuppolicy list                  # list backup policies"
 	echo "otc backuppolicy show NAME|ID          # details of backup policy"
 	echo "otc backuppolicy create [options] NAME # create backup policy"
@@ -2474,6 +2474,8 @@ addVolsToPolicy()
 	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
 	local RSRC=""
 	for vol in "$@"; do
+		if ! is_uuid "$vol"; then oldvol="$vol"; vol=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$vol" | jq '.volumes[] | select(.name == "'$vol'") | .id' | tr -d '" ,'`; fi
+		if ! is_uuid "$vol"; then echo "WARN: No such volume $oldvol" 1>&2; fi
 		RSRC="$RSRC, { \"resource_id\": \"$vol\", \"resource_type\": \"volume\" }"
 	done
 	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be added to BackupPolicy" 1>&2; exit2; fi
@@ -2488,6 +2490,8 @@ rmvVolsFromPolicy()
 	if ! is_uuid $BACKPOL_ID; then convertBackupPolicyNameToId $BACKPOL_ID; fi
 	local RSRC=""
 	for vol in "$@"; do
+		if ! is_uuid "$vol"; then oldvol="$vol"; vol=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$vol" | jq '.volumes[] | select(.name == "'$vol'") | .id' | tr -d '" ,'`; fi
+		if ! is_uuid "$vol"; then echo "WARN: No such volume $oldvol" 1>&2; fi
 		RSRC="$RSRC, { \"resource_id\": \"$vol\" }"
 	done
 	if test -z "$RSRC"; then echo "ERROR: Need to list volume IDs to be removed from BackupPolicy" 1>&2; exit2; fi
@@ -2581,7 +2585,10 @@ createBackup()
 	if test "$1" == "--name"; then NAME="$2"; shift; shift; fi
 	if test -z "$1"; then echo "ERROR: Need to specify volumeid to be backed up" 1>&2; exit 2; fi
 	if test -z "$NAME"; then NAME="Backup-$1"; fi
-	local REQ="{ \"backup\": { \"volume_id\": \"$1\", \"name\": \"$NAME\" } }"
+
+	if ! is_uuid "$1"; then VOL_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$1" | jq '.volumes[] | select(.name == "'$1'") | .id' | tr -d '" ,'`; else VOL_ID="$1"; fi
+	if ! is_uuid "$VOL_ID"; then echo "WARN: No such volume $1" 1>&2; fi
+	local REQ="{ \"backup\": { \"volume_id\": \"$VOL_ID\", \"name\": \"$NAME\" } }"
 	if test -n "$DESCRIPTION"; then REQ="${REQ%\} \}}, \"description\": \"$DESCRIPTION\" } }"; fi
 	BACKUP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS")
 	RC=$?
@@ -2593,9 +2600,13 @@ createBackup()
 
 restoreBackup()
 {
+	if ! is_uuid "$1"; then convertBackupNameToId "$1"; else BACK_ID="$1"; fi
 	if test -z "$2"; then echo "ERROR: Need to specify backupid and volumeid" 1>&2; exit 2; fi
-	local REQ="{ \"restore\": { \"volume_id\": \"$2\" } }"
-	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$1/restore" | jq '.'
+	VOL_ID="$2"
+	if ! is_uuid "$2"; then VOL_ID=`curlgetauth $TOKEN "$AUTH_URL_VOLS?name=$2" | jq '.volumes[] | select(.name == "'$2'") | .id' | tr -d '" ,'`; fi
+	if ! is_uuid "$VOL_ID"; then echo "WARN: No such volume $2" 1>&2; fi
+	local REQ="{ \"restore\": { \"volume_id\": \"$VOL_ID\" } }"
+	curlpostauth $TOKEN "$REQ" "$AUTH_URL_CBACKUPS/$BACK_ID/restore" | jq '.'
 	#echo
 	return ${PIPESTATUS[0]}
 }
