@@ -4056,14 +4056,29 @@ ECSDetachPort()
 	return ${PIPESTATUS[0]}
 }
 
-ECSCreate()
+ECSprepare()
+{
+	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
+	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
+	if [ -z "$IMAGE_ID" -a -n "$IMAGENAME" ]; then convertIMAGENameToId "$IMAGENAME"; fi
+	SECUGROUPNAMELIST="$SECUGROUPNAME"
+	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
+		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
+		SECUGROUP="${SECUGROUP#,}"
+	fi
+	if test -z "$INSTANCE_NAME"; then
+		if test -n "$1"; then INSTANCE_NAME="$1"
+		else INSTANCE_NAME="VM-$(date +%s)-$$"
+		fi
+	fi
+}
+
+ECScommonSettings()
 {
 	if test -n "$(echo "$INSTANCE_NAME" | sed 's/^[0-9a-zA-Z_\-]*$//')"; then
 		echo "ERROR: INSTANCE_NAME may only contain letters, digits, _ and -" 1>&2
 		exit 2
 	fi
-
-	getPersonalizationJSON
 
 	if [ -n "$ROOTDISKSIZE" ]; then
 		DISKSIZE=', "size": '$ROOTDISKSIZE''
@@ -4082,27 +4097,60 @@ ECSCreate()
 		echo "WARN: AZ ($AZ) does not match subnet's AZ ($SUBNETAZ)" 1>&2
 	fi
 
-	local OPTIONAL=""
-	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
-		# TODO: have to got from param
-		OPTIONAL="$OPTIONAL
-			\"publicip\": {
-				\"eip\": {
-					\"iptype\": \"5_bgp\",
-					\"bandwidth\": { \"size\": $BANDWIDTH, \"sharetype\": \"PER\", \"chargemode\": \"traffic\" }
-				}
-			},"
-	elif [ -n "$EIP" ]; then
-		convertEipToId $EIP
-		if [ "$EIP_STATUS" != "DOWN" ]; then
-			echo "ERROR: Status of EIP $EIP_ID ($EIP_IP) must be DOWN, is $EIP_STATUS" 1>&2
-			exit 2
-		fi
-		OPTIONAL="$OPTIONAL
-			\"publicip\": { \"id\": \"$EIP_ID\" },"
+	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
+
+	# TODO: Support both/multiple user data pieces
+   USERDATAJSON=""
+	if test -n "$USERDATA"; then
+		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
+		USERDATAJSON="
+		\"user_data\": \""$(echo "$USERDATA" | base64)"\","
+	fi
+	if test -n "$USERDATAFILE"; then
+		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
+		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
+		USERDATAJSON="
+		\"user_data\": \""$(base64 "$USERDATAFILE")"\","
 	fi
 
+	SECUGROUPIDS=""
+	for id in ${SECUGROUP//,/ }; do
+		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
+	done
+	SECUGROUPIDS="${SECUGROUPIDS%,}"
+}
 
+ECSparamComplete()
+{
+	if [ "$IMAGE_ID" == "" ]; then
+		echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
+		echo 'otc images list' 1>&2
+		exit 1
+	fi
+	if [ "$INSTANCE_TYPE" == "" ]; then
+		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 1>&2
+		echo 'otc ecs flavor-list' 1>&2
+		exit 1
+	fi
+	if [ -n "$1" -a "$VPCID" == "" ]; then
+		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 1>&2
+		echo 'otc vpc list' 1>&2
+		exit 1
+	fi
+	if [ -n "$1" -a "$SECUGROUP" == "" ]; then
+		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 1>&2
+		echo 'otc security-group list' 1>&2
+		exit 1
+	fi
+	if [ "$SUBNETID" == "" ]; then
+		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 1>&2
+		echo 'otc subnet list' 1>&2
+		exit 1
+	fi
+}
+
+ECSoptional()
+{
 	# composing os:scheduler_hints
 	# using:
 	# --tenancy $TENANCY
@@ -4118,86 +4166,97 @@ ECSCreate()
 		fi
 		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
-				\"os:scheduler_hints\": {
-				\"tenancy\": \"$TENANCY\",
-				\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+			\"os:scheduler_hints\": {
+			 \"tenancy\": \"$TENANCY\",
+			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
 			},"
 		else
 			OPTIONAL="$OPTIONAL
-				\"os:scheduler_hints\": {
-				\"tenancy\": \"dedicated\",
-				\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+			\"os:scheduler_hints\": {
+			 \"tenancy\": \"dedicated\",
+			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
 			},"
 		fi
 	else
 		if test -n "$TENANCY"; then
 			OPTIONAL="$OPTIONAL
-				\"os:scheduler_hints\": {
-				\"tenancy\": \"$TENANCY\"
+			\"os:scheduler_hints\": {
+			 \"tenancy\": \"$TENANCY\"
 			},"
 		fi
 	fi
 
 	if test -n "$KEYNAME"; then
 		OPTIONAL="$OPTIONAL
-			\"key_name\": \"$KEYNAME\","
+		\"key_name\": \"$KEYNAME\","
 	fi
 	if test -n "$ADMINPASS"; then
 		OPTIONAL="$OPTIONAL
-			\"adminPass\": \"$ADMINPASS\","
+		\"adminPass\": \"$ADMINPASS\","
 	fi
 	#OPTIONAL="$OPTIONAL \"__vnckeymap\": \"en\","
 	if test -n "$METADATA_JSON"; then
 		OPTIONAL="$OPTIONAL
-			\"metadata\": { $METADATA_JSON },"
+		\"metadata\": { $METADATA_JSON },"
 		echo "WARN: metadata passing not supported on ECS creation via Huawei API" 1>&2
 	fi
 	if test "$OTC_FORCEVPCTAG" == "1"; then
 		if test -n "$TAGS"; then
 			OPTIONAL="$OPTIONAL
-				\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
+		\"tags\": [ $(keyval2list $VPCID,$TAGS) ],"
 		else
 			OPTIONAL="$OPTIONAL
-				\"tags\": [ \"$VPCID\" ],"
+		\"tags\": [ \"$VPCID\" ],"
 		fi
 	else
 		if test -n "$TAGS"; then
 			OPTIONAL="$OPTIONAL
-				\"tags\": [ $(keyval2list $TAGS) ],"
+		\"tags\": [ $(keyval2list $TAGS) ],"
 		fi
+	fi
+
+	if test -n "$DESCRIPTION"; then
+		OPTIONAL="$OPTIONAL
+		\"description\": \"$DESCRIPTION\", "
 	fi
 
 	if test -n "$AUTORECOV"; then
 		OPTIONAL="$OPTIONAL
-			\"extendparam\": { \"support_auto_recovery\": \"$AUTORECOV\" },"
+		\"extendparam\": { \"support_auto_recovery\": \"$AUTORECOV\" },"
+	fi
+}
+
+ECSCreate()
+{
+	getPersonalizationJSON
+	ECScommonSettings
+
+	OPTIONAL=""
+	if [ "$CREATE_ECS_WITH_PUBLIC_IP" == "true" ]; then
+		# TODO: have to got from param
+		OPTIONAL="$OPTIONAL
+		\"publicip\": {
+			\"eip\": {
+				\"iptype\": \"5_bgp\",
+				\"bandwidth\": { \"size\": $BANDWIDTH, \"sharetype\": \"PER\", \"chargemode\": \"traffic\" }
+			}
+		},"
+	elif [ -n "$EIP" ]; then
+		convertEipToId $EIP
+		if [ "$EIP_STATUS" != "DOWN" ]; then
+			echo "ERROR: Status of EIP $EIP_ID ($EIP_IP) must be DOWN, is $EIP_STATUS" 1>&2
+			exit 2
+		fi
+		OPTIONAL="$OPTIONAL
+		\"publicip\": { \"id\": \"$EIP_ID\" },"
 	fi
 
-	if test -z "$NUMCOUNT"; then NUMCOUNT=1; fi
-
-	local SECUGROUPIDS=""
-	for id in ${SECUGROUP//,/ }; do
-		SECUGROUPIDS="$SECUGROUPIDS { \"id\": \"$id\" },"
-	done
-	SECUGROUPIDS="${SECUGROUPIDS%,}"
+	ECSoptional
 
 	local FIXEDIPJSON=""
 	if test -n "$FIXEDIP"; then
 		FIXEDIPJSON=", \"ip_address\": \"$FIXEDIP\""
 	fi
-	# TODO: Support both/multiple user data pieces
-	local USERDATAJSON=""
-	if test -n "$USERDATA"; then
-		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
-		USERDATAJSON="
-			\"user_data\": \""$(echo "$USERDATA" | base64)"\","
-	fi
-	if test -n "$USERDATAFILE"; then
-		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
-		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
-		USERDATAJSON="
-			\"user_data\": \""$(base64 "$USERDATAFILE")"\","
-	fi
-
 	if test -n "$DATADISKS"; then
 		DATA_VOLUMES="
 			\"data_volumes\": [ $(build_data_volumes_json $DATADISKS) ],"
@@ -4221,53 +4280,85 @@ ECSCreate()
 		SUBNETID="$SUBNETIDOLD"
 	fi
 
-	local REQ_CREATE_VM='	{
-		"server": {
-			"availability_zone": "'"$AZ"'",
-			"name": "'"$INSTANCE_NAME"'",
-			"imageRef": "'"$IMAGE_ID"'",
-			"root_volume": { "volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE' }, '$DATA_VOLUMES'
-			"flavorRef": "'"$INSTANCE_TYPE"'", '"$PERSONALIZATION"' '"$USERDATAJSON"'
-			"vpcid": "'"$VPCID"'",
-			"security_groups": [ '"$SECUGROUPIDS"' ],
-			"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } '"$MORENICS"' ], '"$OPTIONAL"'
-			"count": '$NUMCOUNT'
-		}
-	}'
+	local REQ_CREATE_VM='{
+	"server": {
+		"availability_zone": "'"$AZ"'",
+		"name": "'"$INSTANCE_NAME"'",
+		"imageRef": "'"$IMAGE_ID"'",
+		"root_volume": { "volumetype": "'"$VOLUMETYPE"'"'$DISKSIZE' }, '$DATA_VOLUMES'
+		"flavorRef": "'"$INSTANCE_TYPE"'", '"$PERSONALIZATION"' '"$USERDATAJSON"'
+		"vpcid": "'"$VPCID"'",
+		"security_groups": [ '"$SECUGROUPIDS"' ],
+		"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } '"$MORENICS"' ], '"$OPTIONAL"'
+		"count": '$NUMCOUNT'
+	}
+}'
 
 	echo "$REQ_CREATE_VM"
 
-	if [ "$IMAGE_ID" == "" ]; then
-		echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
-		echo 'otc images list' 1>&2
-		exit 1
-	fi
-	if [ "$INSTANCE_TYPE" == "" ]; then
-		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 1>&2
-		echo 'otc ecs flavor-list' 1>&2
-		exit 1
-	fi
-	if [ "$VPCID" == "" ]; then
-		echo "VPC definition not Correct ! Please check avaliable VPCs  with following command:" 1>&2
-		echo 'otc vpc list' 1>&2
-		exit 1
-	fi
-	if [ "$SECUGROUP" == "" ]; then
-		echo "Security Group definition not Correct ! Please check avaliable security group with following command:" 1>&2
-		echo 'otc security-group list' 1>&2
-		exit 1
-	fi
-	if [ "$SUBNETID" == "" ]; then
-		echo "Subnet definition not Correct ! Please check avaliable subnets with following command:" 1>&2
-		echo 'otc subnet list' 1>&2
-		exit 1
-	fi
+	ECSparamComplete 1
 
 	export ECSTASKID
 	ECSTASKID=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS_CLOUD" | jq '.job_id' | cut -d':' -f 2 | tr -d '" '; return ${PIPESTATUS[0]}`
 	# this lines for DEBUG
 	#return ${PIPESTATUS[0]}
 }
+
+# Create VM by nova v2 API
+ECSCreatev2()
+{
+	ECScommonSettings
+	ECSoptional
+	ECSparamComplete
+	if test $NUMCOUNT != 1; then
+		COUNT="\"min_count\": $NUMCOUNT, \"max_count\": $NUMCOUNT,"
+	fi
+	# multi-NIC
+	SN="$SUBNETID"
+	if test -n "$FIXEDIP"; then SN="$SN:$FIXEDIP"; fi
+	if test -n "$MORESUBNETS"; then SN="$SN,$MORESUBNETS"; fi
+	local MORENICS=""
+	SUBNETIDOLD="$SUBNETID"
+	OLDIFS="$IFS"; IFS=","
+	for sub in $SN; do
+		subn=${sub%%:*}
+		fixed=${sub#*:}
+		if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
+		if test "$fixed" == "$sub"; then
+			MORENICS="$MORENICS, { \"uuid\": \"$subn\" }"
+		else
+			MORENICS="$MORENICS, { \"uuid\": \"$subn\", \"fixed_ip\": \"$fixed\" }"
+		fi
+	done
+	IFS="$OLDIFS"
+	SUBNETID="$SUBNETIDOLD"
+	MORENICS="${MORENICS#,}"
+
+	# TODO: Need SG names here(!)
+	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $SECUGROUPIDS ],"; fi
+
+	# TODO: volumes
+	local REQ_CREATE_VM="{
+	\"server\": {
+		\"availablity_zone\": \"$AZ\",
+		\"name\": \"$INSTANCE_NAME\",
+		\"imageRef\": \"$IMAGE_ID\",
+		\"flavorRef\": \"$INSTANCE_TYPE\",
+		$SG
+		$PERSONALIZATION $USERDATAJSON
+		$OPTIONAL $COUNT
+		\"networks\": [ $MORENICS ]
+	}
+}"
+	echo "$REQ_CREATE_VM"
+	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS"`
+	ECSID=$(echo "$OUTPUT" | jq '.server.id' | tr -d '"')
+	#echo "$OUTPUT" | jq '.'
+	# TODO: Tags, EIPs
+	# TODO wait
+	echo "ECS ID: $ECSID"
+}
+
 
 ECSAction()
 {
@@ -6338,21 +6429,7 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 	getLimits
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
-
-	if [ "$VPCNAME" != "" ]; then convertVPCNameToId "$VPCNAME"; fi
-	if [ "$SUBNETNAME" != "" ]; then convertSUBNETNameToId "$SUBNETNAME" "$VPCID"; fi
-	if [ -z "$IMAGE_ID" -a -n "$IMAGENAME" ]; then convertIMAGENameToId "$IMAGENAME"; fi
-	SECUGROUPNAMELIST="$SECUGROUPNAME"
-	if [ "$SECUGROUPNAMELIST" != "" ] && [ "$SECUGROUP" == "" ]; then
-		SECUGROUP=$(IFS=,; for SECUGROUPNAME in $SECUGROUPNAMELIST; do convertSECUGROUPNameToId "$SECUGROUPNAME"; printf ",$SECUGROUP";done)
-		SECUGROUP="${SECUGROUP#,}"
-	fi
-	if test -z "$INSTANCE_NAME"; then
-		if test -n "$1"; then INSTANCE_NAME="$1"
-		else INSTANCE_NAME="VM-$(date +%s)-$$"
-		fi
-	fi
-
+	ECSprepare
 	#if test -n "$DEBUG"; then echo ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"; fi
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
@@ -6401,6 +6478,10 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	if [ "$ECSJOBSTATUS" != "SUCCESS" -a "$ECSJOBSTATUS" != "RUNNING" ]; then
 		exit 1
 	fi
+
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ]; then
+	ECSprepare
+	ECSCreatev2 "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ] ||
      [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot" ]; then
