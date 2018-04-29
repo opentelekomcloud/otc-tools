@@ -4335,7 +4335,7 @@ ECSCreatev2()
 	MORENICS="${MORENICS#,}"
 
 	# TODO: Need SG names here(!)
-	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $SECUGROUPIDS ],"; fi
+	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $( echo $SECUGROUPIDS | sed 's/\"id\":/\"name\":/g' ) ],"; fi
 
 	# TODO: volumes
 	local REQ_CREATE_VM="{
@@ -4356,7 +4356,34 @@ ECSCreatev2()
 	#echo "$OUTPUT" | jq '.'
 	# TODO: Tags, EIPs
 	# TODO wait
+	if test "$WAIT_FOR_JOB" = "true"; then
+		local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS
+		declare -i ctr=0
+		declare -i err=0
+		while test $ctr -le 600; do 
+			JSON=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECSID")
+			if test $? != 0; then
+				let err+=1
+				if test $err -ge 5; then echo -e "\nERROR: Poll ECS status err"; exit 2; fi
+			fi
+			STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
+			if test "$STATUS" == "ACTIVE"; then echo "#$ECSID: ACTIVE"; break; fi
+			PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
+			if test "$STATUS" != "$PRREVSTATUS" -o "$PROGRSS" != "$PREVPROGRESS"; then
+				echo -n "\r#$ECSID: $STATUS $PROGRESS"
+				PREVSTATUS="$STATUS"; PREVPROGRESS="$PROGRESS"
+			fi
+			if test "$STATUS" = "ERROR"; then
+				echo
+				echo "$JSON" | jq '.server.fault'
+				exit 2
+			fi
+			sleep 2
+			let ctr+=1
+		done
+	fi
 	echo "ECS ID: $ECSID"
+
 }
 
 
