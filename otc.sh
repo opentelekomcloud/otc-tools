@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.21
+VERSION=0.8.22
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1005,6 +1005,7 @@ ecsHelp()
 	echo "    --inherit-tags                  # tag created rootdisk as well"
 	echo "    --autorecovery true/false       # set autorecovery (Xen only)"
 	echo "    --[no]wait"
+	echo "otc ecs create2            # create vm with v2 API (same params, incomplete)"
 	echo
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "    -r  specifies that tags or metadata will remove others"
@@ -4308,6 +4309,33 @@ ECSCreate()
 	#return ${PIPESTATUS[0]}
 }
 
+waitVM()
+{
+	ECSID=$1
+	local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS PT=""
+	declare -i ctr=0
+	declare -i err=0
+	while test $ctr -le 600; do
+		JSON=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECSID")
+		if test $? != 0; then
+			let err+=1
+			if test $err -ge 5; then echo -e "\nERROR: Poll ECS status err"; exit 2; fi
+		fi
+		STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
+		if test "$STATUS" == "ACTIVE"; then echo -e "\r#$ECSID: ACTIVE "; break; fi
+		PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
+		echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
+		if test "$STATUS" = "ERROR"; then
+			echo
+			echo "$JSON" | jq '.server.fault'
+			exit 2
+		fi
+		sleep 2
+		let ctr+=1
+		PT=".$PT"
+	done
+}
+
 # Create VM by nova v2 API
 ECSCreatev2()
 {
@@ -4324,10 +4352,14 @@ ECSCreatev2()
 	ECSmoreNICs "$SN"
 	MORENICS="${MORENICS#,}"
 
-	# TODO: Need SG names here(!)
+	# FIXME: We pass SG IDs as names here ... Seems to work.
 	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $( echo $SECUGROUPIDS | sed 's/\"id\":/\"name\":/g' ) ],"; fi
 
 	# TODO: volumes
+	if test -n "$DATADISKS"; then echo "ERROR: datadisks not yet supported in create2" 1>&2; exit 2; fi
+	if test -n "$DISKIZE" -o -n "$VOLUMETYPE"; then echo "WARNING: No support yet to change disksize or type" 1>&2; fi
+	if test "$CREATE_ECS_WITH_PUBLIC_IP" == "true"; then echo "ERROR: EIP creation not yet supported in create2" 1>&2; exit 2; fi
+
 	local REQ_CREATE_VM="{
 	\"server\": {
 		\"availablity_zone\": \"$AZ\",
@@ -4349,33 +4381,7 @@ ECSCreatev2()
 	if test -z "$ECSID"; then exit 2; fi
 	# TODO: Tags, EIPs
 	# TODO wait
-	if test "$WAIT_FOR_JOB" = "true"; then
-		local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS PT=""
-		declare -i ctr=0
-		declare -i err=0
-		while test $ctr -le 600; do 
-			JSON=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECSID")
-			if test $? != 0; then
-				let err+=1
-				if test $err -ge 5; then echo -e "\nERROR: Poll ECS status err"; exit 2; fi
-			fi
-			STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
-			if test "$STATUS" == "ACTIVE"; then echo -e "\r#$ECSID: ACTIVE "; break; fi
-			PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
-			if test "$STATUS" != "$PRREVSTATUS" -o "$PROGRSS" != "$PREVPROGRESS"; then
-				echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
-				PREVSTATUS="$STATUS"; PREVPROGRESS="$PROGRESS"
-			fi
-			if test "$STATUS" = "ERROR"; then
-				echo
-				echo "$JSON" p| jq '.server.fault'
-				exit 2
-			fi
-			sleep 2
-			let ctr+=1
-			PT=".$PT"
-		done
-	fi
+	if test "$WAIT_FOR_JOB" = "true"; then waitVM $ECSID; fi
 	echo "ECS ID: $ECSID"
 
 }
@@ -4408,7 +4414,7 @@ ECSStop()
 
 setAutoRecov()
 {
-	if test "$AUTORECOV" != "true" -a "$AUTORECOV" != "True" -a "$AUTORECOV" != "false" -a "$AUTORECOV" != "False"; then echo "ERROR: --autorecovery needs to be set to true or false" 1>&2; exit 1; fi
+	if test "$AUTORECOV" != "true" -a "$AUTORECOV" != "false"; then echo "ERROR: --autorecovery needs to be set to true or false" 1>&2; exit 1; fi
 	curlputauth $TOKEN "{ \"support_auto_recovery\": \"$AUTORECOV\" }" "$AUTH_URL_ECS_CLOUD/$1/autorecovery"
 }
 
@@ -6167,11 +6173,11 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				FILE4="$2"; shift;;
 			--file5)
 				FILE5="$2"; shift;;
-			-t|--instance-type)
+			-t|--instance-type|--flavor)
 				INSTANCE_TYPE="$2"; FLAVORSET=1; shift;;
 			-i|--image-name)
 				IMAGENAME="$2"; shift;;
-			--image-id)
+			--image-id|--image)
 				IMAGE_ID="$2"; shift;;
 			-c|--count)
 				NUMCOUNT="$2"; shift;;
@@ -6197,13 +6203,13 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				SECDNS="$2"; shift;;
 			-z|--availability-zone|--az)
 				AZ="$2"; shift;;
-			-s|--security-group-ids)
+			-s|--security-group-ids|--security-groups)
 				SECUGROUP="$2"; shift;;
 			-g|--security-group-name)
 				SECUGROUPNAME="$2"; shift;;
 			-p|--public)
 				case "$2" in
-					true|false)  CREATE_ECS_WITH_PUBLIC_IP="$2";;
+					True|False|true|false|TRUE|FALSE)  CREATE_ECS_WITH_PUBLIC_IP="$(echo $2 | tr 'A-Z' 'a-z')";;
 					[0-9]*)      CREATE_ECS_WITH_PUBLIC_IP=false; EIP="$2";;
 					*)           echo "ERROR: unsupported value for public IPs" 1>&2; exit 2;;
 				esac
@@ -6227,7 +6233,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 			--datadisks)
 				DATADISKS="$2"; shift;;
 			--autorecovery)
-				AUTORECOV="$2"; shift;;
+				AUTORECOV="$(echo $2 | tr 'A-Z' 'a-z')"; shift;;
 			--tags)
 				TAGS="$2"; shift
 				if test "$TAGS" != "${TAGS//@/_at_}"; then
@@ -6261,7 +6267,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				BANDWIDTH_NAME=$2; shift;;
 			--bandwidth)
 				BANDWIDTH=$2; shift;;
-			--wait)
+			--wait|--poll)
 				WAIT_FOR_JOB="true";;
 			--nowait)
 				WAIT_FOR_JOB="false";;
@@ -6449,6 +6455,11 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 	getLimits
 
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ] ||
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a "${INSTANCE_TYPE:0:8}" == "physical" ]; then
+	ECSprepare
+	ECSCreatev2 "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
+
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	ECSprepare
 	#if test -n "$DEBUG"; then echo ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"; fi
@@ -6499,10 +6510,6 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 	if [ "$ECSJOBSTATUS" != "SUCCESS" -a "$ECSJOBSTATUS" != "RUNNING" ]; then
 		exit 1
 	fi
-
-elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ]; then
-	ECSprepare
-	ECSCreatev2 "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot-instances" ] ||
      [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "reboot" ]; then
