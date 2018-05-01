@@ -4342,12 +4342,15 @@ ECSCreatev2()
 }"
 	echo "$REQ_CREATE_VM"
 	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS"`
+	RC=$?
+	if test $RC != 0; then echo "ERROR creating VM" 1>&2; exit $RC; fi
 	ECSID=$(echo "$OUTPUT" | jq '.server.id' | tr -d '"')
 	#echo "$OUTPUT" | jq '.'
+	if test -z "$ECSID"; then exit 2; fi
 	# TODO: Tags, EIPs
 	# TODO wait
 	if test "$WAIT_FOR_JOB" = "true"; then
-		local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS
+		local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS PT=""
 		declare -i ctr=0
 		declare -i err=0
 		while test $ctr -le 600; do 
@@ -4357,19 +4360,20 @@ ECSCreatev2()
 				if test $err -ge 5; then echo -e "\nERROR: Poll ECS status err"; exit 2; fi
 			fi
 			STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
-			if test "$STATUS" == "ACTIVE"; then echo "#$ECSID: ACTIVE"; break; fi
+			if test "$STATUS" == "ACTIVE"; then echo -e "\r#$ECSID: ACTIVE "; break; fi
 			PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
 			if test "$STATUS" != "$PRREVSTATUS" -o "$PROGRSS" != "$PREVPROGRESS"; then
-				echo -n "\r#$ECSID: $STATUS $PROGRESS"
+				echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
 				PREVSTATUS="$STATUS"; PREVPROGRESS="$PROGRESS"
 			fi
 			if test "$STATUS" = "ERROR"; then
 				echo
-				echo "$JSON" | jq '.server.fault'
+				echo "$JSON" p| jq '.server.fault'
 				exit 2
 			fi
 			sleep 2
 			let ctr+=1
+			PT=".$PT"
 		done
 	fi
 	echo "ECS ID: $ECSID"
