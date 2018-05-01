@@ -4226,6 +4226,26 @@ ECSoptional()
 	fi
 }
 
+ECSmoreNICs()
+{
+	MORENICS=""
+	if test -z "$1"; then return; fi
+	SUBNETIDOLD="$SUBNETID"
+	OLDIFS="$IFS"; IFS=","
+	for sub in $1; do
+		subn=${sub%%:*}
+		fixed=${sub#*:}
+		if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
+		if test "$fixed" == "$sub"; then
+			MORENICS="$MORENICS, { \"uuid\": \"$subn\" }"
+		else
+			MORENICS="$MORENICS, { \"uuid\": \"$subn\", \"fixed_ip\": \"$fixed\" }"
+		fi
+	done
+	IFS="$OLDIFS"
+	SUBNETID="$SUBNETIDOLD"
+}
+
 ECSCreate()
 {
 	getPersonalizationJSON
@@ -4262,23 +4282,7 @@ ECSCreate()
 			\"data_volumes\": [ $(build_data_volumes_json $DATADISKS) ],"
 	fi
 	# multi-NIC
-	local MORENICS=""
-	if test -n "MORESUBNETS"; then
-		SUBNETIDOLD="$SUBNETID"
-		OLDIFS="$IFS"; IFS=","
-		for sub in $MORESUBNETS; do
-			subn=${sub%%:*}
-			fixed=${sub#*:}
-			if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
-			if test "$fixed" == "$sub"; then
-				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\" }"
-			else
-				MORENICS="$MORENICS, { \"subnet_id\": \"$subn\", \"ip_address\": \"$fixed\" }"
-			fi
-		done
-		IFS="$OLDIFS"
-		SUBNETID="$SUBNETIDOLD"
-	fi
+	ECSmoreNICs "$MORESUBNETS"
 
 	local REQ_CREATE_VM='{
 	"server": {
@@ -4317,21 +4321,7 @@ ECSCreatev2()
 	SN="$SUBNETID"
 	if test -n "$FIXEDIP"; then SN="$SN:$FIXEDIP"; fi
 	if test -n "$MORESUBNETS"; then SN="$SN,$MORESUBNETS"; fi
-	local MORENICS=""
-	SUBNETIDOLD="$SUBNETID"
-	OLDIFS="$IFS"; IFS=","
-	for sub in $SN; do
-		subn=${sub%%:*}
-		fixed=${sub#*:}
-		if ! is_uuid "$subn"; then convertSUBNETNameToId "$subn"; subn="$SUBNETID"; fi
-		if test "$fixed" == "$sub"; then
-			MORENICS="$MORENICS, { \"uuid\": \"$subn\" }"
-		else
-			MORENICS="$MORENICS, { \"uuid\": \"$subn\", \"fixed_ip\": \"$fixed\" }"
-		fi
-	done
-	IFS="$OLDIFS"
-	SUBNETID="$SUBNETIDOLD"
+	ECSmoreNICs "$SN"
 	MORENICS="${MORENICS#,}"
 
 	# TODO: Need SG names here(!)
