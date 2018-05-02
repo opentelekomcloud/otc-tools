@@ -4312,7 +4312,7 @@ ECSCreate()
 waitVM()
 {
 	ECSID=$1
-	local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS PT=""
+	local ctr err JSON STATUS PSTATUS PROGRESS PPROGRESS PT=""
 	declare -i ctr=0
 	declare -i err=0
 	while test $ctr -le 900; do
@@ -4324,12 +4324,16 @@ waitVM()
 		STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
 		if test "$STATUS" == "ACTIVE"; then echo -e "\r#$ECSID: ACTIVE "; break; fi
 		PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
-		echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
+		if test "$STATUS" =! "$PSTATUS" -o "$PROGRESS" != "$PPROGRESS"; then
+			echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
+			PSTATUS="$STATUS"; PPROGRESS="$PROGRESS"
+		fi
 		if test "$STATUS" = "ERROR"; then
 			echo
 			echo "$JSON" | jq '.server.fault'
 			exit 2
 		fi
+		echo -n "."
 		sleep 2
 		let ctr+=1
 		PT=".$PT"
@@ -4356,9 +4360,12 @@ ECSCreatev2()
 	# FIXME: We pass SG IDs as names here ... Seems to work.
 	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $( echo $SECUGROUPIDS | sed 's/\"id\":/\"name\":/g' ) ],"; fi
 
-	# TODO: volumes
+	# TODO: non-std volume treatment
+	# Get Image disk size
+	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
+	if test -n "$DISKSIZE" -a "$DISKSIZE" != "$IMGDISKSZ"; then echo "ERROR: Changing root disk size not yet supported (img=$IMGDISKSZ, req=$DISKSIZE)" 1>&2; exit 2; fi
+	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then echo "WARNING: No support yet to change disktype" 1>&2; fi
 	if test -n "$DATADISKS"; then echo "ERROR: datadisks not yet supported in create2" 1>&2; exit 2; fi
-	if test -n "$DISKIZE" -o -n "$VOLUMETYPE"; then echo "WARNING: No support yet to change disksize or type" 1>&2; fi
 	if test "$CREATE_ECS_WITH_PUBLIC_IP" == "true"; then echo "ERROR: EIP creation not yet supported in create2" 1>&2; exit 2; fi
 
 	local REQ_CREATE_VM="{
