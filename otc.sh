@@ -3902,7 +3902,7 @@ getFileContentJSON()
 		IFS='=' read -a FILE_AR <<< "${INJECTFILE}"
 		local FILENAME_NAME=${FILE_AR[1]}
 		local TARGET_FILENAME=${FILE_AR[0]}
-		local FILECONTENT=$( base64 "$FILENAME_NAME" )
+		local FILECONTENT=$( base64 -w0 "$FILENAME_NAME" )
 		local FILE_TEMPLATE='{ "path": "'"$TARGET_FILENAME"'", "contents": "'"$FILECONTENT"'" }'
 
 		export FILEJSONITEM="$FILE_TEMPLATE"
@@ -4105,13 +4105,13 @@ ECScommonSettings()
 	if test -n "$USERDATA"; then
 		if test "${USERDATA:0:13}" != "#cloud-config"; then echo "WARN: user-data string does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="
-		\"user_data\": \""$(echo "$USERDATA" | base64)"\","
+		\"user_data\": \""$(echo "$USERDATA" | base64 -w0)"\","
 	fi
 	if test -n "$USERDATAFILE"; then
 		if test -n "$USERDATAJASON"; then echo "WARN: user-data-file overrides string" 1>&2; fi
 		if test "`head -n1 $USERDATAFILE`" != "#cloud-config"; then echo "WARN: user-data-file does not start with #cloud-config" 1>&2; fi
 		USERDATAJSON="
-		\"user_data\": \""$(base64 "$USERDATAFILE")"\","
+		\"user_data\": \""$(base64 -w0 "$USERDATAFILE")"\","
 	fi
 
 	SECUGROUPIDS=""
