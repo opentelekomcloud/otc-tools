@@ -4324,7 +4324,7 @@ waitVM()
 		STATUS=$(echo "$JSON" | jq '.server.status' | tr -d '"')
 		if test "$STATUS" == "ACTIVE"; then echo -e "\r#$ECSID: ACTIVE "; break; fi
 		PROGRESS=$(echo "$JSON" | jq '.server.progress' | tr -d '"')
-		if test "$STATUS" =! "$PSTATUS" -o "$PROGRESS" != "$PPROGRESS"; then
+		if test "$STATUS" != "$PSTATUS" -o "$PROGRESS" != "$PPROGRESS"; then
 			echo -en "\r#$ECSID: $STATUS $PROGRESS $PT"
 			PSTATUS="$STATUS"; PPROGRESS="$PROGRESS"
 		fi
@@ -4363,7 +4363,7 @@ ECSCreatev2()
 	# TODO: non-std volume treatment
 	# Get Image disk size
 	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
-	if test -n "$DISKSIZE" -a "$DISKSIZE" != "$IMGDISKSZ"; then echo "ERROR: Changing root disk size not yet supported (img=$IMGDISKSZ, req=$DISKSIZE)" 1>&2; exit 2; fi
+	if test -n "$DISKSIZE" -a "$ROOTDISKSIZE" != "$IMGDISKSZ"; then echo "ERROR: Changing root disk size not yet supported (img=$IMGDISKSZ, req=$DISKSIZE)" 1>&2; exit 2; fi
 	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then echo "WARNING: No support yet to change disktype" 1>&2; fi
 	if test -n "$DATADISKS"; then echo "ERROR: datadisks not yet supported in create2" 1>&2; exit 2; fi
 	if test "$CREATE_ECS_WITH_PUBLIC_IP" == "true"; then echo "ERROR: EIP creation not yet supported in create2" 1>&2; exit 2; fi
