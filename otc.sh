@@ -4315,7 +4315,7 @@ waitVM()
 	local ctr err JSON STATUS PREVSTATUS PROGRESS PREVPROGRESS PT=""
 	declare -i ctr=0
 	declare -i err=0
-	while test $ctr -le 600; do
+	while test $ctr -le 900; do
 		JSON=$(curlgetauth $TOKEN "$AUTH_URL_ECS/$ECSID")
 		if test $? != 0; then
 			let err+=1
@@ -4339,6 +4339,7 @@ waitVM()
 # Create VM by nova v2 API
 ECSCreatev2()
 {
+	getPersonalizationJSON
 	ECScommonSettings
 	ECSoptional
 	ECSparamComplete
