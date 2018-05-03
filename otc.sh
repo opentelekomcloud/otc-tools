@@ -4340,6 +4340,58 @@ waitVM()
 	done
 }
 
+
+build_data_volumes_bdmv2()
+{
+	local info_str=$1
+
+	local DATA_VOLUMES=""
+	disks=(${info_str//,/ })
+	for disk in "${disks[@]}"; do
+		info=(${disk//:/ })
+		DATA_VOLUMES="$DATA_VOLUMES,
+		 { \"source_type\": \"blank\", \"destination_type\": \"volume\", \"volume_size\": ${info[1]}, \"volume_type\": \"${info[0]}\" }"
+		# TODO: tags
+   done
+	echo "$DATA_VOLUMES"
+}
+
+createBDMv2()
+{
+	# Boot from image, if possible ...
+	DISKMAPPING="\"imageRef\": \"$IMAGE_ID\","
+	# Get Image disk size
+	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
+	# If we have a sigle (SATA) disk with default size, we are done ...
+	if test -z "$DISKZIE" -o "$ROOTDISKSIZE" == "$IMGDISKSZ" &&
+		test -z "$VOLUMETYPE" -o "$VOLUMETYPE" == "SATA" &&
+		test -z "$DATADISKS"; then
+		return
+	fi
+	# No such luck, we need to build a real block_device_mapping_v2
+	if test -z "$ROOTDISKSIZE"; then ROOTDISKSIZE=$IMGDISKSZ; fi
+	DISKMAPPING="\"block_device_mapping_v2\": ["
+	# Boot disk
+	DISKMAPPING="$DISKMAPPING
+		 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
+		   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
+	# Note: This is not yet supported by OTC
+	if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
+	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
+	DISKMAPPING="$DISKMAPPING }$(build_data_volumes_bdmv2 $DATADISKS)"
+	# Allow attaching existing disks
+	if test "$NUMCOUNT" = 1 -a -n "$DEV_VOL"; then
+		for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
+			DISKMAPPING="$DISKMAPPING,
+		 { \"uuid\": \"$i{dev_vol#*:}\", \"device_name\": \"${dev_vol%%:*}\" }"
+		done
+	fi
+	DISKMAPPING="$DISKMAPPING
+		],"
+}
+
+
+
 # Create VM by nova v2 API
 ECSCreatev2()
 {
@@ -4360,19 +4412,15 @@ ECSCreatev2()
 	# FIXME: We pass SG IDs as names here ... Seems to work.
 	if test -n "$SECUGROUPIDS"; then SG="\"security_groups\": [ $( echo $SECUGROUPIDS | sed 's/\"id\":/\"name\":/g' ) ],"; fi
 
-	# TODO: non-std volume treatment
-	# Get Image disk size
-	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
-	if test -n "$DISKSIZE" -a "$ROOTDISKSIZE" != "$IMGDISKSZ"; then echo "ERROR: Changing root disk size not yet supported (img=$IMGDISKSZ, req=$DISKSIZE)" 1>&2; exit 2; fi
-	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then echo "WARNING: No support yet to change disktype" 1>&2; fi
-	if test -n "$DATADISKS"; then echo "ERROR: datadisks not yet supported in create2" 1>&2; exit 2; fi
+	# volume treatment
+	createBDMv2
 
 	local REQ_CREATE_VM="{
 	\"server\": {
 		\"availablity_zone\": \"$AZ\",
 		\"name\": \"$INSTANCE_NAME\",
-		\"imageRef\": \"$IMAGE_ID\",
 		\"flavorRef\": \"$INSTANCE_TYPE\",
+		$DISKMAPPING
 		$SG
 		$PERSONALIZATION $USERDATAJSON
 		$OPTIONAL $COUNT
