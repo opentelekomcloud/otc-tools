@@ -128,9 +128,9 @@ if test "$WAIT" == "1"; then
   declare -i ctr=0
   PORT=${PORT:-22}
   #TODO NCPROXY
-  echo "nc $NCPROXY -w 2 $IP $PORT" 1>&2
-  while test $ctr -le 200; do
-    echo "quit" | nc $NCPROXY -w 2 $IP $PORT >/dev/null 2>&1 && break
+  echo "nc $NCPROXY -w 3 $IP $PORT" 1>&2
+  while test $ctr -le 150; do
+    echo "quit" | nc $NCPROXY -w 3 $IP $PORT >/dev/null 2>&1 && break
     sleep 1
     let ctr+=1
   done
