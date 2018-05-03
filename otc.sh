@@ -4366,7 +4366,6 @@ ECSCreatev2()
 	if test -n "$DISKSIZE" -a "$ROOTDISKSIZE" != "$IMGDISKSZ"; then echo "ERROR: Changing root disk size not yet supported (img=$IMGDISKSZ, req=$DISKSIZE)" 1>&2; exit 2; fi
 	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then echo "WARNING: No support yet to change disktype" 1>&2; fi
 	if test -n "$DATADISKS"; then echo "ERROR: datadisks not yet supported in create2" 1>&2; exit 2; fi
-	if test "$CREATE_ECS_WITH_PUBLIC_IP" == "true"; then echo "ERROR: EIP creation not yet supported in create2" 1>&2; exit 2; fi
 
 	local REQ_CREATE_VM="{
 	\"server\": {
@@ -4387,11 +4386,15 @@ ECSCreatev2()
 	ECSID=$(echo "$OUTPUT" | jq '.server.id' | tr -d '"')
 	#echo "$OUTPUT" | jq '.'
 	if test -z "$ECSID"; then exit 2; fi
-	# TODO: Tags, EIPs
-	# TODO wait
+	# EIP
+	if test "$CREATE_ECS_WITH_PUBLIC_IP" == "true"; then
+		EIP=$(PUBLICIPSCreate | jq '.id' | tr -d '"')
+		if test ${PIPESTATUS[0]} != 0; then echo "WARNING: EIP allocation failed" 1>&2; EIP=""; else sleep 2; fi
+	fi
+	if test -n "$EIP"; then BindPublicIpToCreatingVM; fi
+	# Wait
 	if test "$WAIT_FOR_JOB" = "true"; then waitVM $ECSID; fi
 	echo "ECS ID: $ECSID"
-
 }
 
 
@@ -4728,7 +4731,7 @@ PUBLICIPSCreate()
 		}
 	}'
 
-	echo $REQ_CREATE_PUBLICIPS
+	#echo $REQ_CREATE_PUBLICIPS 1>&2
 	curlpostauth "$TOKEN" "$REQ_CREATE_PUBLICIPS" "$AUTH_URL_PUBLICIPS" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
@@ -4757,7 +4760,7 @@ BindPublicIpToCreatingVM()
 	local PRTID
 	convertEipToId "$EIP"
 	if test "$EIP_STATUS" != "DOWN"; then
-		echo "ERROR: Requested EIP $EIP_ID has wrong status $EIP_STATUS" 1>&2
+		echo "WARNING: Requested EIP $EIP_ID has wrong status $EIP_STATUS" 1>&2
 	fi
 	##### use ecs server id to attach volumes, external ip_addresses, ...
 	while [ -z "$PRTID" ]; do sleep 5; PRTID=$(getPortID $ECSID); done
@@ -4768,7 +4771,7 @@ PUBLICIPSBind()
 {
 	local ID=$1
 	local PORT_ID=$2
-	if test -z "$PORT_ID"; then echo "Please define port-id to which the public ip should be bound to." 1>&2; exit 1; fi
+	if test -z "$PORT_ID"; then echo "ERROR: Need port-id to which the public IP should be bound to." 1>&2; exit 1; fi
 	local REQ_BIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": "'"$PORT_ID"'"
