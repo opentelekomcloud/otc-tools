@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.22
+VERSION=0.8.23
 
 # Get Config ####################################################################
 warn_too_open()
@@ -998,6 +998,7 @@ ecsHelp()
 	echo "    --disktype            SATA|SAS|SSD	# SATA is default"
 	echo "    --tenancy             <TENANCY> # use 'dedicated' for auto-placement on matching DedicatedHost"
 	echo "    --dedicated-host      <HOST>    # use ID/Name of preexisting DedicatedHost for direct placement"
+	echo "    --scheduler-hints JSON # pass raw JSON scheduler hints to nova (don't use with above two opts)"
 	echo "    --datadisks           <DATADISK># format: <TYPE:SIZE>[,<TYPE:SIZE>[,...]]"
 	echo "                                    #   example: SSD:20,SATA:50"
 	echo "    --az                  <AZ>		# determined from subnet by default"
@@ -4225,6 +4226,12 @@ ECSoptional()
 		OPTIONAL="$OPTIONAL
 		\"extendparam\": { \"support_auto_recovery\": \"$AUTORECOV\" },"
 	fi
+
+	if test -n "$SCHEDHINT"; then
+		OPTIONAL="$OPTIONAL
+		\"os:scheduler_hints\": $SCHEDHINT,"
+	fi
+
 }
 
 ECSmoreNICs()
@@ -4452,11 +4459,12 @@ ECSCreatev2()
 		if test ${PIPESTATUS[0]} != 0; then echo "WARNING: EIP allocation failed" 1>&2; EIP=""; else sleep 2; fi
 	fi
 	if test -n "$EIP"; then BindPublicIpToCreatingVM; fi
+	# Wait
+	if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then WAIT_FOR_JOB="true"; fi
+	if test "$WAIT_FOR_JOB" == "true"; then waitVM $ECSID; fi
 	# TODO: Manual tag inheritance, like on v1 API
 	# FIXME: unfortunately we infect DEV_VOLUMES
 	inheritTags
-	# Wait
-	if test "$WAIT_FOR_JOB" = "true"; then waitVM $ECSID; fi
 	echo "ECS ID: $ECSID"
 }
 
@@ -6402,6 +6410,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				OPTENABLE=1;;
 			--disable)
 				OPTDISABLE=1;;
+			--scheduler-hints)
+				SCHEDHINT="$2"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
