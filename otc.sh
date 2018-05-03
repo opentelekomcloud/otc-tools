@@ -4391,8 +4391,10 @@ createBDMv2()
 	# Allow attaching existing disks
 	if test "$NUMCOUNT" = 1 -a -n "$DEV_VOL"; then
 		for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
+			EVS_ID="${dev_vol#*:}"
+			if ! is_uuid "$EVS_ID"; then convertEVSNameToId $EVS_ID; fi
 			DISKMAPPING="$DISKMAPPING,
-		 { \"source_type\": \"volume\", \"destination_type\": \"volume\", \"uuid\": \"${dev_vol#*:}\", \"device_name\": \"${dev_vol%%:*}\" }"
+		 { \"source_type\": \"volume\", \"destination_type\": \"volume\", \"uuid\": \"$EVS_ID\", \"device_name\": \"${dev_vol%%:*}\" }"
 		done
 	fi
 	DISKMAPPING="$DISKMAPPING
