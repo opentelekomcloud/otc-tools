@@ -4350,8 +4350,10 @@ build_data_volumes_bdmv2()
 	for disk in "${disks[@]}"; do
 		info=(${disk//:/ })
 		DATA_VOLUMES="$DATA_VOLUMES,
-		 { \"source_type\": \"blank\", \"destination_type\": \"volume\", \"volume_size\": ${info[1]}, \"volume_type\": \"${info[0]}\" }"
+		 { \"source_type\": \"blank\", \"destination_type\": \"volume\", \"volume_size\": ${info[1]}, \"volume_type\": \"${info[0]}\""
 		# TODO: tags
+		#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DATA_VOLUMES="$DATA_VOLUMES, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
+		DATA_VOLUMES="$DATA_VOLUMES }"
    done
 	echo "$DATA_VOLUMES"
 }
@@ -4376,21 +4378,31 @@ createBDMv2()
 		 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
 		   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
 	# Note: This is not yet supported by OTC
-	if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
+	#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
 	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
 	DISKMAPPING="$DISKMAPPING }$(build_data_volumes_bdmv2 $DATADISKS)"
 	# Allow attaching existing disks
 	if test "$NUMCOUNT" = 1 -a -n "$DEV_VOL"; then
 		for dev_vol in $(echo $DEV_VOL | sed 's/,/ /g'); do
 			DISKMAPPING="$DISKMAPPING,
-		 { \"uuid\": \"$i{dev_vol#*:}\", \"device_name\": \"${dev_vol%%:*}\" }"
+		 { \"source_type\": \"volume\", \"destination_type\": \"volume\", \"uuid\": \"${dev_vol#*:}\", \"device_name\": \"${dev_vol%%:*}\" }"
 		done
 	fi
 	DISKMAPPING="$DISKMAPPING
 		],"
 }
 
-
+inheritTags()
+{
+	if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
+		VOLS=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tr -d '"')
+		echo "Note: Tag volumes $VOLS" 1>&2
+		TAGJSON="$(keyval2json $TAGS)"
+		for VOL in $VOLS; do
+			curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$VOL" >/dev/null
+		done
+	fi
+}
 
 # Create VM by nova v2 API
 ECSCreatev2()
@@ -4440,6 +4452,9 @@ ECSCreatev2()
 		if test ${PIPESTATUS[0]} != 0; then echo "WARNING: EIP allocation failed" 1>&2; EIP=""; else sleep 2; fi
 	fi
 	if test -n "$EIP"; then BindPublicIpToCreatingVM; fi
+	# TODO: Manual tag inheritance, like on v1 API
+	# FIXME: unfortunately we infect DEV_VOLUMES
+	inheritTags
 	# Wait
 	if test "$WAIT_FOR_JOB" = "true"; then waitVM $ECSID; fi
 	echo "ECS ID: $ECSID"
@@ -6554,14 +6569,7 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
 		ECSID=$(echo "$ECSJOBSTATUSJSON" | jq '.entities.sub_jobs[].entities.server_id' 2>/dev/null | tr -d '"')
 	fi
 	if [ -n "$ECSID" -a "null" != "$ECSID" ]; then
-		if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then
-			VOLS=$(curlgetauth $TOKEN $AUTH_URL_ECS/$ECSID | jq '.server | .["os-extended-volumes:volumes_attached"][].id' | tr -d '"')
-			echo "Note: Tag volumes $VOLS" 1>&2
-			TAGJSON="$(keyval2json $TAGS)"
-			for VOL in $VOLS; do
-				curlpostauth $TOKEN "{ \"tags\": { $TAGJSON } }" "$CINDER_URL/os-vendor-tags/volumes/$VOL" >/dev/null
-			done
-		fi
+		inheritTags
 		echo "ECS ID: $ECSID"
 	fi
 	echo "ECS Creation status: $ECSJOBSTATUS"
