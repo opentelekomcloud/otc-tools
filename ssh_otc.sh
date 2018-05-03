@@ -8,12 +8,14 @@
 
 usage()
 {
-	echo "Usage: ssh_otc.sh [USERNAME@]VM [CMD]"
+	echo "Usage: ssh_otc.sh [--wait] [sshopts] [USERNAME@]VM [CMD]"
 	echo "VM may be specified by IP, NAME, UUID"
 	exit 2
 }
 
 if test -z "$1"; then usage; fi
+
+if test "$1" == "--wait"; then WAIT=1; shift; fi
 
 #OTC_TENANT=${OTC_TENANT:-210}
 #SSHKEY=~/SSHkey-$OTC_TENANT.pem
@@ -28,7 +30,8 @@ declare -a ARGS=()
 while [[ $1 = -* ]]; do
 	ARGS[${#ARGS[*]}]="$1"
 	# FIXME: Need to handle all opts with args here ...
-	if test "$1" == "-p" -o "$1" == "-b" -o "$1" == "-c" -o "$1" == "-D" \
+	if test "$1" == "-p"; then ARGS[${#ARGS[*]}]="$2"; PORT="$2"; shift; fi
+	if test "$1" == "-b" -o "$1" == "-c" -o "$1" == "-D" \
 		-o "$1" == "-E" -o "$1" == "-e" -o "$1" == "-F" -o "$1" == "-F" \
 		-o "$1" == "-L" -o "$1" == "-m" -o "$1" == "-m" -o "$1" == "-O" \
 		-o "$1" == "-o" -o "$1" == "-Q" -o "$1" == "-R" -o "$1" == "-S" \
@@ -121,6 +124,17 @@ fi
 
 if test "$ISET" != 1; then getSSHkey; fi
 
+if test "$WAIT" == "1"; then
+  declare -i ctr=0
+  PORT=${PORT:-22}
+  #TODO NCPROXY
+  echo "nc $NCPROXY -w 2 $IP $PORT" 1>&2
+  while test $ctr -le 200; do
+    echo "quit" | nc $NCPROXY -w 2 $IP $PORT >/dev/null 2>&1 && break
+    sleep 1
+    let ctr+=1
+  done
+fi
 echo "ssh ${ARGS[@]} $SSHKEY $USER@$IP $@" 1>&2
 ssh ${ARGS[@]} $SSHKEY $USER@$IP $@
 RC=$?
