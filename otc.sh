@@ -4167,24 +4167,24 @@ ECSoptional()
 			fi
 		fi
 		if test -n "$TENANCY"; then
-			OPTIONAL="$OPTIONAL
-			\"os:scheduler_hints\": {
-			 \"tenancy\": \"$TENANCY\",
-			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
-			},"
+			SCHDHINT=",
+		\"os:scheduler_hints\": {
+			\"tenancy\": \"$TENANCY\",
+			\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+		},"
 		else
-			OPTIONAL="$OPTIONAL
-			\"os:scheduler_hints\": {
-			 \"tenancy\": \"dedicated\",
-			 \"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
-			},"
+			SCHDHINT=",
+		\"os:scheduler_hints\": {
+			\"tenancy\": \"dedicated\",
+			\"dedicated_host_id\": \"$DEDICATED_HOST_ID\"
+		},"
 		fi
 	else
 		if test -n "$TENANCY"; then
-			OPTIONAL="$OPTIONAL
-			\"os:scheduler_hints\": {
-			 \"tenancy\": \"$TENANCY\"
-			},"
+			SCHHINT=",
+		\"os:scheduler_hints\": {
+			\"tenancy\": \"$TENANCY\"
+		},"
 		fi
 	fi
 
@@ -4228,8 +4228,8 @@ ECSoptional()
 	fi
 
 	if test -n "$SCHEDHINT"; then
-		OPTIONAL="$OPTIONAL
-		\"os:scheduler_hints\": $SCHEDHINT,"
+		SCHDHINT=",
+	\"os:scheduler_hints\": $SCHEDHINT"
 	fi
 
 }
@@ -4302,7 +4302,7 @@ ECSCreate()
 		"vpcid": "'"$VPCID"'",
 		"security_groups": [ '"$SECUGROUPIDS"' ],
 		"nics": [ { "subnet_id": "'"$SUBNETID"'" '"$FIXEDIPJSON"' } '"$MORENICS"' ], '"$OPTIONAL"'
-		"count": '$NUMCOUNT'
+		"count": '$NUMCOUNT' '$SCHDHINT'
 	}
 }'
 
@@ -4443,10 +4443,10 @@ ECSCreatev2()
 		\"flavorRef\": \"$INSTANCE_TYPE\",
 		$DISKMAPPING
 		$SG
-		$PERSONALIZATION $USERDATAJSON
-		$OPTIONAL $COUNT
+		$PERSONALIZATION $USERDATAJSON $OPTIONAL
+		$COUNT
 		\"networks\": [ $MORENICS ]
-	}
+	}$SCHDHINT
 }"
 	echo "$REQ_CREATE_VM"
 	OUTPUT=`curlpostauth "$TOKEN" "$REQ_CREATE_VM" "$AUTH_URL_ECS"`
