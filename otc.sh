@@ -968,6 +968,7 @@ ecsHelp()
 	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
 	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
+	echo "otc ecs console-log <vmid> # get console output from VM"
 	echo "otc ecs create -n <name>   # create ecs instance <name>"
 	echo
 	echo "otc ecs create             # create vm example"
@@ -3877,6 +3878,17 @@ showASPolicy()
 	curlgetauth $TOKEN "$AUTH_URL_AS/scaling_policy/$ID" | jq '.'
 }
 
+getECSlog()
+{
+	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
+	# Assumes avg 85 chrs per line (1024/85 ~ 12)
+	ln=$(($MAXGETKB*12))
+	LF=$(echo -e "\n")
+	curlpostauth $TOKEN "{ \"os-getConsoleOutput\": { \"length\": $ln } }" "$AUTH_URL_ECS/$ECS_ID/action" | jq '.output' | sed -e 's/^"\(.*\)"$/\1/' -e 's/\\n/\
+/g'
+	RC=${PIPESTATUS[0]}
+	return $RC
+}
 
 # ECS helpsers
 getECSJOBList()
@@ -6540,6 +6552,9 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 	getLimits
+
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "console-log" ]; then
+	getECSlog $1
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ] ||
      [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a "${INSTANCE_TYPE:0:8}" == "physical" ]; then
