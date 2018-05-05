@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.23
+VERSION=0.8.24
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1148,9 +1148,10 @@ eipHelp()
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
 	echo "    --ipv6                      # create a nat64 address"
-	echo "otc publicip delete <id>        # delete a publicip (EIP)"
-	echo "otc publicip bind <publicip-id> <port-id> # bind a publicip to a port"
-	echo "otc publicip unbind <publicip-id>         # unbind a publicip"
+	echo "otc publicip update <id/ip>     # change name and/or bandwidth (same opts)"
+	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
+	echo "otc publicip bind <id/ip> <port-id>       # bind a publicip to a port"
+	echo "otc publicip unbind <id/ip>               # unbind a publicip"
 }
 
 sgHelp()
@@ -1640,6 +1641,11 @@ is_uuid()
 is_id()
 {
 	echo "$1" | grep '^[0-9a-f]\{32\}$' >/dev/null 2>&1
+}
+
+is_ip4()
+{
+	echo "$1" | grep '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' >/dev/null 2>&1
 }
 
 getid()
@@ -2213,6 +2219,19 @@ getVPCLimits()
 	return ${PIPESTATUS[0]}
 }
 
+convertEIPtoID()
+{
+	#setlimit; setapilimit 400 30 publicips
+	#curlgetauth_pag $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq ".publicips[] | select(.public_ip_address == "$1") | .id" | tr -d '"'
+	EIP_RESP=$(curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?public_ip_address=$1")
+	if test $? != 0; then echo "ERROR: No such EIP $1" 1>&2; exit 2; fi
+	EIP=$(echo "$EIP_RESP" | jq '.publicips[].id' | tr -d '"')
+	BWID=$(echo "$EIP_RESP" | jq '.publicips[].bandwidth_id' | tr -d '"')
+	#EIP_RESP=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/floatingips?floating_ip_address=$1")
+	#if test $? != 0; then echo "ERROR: No such EIP $1" 1>&2; exit 2; fi
+	#EIP=$(echo "$EIP_RESP" | jq '.floatingips[].id' | tr -d '"')
+}
+
 getPUBLICIPSList()
 {
 	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
@@ -2224,7 +2243,8 @@ getPUBLICIPSList()
 
 getPUBLICIPSDetail()
 {
-	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS/$1" | jq '.'
+	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
+	curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS/$EIP" | jq '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4821,9 +4841,32 @@ PUBLICIPSCreate()
 	return ${PIPESTATUS[0]}
 }
 
+PUBLICIPSUpdate()
+{
+	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
+	#if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
+	if test -n "$DOIPV6"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
+	if test -z "$BWID"; then BWID=$(curlgetauth $TOKEN $AUTH_URL_PUBLICIPS/$EIP | jq .publicip.bandwidth_id | tr -d '"'); fi
+	if test -z "$BWID" -o "$BWID" == "null"; then echo "ERROR: No such public IP $EIP" 1>&2; exit 2; fi
+	local REQ_UPDATE_BW='{
+		"bandwidth": {
+			"size": '$BANDWIDTH''
+	if test -n "$BANDWIDTH_NAME"; then
+		REQ_UPDATE_BW="$REQ_UPDATE_BW,
+			\"name\": \"$BANDWIDTH_NAME\""
+	fi
+	REQ_UPDATE_BW="$REQ_UPDATE_BW
+		}
+}"
+	#echo $REQ_CREATE_PUBLICIPS 1>&2
+	curlputauth "$TOKEN" "$REQ_UPDATE_BW" "$NEUTRON_URL/v1/$OS_PROJECT_ID/bandwidths/$BWID" | jq '.[]'
+	return ${PIPESTATUS[0]}
+}
+
 PUBLICIPSDelete()
 {
-	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$@" | jq '.[]'
+	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
+	curldeleteauth "$TOKEN" "$AUTH_URL_PUBLICIPS/$EIP" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
@@ -4854,7 +4897,7 @@ BindPublicIpToCreatingVM()
 
 PUBLICIPSBind()
 {
-	local ID=$1
+	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
 	local PORT_ID=$2
 	if test -z "$PORT_ID"; then echo "ERROR: Need port-id to which the public IP should be bound to." 1>&2; exit 1; fi
 	local REQ_BIND_PUBLICIPS='{
@@ -4864,13 +4907,13 @@ PUBLICIPSBind()
 	}'
 
 	echo $REQ_BIND_PUBLICIPS
-	curlputauth "$TOKEN" "$REQ_BIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
+	curlputauth "$TOKEN" "$REQ_BIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$EIP" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
 PUBLICIPSUnbind()
 {
-	local ID=$1
+	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
 	local REQ_UNBIND_PUBLICIPS='{
 		"publicip": {
 			"port_id": ""
@@ -4878,7 +4921,7 @@ PUBLICIPSUnbind()
 	}'
 
 	echo $REQ_UNBIND_PUBLICIPS
-	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$ID" | jq '.[]'
+	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$EIP" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
@@ -6713,6 +6756,8 @@ elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "show" ]; then
 	getPUBLICIPSDetail $1
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "create" ]; then
 	PUBLICIPSCreate "$@"
+elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "update" ]; then
+	PUBLICIPSUpdate "$@"
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "delete" ]; then
 	PUBLICIPSDelete $@
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "bind" ] ||
