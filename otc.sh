@@ -992,7 +992,7 @@ ecsHelp()
 	echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
 	echo "    --user-data-file      <USERDFILE>     # don't forget #cloud-config header"
 	echo "    --public              <true/false/IP>"
-	echo "    --volumes             <device:volume>[<device,volume>[,..]]    # attach volumes as named devices"
+	echo "    --volumes             <device:volume>[,<device:volume>[,..]]    # attach volumes as named devices"
 	echo "    --bandwidth           <BW>		# defaults to 25"
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
@@ -4157,9 +4157,10 @@ ECScommonSettings()
 ECSparamComplete()
 {
 	if [ "$IMAGE_ID" == "" ]; then
-		echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
-		echo 'otc images list' 1>&2
-		exit 1
+		if test -z "$BOOT_VOLUME"; then
+			echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
+			echo 'otc images list' 1>&2
+		fi
 	fi
 	if [ "$INSTANCE_TYPE" == "" ]; then
 		echo "Instance Type definition not Correct ! Please check avaliable flavors  with following command:" 1>&2
@@ -4404,7 +4405,7 @@ createBDMv2()
 	# Get Image disk size
 	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
 	# If we have a sigle (SATA) disk with default size, we are done ...
-	if test -z "$DISKZIE" -o "$ROOTDISKSIZE" == "$IMGDISKSZ" &&
+	if test -z "$DISKSIZE" -o "$ROOTDISKSIZE" == "$IMGDISKSZ" &&
 		test -z "$VOLUMETYPE" -o "$VOLUMETYPE" == "SATA" &&
 		test -z "$DATADISKS"; then
 		return
