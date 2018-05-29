@@ -981,6 +981,7 @@ ecsHelp()
 	echo "    --instance-type       <FLAVOR>"
 	echo "    --instance-name       <NAME>"
 	echo "    --image-name          <IMAGE>"
+	echo "    --boot-volume         <VOLUME>  # boot from volume instead of image"
 	echo "    --subnet-name         <SUBNET>"
 	echo "    --fixed-ip            <IP>"
 	echo "    --nicsubs <SUBN1>[:FIX1][,<SUBN2>[:FIX2][,...]]   # 2ndary NICs "
@@ -992,7 +993,7 @@ ecsHelp()
 	echo "    --user-data           <USERDYAMLSTRG> # don't forget #cloud-config header"
 	echo "    --user-data-file      <USERDFILE>     # don't forget #cloud-config header"
 	echo "    --public              <true/false/IP>"
-	echo "    --volumes             <device:volume>[,<device:volume>[,..]]    # attach volumes as named devices"
+	echo "    --volumes             <DEVICE:VOLUME>[,<DEVICE:VOLUME>[,..]]    # attach volumes as named devices"
 	echo "    --bandwidth           <BW>		# defaults to 25"
 	echo "    --bandwidth-name      <BW-NAME>	# defaults to bandwidth-BW"
 	echo "    --disksize            <DISKGB>"
@@ -4157,7 +4158,7 @@ ECScommonSettings()
 ECSparamComplete()
 {
 	if [ "$IMAGE_ID" == "" ]; then
-		if test -z "$BOOT_VOLUME"; then
+		if test -z "$BOOT_VOL"; then
 			echo "Image definition not Correct ! Check avaliable images with following command:" 1>&2
 			echo 'otc images list' 1>&2
 		fi
@@ -4400,26 +4401,35 @@ build_data_volumes_bdmv2()
 
 createBDMv2()
 {
-	# Boot from image, if possible ...
-	DISKMAPPING="\"imageRef\": \"$IMAGE_ID\","
-	# Get Image disk size
-	IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
-	# If we have a sigle (SATA) disk with default size, we are done ...
-	if test -z "$DISKSIZE" -o "$ROOTDISKSIZE" == "$IMGDISKSZ" &&
-		test -z "$VOLUMETYPE" -o "$VOLUMETYPE" == "SATA" &&
-		test -z "$DATADISKS"; then
-		return
+	if test -n "$IMAGE_ID"; then
+		# Boot from image, if possible ...
+		DISKMAPPING="\"imageRef\": \"$IMAGE_ID\","
+		# Get Image disk size
+		IMGDISKSZ="$(curlgetauth $TOKEN $AUTH_URL_IMAGES/$IMAGE_ID | jq '.min_disk')"
+		# If we have a sigle (SATA) disk with default size, we are done ...
+		if test -z "$DISKSIZE" -o "$ROOTDISKSIZE" == "$IMGDISKSZ" &&
+			test -z "$VOLUMETYPE" -o "$VOLUMETYPE" == "SATA" &&
+			test -z "$DATADISKS"; then
+			return
+		fi
 	fi
-	# No such luck, we need to build a real block_device_mapping_v2
-	if test -z "$ROOTDISKSIZE"; then ROOTDISKSIZE=$IMGDISKSZ; fi
-	DISKMAPPING="\"block_device_mapping_v2\": ["
-	# Boot disk
-	DISKMAPPING="$DISKMAPPING
-		 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
-		   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
-	# Note: This is not yet supported by OTC
-	#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
-	if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
+	if test -n "$IMAGE_ID"; then
+		# No such luck, we need to build a real block_device_mapping_v2
+		if test -z "$ROOTDISKSIZE"; then ROOTDISKSIZE=$IMGDISKSZ; fi
+		DISKMAPPING="\"block_device_mapping_v2\": ["
+		# Boot disk
+		DISKMAPPING="$DISKMAPPING
+			 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
+			   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
+		# Note: This is not yet supported by OTC
+		#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
+		if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
+	else
+		if ! is_uuid "$BOOT_VOL"; then BOOT_VOL="$(curlgetauth $TOKEN $CINDER_URL/volumes?name=$(uriencode $BOOT_VOL) | jq .volumes[].id | tr -d '"')"; fi
+		DISKMAPPING="\"block_device_mapping_v2\": [
+			{ \"boot_index\": 0, \"source_type\": \"volume\", \"uuid\": \"$BOOT_VOL\",
+			  \"delete_on_termination\": true"
+	fi
 	DISKMAPPING="$DISKMAPPING }$(build_data_volumes_bdmv2 $DATADISKS)"
 	# Allow attaching existing disks
 	if test "$NUMCOUNT" = 1 -a -n "$DEV_VOL"; then
@@ -6356,6 +6366,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				shift;;     # past argument
 			--volumes)
 				DEV_VOL="$2"; shift;;
+			--boot-volume)
+				BOOT_VOL="$2"; shift;;
 			--disks)
 				DISKS="$2"; shift;;
 			--disktype|--disk-type)
@@ -6602,11 +6614,11 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "console-log" ]; then
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ] ||
      [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a "${INSTANCE_TYPE:0:8}" == "physical" ]; then
-	ECSprepare
+	ECSprepare $1
 	ECSCreatev2 "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" ]; then
-	ECSprepare
+	ECSprepare $1
 	#if test -n "$DEBUG"; then echo ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"; fi
 	ECSCreate "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 	echo "Task ID: $ECSTASKID"
