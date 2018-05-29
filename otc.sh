@@ -4420,7 +4420,7 @@ createBDMv2()
 		# Boot disk
 		DISKMAPPING="$DISKMAPPING
 			 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
-			   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
+			   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": false"
 		# Note: This is not yet supported by OTC
 		#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
 		if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
