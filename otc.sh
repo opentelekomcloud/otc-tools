@@ -1027,6 +1027,9 @@ ecsHelp()
 	echo "otc ecs limits                  # display project quotas"
 	echo "otc ecs az-list                 # list availability zones"
 	echo "otc ecs flavor-list             # list available flavors"
+	echo "otc ecs (flp|flavor-pretty)     # tersely lists available flavors"
+	echo "otc ecs flp spec [pattern]      # as above, but lists os_extra_spec, optionally grep-filtered for [pattern]"
+	echo "                                # [pattern] must be escaped, eg: 'quota\|resource_type' including the ''"
 	echo "otc ecs attach-nic ECSID PORT   # attach vNIC to VM: port-spec see below"
 	echo "     --port-id PORTID           # Specify port-id"
 	echo "     --net-id NETID [--fixed-ip IP]  # Specify net [and fixed-ip]"
@@ -3346,6 +3349,41 @@ getFLAVORList()
 	#setlimit 500
 	setlimit; setapilimit 720 30 flavors
 	curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING" | jq '.flavors[] | "\(.id)   \(.name)   \(.vcpus)   \(.ram)   \(.os_extra_specs)"'  | sed -e 's/{*\\"}*//g' -e 's/,/ /g'| tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+length()
+{
+	tr -d '"' | awk '{print length}'|sort -nr|head -1
+}
+
+prettyFLAVORList()
+{
+	setlimit; setapilimit 720 30 flavors
+   _foo=$IFS
+	IFS=;DATA=$(curlgetauth_pag $TOKEN "$AUTH_URL_FLAVORS$PARAMSTRING")
+	IFS=$_foo
+	l_id=$(echo $DATA | jq '.flavors[] | "\(.id)"' | length)
+	l_ram=$(echo $DATA | jq '.flavors[] | "\(.ram)"' | length)
+	l_vcpus=$( ( echo CPU;echo $DATA | jq '.flavors[] | "\(.vcpus)"' ) | length)
+	l_name=$(echo $DATA | jq '.flavors[] | "\(.name)"' | length)
+	format="%${l_vcpus}s %${l_ram}s %-${l_name}s %-${l_id}s"
+	dospec=""
+	GREP="."
+	if [ "$1" == "--spec" ]
+	then
+		dospec="os_extra_specs"
+		[ "$2" ] && GREP="$2"
+	fi
+	printf "$format %s\n" CPU Ram Name ID $dospec
+	while read cpu ram name id
+	do
+		printf "$format\n" $cpu $ram $name $id
+		[ "$dospec" ] && while read spec
+			do
+				printf "$format %s\n" $(let num=$(echo $format | sed -e "s/[^ ]//g" | wc -c ) ; for i in `seq 1 $num`; do echo -n "- ";done  ) $spec | grep $GREP
+			done < <(echo $DATA | jq ".flavors[] | select(.id==\"$id\") | .os_extra_specs | to_entries[] | [.key, .value] | @csv" | tr , : | tr -d '"\\')
+	done < <(echo $DATA | jq '.flavors[] | "\(.vcpus) \(.ram) \(.name) \(.id)"' | tr -d '"')
 	return ${PIPESTATUS[0]}
 }
 
@@ -6884,6 +6922,11 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listflavor" ]  ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavors" ]; then
 	getFLAVORList
+
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flavor-pretty" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "flp" ] ||
+     [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "pflav" ]; then
+	prettyFLAVORList "$@"
 
 elif [ "$MAINCOM" == "keypair" -a "$SUBCOM" == "list" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "listkey" ] ||
