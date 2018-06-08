@@ -3365,7 +3365,7 @@ prettyFLAVORList()
 	IFS=$_foo
 	l_id=$(echo $DATA | jq '.flavors[] | "\(.id)"' | length)
 	l_ram=$(echo $DATA | jq '.flavors[] | "\(.ram)"' | length)
-	l_vcpus=$( ( echo CPU;echo $DATA | jq '.flavors[] | "\(.vcpus)"' ) | length)
+	l_vcpus=$( ( echo CPU; echo $DATA | jq '.flavors[] | "\(.vcpus)"' ) | length)
 	l_name=$(echo $DATA | jq '.flavors[] | "\(.name)"' | length)
 	format="%${l_vcpus}s %${l_ram}s %-${l_name}s %-${l_id}s"
 	dospec=""
@@ -3375,13 +3375,13 @@ prettyFLAVORList()
 		dospec="os_extra_specs"
 		[ "$2" ] && GREP="$2"
 	fi
-	printf "$format %s\n" CPU Ram Name ID $dospec
+	printf "#$format %s\n" CPU Ram Name ID $dospec
 	while read cpu ram name id
 	do
-		printf "$format\n" $cpu $ram $name $id
+		printf " $format\n" $cpu $ram $name $id
 		[ "$dospec" ] && while read spec
 			do
-				printf "$format %s\n" $(let num=$(echo $format | sed -e "s/[^ ]//g" | wc -c ) ; for i in `seq 1 $num`; do echo -n "- ";done  ) $spec | grep $GREP
+				printf " $format %s\n" $(let num=$(echo $format | sed -e "s/[^ ]//g" | wc -c ) ; for i in `seq 1 $num`; do echo -n "- ";done  ) $spec | grep $GREP
 			done < <(echo $DATA | jq ".flavors[] | select(.id==\"$id\") | .os_extra_specs | to_entries[] | [.key, .value] | @csv" | tr , : | tr -d '"\\')
 	done < <(echo $DATA | jq '.flavors[] | "\(.vcpus) \(.ram) \(.name) \(.id)"' | tr -d '"')
 	return ${PIPESTATUS[0]}
