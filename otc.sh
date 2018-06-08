@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.24
+VERSION=0.8.25
 
 # Get Config ####################################################################
 warn_too_open()
@@ -3495,8 +3495,8 @@ createELB()
 				#echo "WARN: Derive AZ from subnet: $SUBNETAZ" 1>&2
 				AZ="$SUBNETAZ"
 			else
-				echo "ERROR: Need to specify AZ (or derive from subnet)" 1>&2
-				exit 2
+				echo "Warning: Might need to specify AZ for internal ELB. (Can not derive from subnet.)" 1>&2
+				#exit 2
 			fi
 		fi
 		if test -n "$SUBNETAZ" -a "$SUBNETAZ" != "$AZ"; then
@@ -3516,7 +3516,11 @@ createELB()
 			echo "WARN: No IDs known for cloud env $OS_CLOUD_ENV" 1>&2
 			AZID="$AZ"
 		fi
-		ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'"'
+		if test -n "$AZ"; then
+			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'", "az": "'$AZID'"'
+		else
+			ELBTYPE='"type": "Internal", "vip_subnet_id": "'$SUBNETID'"'
+		fi
 		if test -n "$SECUGROUP"; then
 			ELBTYPE="$ELBTYPE, \"security_group_id\": \"$SECUGROUP\""
 		else
