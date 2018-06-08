@@ -10,8 +10,12 @@ Prefix any command by debug to observe the REST calls being made.
 
 For production use, we recommend using the native OpenStack python client tools
 (python-novaclient etc or the newer python-openstackclient), complemented by
-the python-otcctools for specific OTC functions.  Or of course higher level
-tools, such as ansible with python-shade or terraform.
+the python-otcctools for specific OTC functions.  Alternatively, there are
+otc-specific extensions to python-openstackclient in the python-otcextensions
+project (on github/OpenTelekomCloud, like all the other projects).
+
+Of course higher level tools, such as heat, ansible or terraform are a good
+choice for automation or you use openstacksdk (and shade).
 
 Usage
 -----
@@ -65,7 +69,8 @@ specific options (LOCALOPTS) need to precede the positional parameters.
 
 otc.sh does not do any kind of version discovery, but just assumes support
 for all commands that public OTC offers. This reduces complexity and
-increases performance, and is a deliberate choice.
+increases performance, and is a deliberate choice. It does however use
+the service catalog from keystone to determine all the endoints.
 
 Some of otc.sh's functions will work with other OpenStack clouds; for
 testing, even some keystonev2 support has been added. But this is not at
@@ -117,6 +122,10 @@ You can replace this with --jqfilter '' which results in no processing.
 Or you pass a string like --jqfilter '.servers[] | .id+\"   \"+.name'.
 Note the quoting for \".
 
+Note that in this mode, otc.sh really does not much more than curl except for
+handling the tokens and providing the variables like \$CINDER_URL from the
+catalog.
+
 Return codes
 ------------
 Some work has been done in the 0.7.x series to tidy up the return of response
@@ -141,6 +150,8 @@ otc.sh normally knows what kind of token is needed for which command, but
 for the custom functions the default (project scoped tokens) may not always
 fit.
 
+The token cache was introduced in 0.8.0 ot otc-tools.
+
 
 Packages
 --------
@@ -152,4 +163,4 @@ A docker container image
 is available on dockerhub.
 
 You can of course also just grab this script from github; please install
-curl and jq to make it work; optionally also s3 (libs3/libs3-2).
+curl and jq to make it work; optionally also s3 (libs3/libs3-4).
