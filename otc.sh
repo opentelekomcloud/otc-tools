@@ -981,7 +981,7 @@ ecsHelp()
 	echo "    --instance-type       <FLAVOR>"
 	echo "    --instance-name       <NAME>"
 	echo "    --image-name          <IMAGE>"
-	echo "    --boot-volume         <VOLUME>  # boot from volume instead of image"
+	echo "    --boot-volume         <VOLUME>  # boot from volume instead of image [only create2]"
 	echo "    --subnet-name         <SUBNET>"
 	echo "    --fixed-ip            <IP>"
 	echo "    --nicsubs <SUBN1>[:FIX1][,<SUBN2>[:FIX2][,...]]   # 2ndary NICs "
@@ -4419,16 +4419,17 @@ createBDMv2()
 		DISKMAPPING="\"block_device_mapping_v2\": ["
 		# Boot disk
 		DISKMAPPING="$DISKMAPPING
-			 { \"boot_index\": 0, \"source_type\": \"image\", \"uuid\": \"$IMAGE_ID\", 
-			   \"destination_type\": \"volume\", \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": false"
+			 { \"boot_index\": 0, \"source_type\": \"image\",
+			   \"uuid\": \"$IMAGE_ID\", \"destination_type\": \"volume\",
+			   \"volume_size\": $ROOTDISKSIZE, \"delete_on_termination\": true"
 		# Note: This is not yet supported by OTC
 		#if test -n "$TAGS" -a -n "$INHERIT_TAGS"; then DISKMAPPING="$DISKMAPPING, \"tag\":$(keyval2list $TAGS | sed 's/,.*$//')"; fi
 		if test -n "$VOLUMETYPE" -a "$VOLUMETYPE" != "SATA"; then DISKMAPPING="$DISKMAPPING, \"volume_type\": \"$VOLUMETYPE\""; fi
 	else
 		if ! is_uuid "$BOOT_VOL"; then BOOT_VOL="$(curlgetauth $TOKEN $CINDER_URL/volumes?name=$(uriencode $BOOT_VOL) | jq .volumes[].id | tr -d '"')"; fi
 		DISKMAPPING="\"block_device_mapping_v2\": [
-			{ \"boot_index\": 0, \"source_type\": \"volume\", \"uuid\": \"$BOOT_VOL\",
-			  \"delete_on_termination\": true"
+			{ \"boot_index\": 0, \"source_type\": \"volume\", \"delete_on_termination\": false,
+			  \"uuid\": \"$BOOT_VOL\""
 	fi
 	DISKMAPPING="$DISKMAPPING }$(build_data_volumes_bdmv2 $DATADISKS)"
 	# Allow attaching existing disks
@@ -6613,7 +6614,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "console-log" ]; then
 	getECSlog $1
 
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create2" ] ||
-     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a "${INSTANCE_TYPE:0:8}" == "physical" ]; then
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a "${INSTANCE_TYPE:0:8}" == "physical" ] ||
+     [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "create" -a -n "$BOOT_VOL" ]; then
 	ECSprepare $1
 	ECSCreatev2 "$NUMCOUNT" "$INSTANCE_TYPE" "$IMAGE_ID" "$VPCID" "$SUBNETID" "$SECUGROUP"
 
