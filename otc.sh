@@ -2992,9 +2992,9 @@ domainNameID()
 {
 	if is_id "$1"; then echo "$1"; return; fi
 	local NAME=$(uriencode $1)
-	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$NAME" | jq '.zones[].id' | tr -d '"')
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$NAME" | jq '.zones[] | select(.name == "$1") | .id' | tr -d '"')
 	if is_id "$ID"; then echo "$ID"; return; fi
-	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$NAME" | jq '.zones[].id' | tr -d '"')
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$NAME" | jq '.zones[] | select(.name == "$1") | .id' | tr -d '"')
 	if is_id "$ID"; then echo "$ID"; return; fi
 	echo "No such zone $1" 1>&2
 	exit 2
