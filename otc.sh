@@ -2996,6 +2996,10 @@ domainNameID()
 	if is_id "$ID"; then echo "$ID"; return; fi
 	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$NAME" | jq '.zones[] | select(.name == "$1") | .id' | tr -d '"')
 	if is_id "$ID"; then echo "$ID"; return; fi
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?name=$NAME" | jq '.zones[] | .id' | tail -n1 | tr -d '"')
+	if is_id "$ID"; then echo "$ID"; return; fi
+	ID=$(curlgetauth $TOKEN "${AUTH_URL_DNS}?type=private&name=$NAME" | jq '.zones[] | .id' | tail -n1 | tr -d '"')
+	if is_id "$ID"; then echo "$ID"; return; fi
 	echo "No such zone $1" 1>&2
 	exit 2
 }
@@ -3003,14 +3007,14 @@ domainNameID()
 
 showDomain()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	curlgetauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
 
 deleteDomain()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	curldeleteauth $TOKEN $AUTH_URL_DNS/$ID | jq .
 	return ${PIPESTATUS[0]}
 }
@@ -3018,7 +3022,7 @@ deleteDomain()
 # Params: ZONEID NAME TYPE TTL VAL[,VAL] [DESC]
 addRecord()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	if test -z "$5"; then
 		echo "ERROR: Need to provide more params" 1>&2
 		exit 1
@@ -3047,7 +3051,7 @@ addRecord()
 
 showRecord()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	curlgetauth $TOKEN $AUTH_URL_DNS/$ID/recordsets/$2 | jq '.'
 	return ${PIPESTATUS[0]}
 }
@@ -3058,10 +3062,7 @@ listRecords()
 	if test -z "$1"; then
 		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	else
-		ID="$1"
-		#ID="$(uriencode $1)"
-		if ! is_id "$ID"; then ID=$(curlgetauth $TOKEN ${AUTH_URL_DNS}?name=$ID | jq '.zones[].id' | tr -d '"'); fi
-		if ! is_id "$ID"; then echo "No such zone $1" 1>&2; exit 2; fi
+		ID=$(domainNameID $1) || exit
 		curlgetauth $TOKEN "$AUTH_URL_DNS/$ID/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
 	fi
 	return ${PIPESTATUS[0]}
@@ -3075,7 +3076,7 @@ deleteRecord()
 
 associateDomain()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	if ! is_uuid $2; then convertVPCNameToId "$2"; else VPCID=$2; fi
 	local REQ="{ \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" } }"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_DNS/$ID/associaterouter" | jq '.'
@@ -3083,7 +3084,7 @@ associateDomain()
 
 dissociateDomain()
 {
-	ID=$(domainNameID $1)
+	ID=$(domainNameID $1) || exit
 	if ! is_uuid $2; then convertVPCNameToId "$2"; else VPCID=$2; fi
 	local REQ="{ \"router\": { \"router_id\": \"$VPCID\", \"router_region\": \"$OS_REGION_NAME\" } }"
 	curlpostauth $TOKEN "$REQ" "$AUTH_URL_DNS/$ID/disassociaterouter" | jq '.'
