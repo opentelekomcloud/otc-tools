@@ -65,7 +65,7 @@ getvm()
 	# Check VPC and use EIP if present and needed
 	MYVPC=$(otc.sh mds meta_data 2>/dev/null | jq .meta.vpc_id | tr -d '"')
 	if test -z "$MYVPC" -o "$MYVPC" == "null" || test "$(getVPC)" != "$MYVPC"; then
-		PORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
+		NPORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
 		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
 		if test -n "$EIP"; then
 			echo "#Using EIP $EIP instead of IP $IP" 1>&2
