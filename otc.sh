@@ -260,7 +260,7 @@ docurl()
 		fi
 		if echo "$BODY" | grep '{' >/dev/null; then JBODY="{${BODY#*\{}"; else JBODY=""; fi
 		ERROR=$(echo "$JBODY" | jq '.error' 2>/dev/null | tr -d '"')
-		if test "$ERROR" != "null"; then echo "$ERROR" 1>&2; fi
+		if test "$ERROR" != "null" -a -z "$QUIETERR"; then echo "$ERROR" 1>&2; fi
 		CODE=$(echo "$JBODY"| jq '.code' 2>/dev/null)
 		ECODE=$(echo "$JBODY"| jq '.error.error_code' 2>/dev/null)
 		if test "$CODE" == "null"; then
@@ -283,7 +283,10 @@ docurl()
 				docurl "${ARGS[@]}"
 				return
 			fi
-			if test -n "$MSG" -a "$MSG" != "null"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			if test -n "$MSG" -a "$MSG" != "null"; then 
+				if test -z "$QUIETERR"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; fi
+				return 9
+			fi
 			MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
 			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
 			if test -n "$ECODE" -a "$ECODE" != "null"; then RC=9; fi
@@ -402,8 +405,10 @@ curldeleteauth()
 {
 	TKN="$1"; shift
 	if test -n "$2"; then
+		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "$2" -H "X-Auth-Token: $TKN" "$1"
 		docurl -sS -X DELETE -H "Accept: application/json" -H "$2" -H "X-Auth-Token: $TKN" "$1"
 	else
+		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 		docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
 	fi
 }
@@ -2021,7 +2026,7 @@ getECSVM()
 	else
 		IFACEJSON=", \"interfaceAttachments\": $IFACEJSON"
 	fi
-	AUTOREC=$(curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/$ECS_ID/autorecovery")
+	AUTOREC=$(QUIETERR=1 curlgetauth $TOKEN "$AUTH_URL_ECS_CLOUD/$ECS_ID/autorecovery")
 	if test $? != 0 || ! echo "$AUTOREC" | grep 'support_auto' >/dev/null 2>&1; then
 		AUTOREC=""
 	else
