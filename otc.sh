@@ -1018,9 +1018,11 @@ ecsHelp()
 	echo "otc ecs update <id>             # change VM data (same parms as create)"
 	echo "    -r  specifies that tags or metadata will remove others"
 	echo "otc ecs reboot-instances <id>   # reboot ecs instance <id>"
-	echo "                                # optionally --soft/--hard"
+	echo "                                # optionally --soft/--hard/--wait"
 	echo "otc ecs stop-instances <id>     # stop ecs instance <id>, dito"
+	echo "                                # optionally --wait"
 	echo "otc ecs start-instances <id>    # start ecs instance <id>"
+	echo "                                # optionally --wait"
 	echo "otc ecs delete                  # delete VM"
 	echo "    --umount <dev:vol>[,..]     # umount named volumes before deleting the vm" ##### current issue
 	echo "    --rename                    # prepend DEL_ to ECS names prior to queuing for deletion"
@@ -4574,8 +4576,10 @@ ECSAction()
 		}
 	}'
 	#echo $REQ_ECS_ACTION_VM
-	curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION"
-	#return $?
+	local ECSRESP=$(curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION")
+	local ECSTASKID=$(echo "$ECSRESP" | jq .job_id | tr -d '" ')
+	WaitForTask $ECSTASKID
+	return $?
 }
 
 # OpenStack API (unused)
