@@ -3194,6 +3194,7 @@ createIMAGE()
 		return ${PIPESTATUS[0]}
 	else
 		# Create VM snapshot image
+		if ! is_uuid "$INSTANCE_ID"; then convertECSNameToId "$INSTANCE_ID"; INSTANCE_ID=$ECS_ID; fi
 		local REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.'; return ${PIPESTATUS[0]})
@@ -4576,7 +4577,9 @@ ECSAction()
 		}
 	}'
 	#echo $REQ_ECS_ACTION_VM
-	local ECSRESP=$(curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION")
+	local ECSRESP
+	ECSRESP=$(curlpostauth "$TOKEN" "$REQ_ECS_ACTION_VM" "$AUTH_URL_ECS_CLOUD_ACTION")
+	if test $? != 0; then return 9; fi
 	local ECSTASKID=$(echo "$ECSRESP" | jq .job_id | tr -d '" ')
 	WaitForTask $ECSTASKID
 	return $?
@@ -6344,7 +6347,7 @@ while test "${1:0:2}" == '--'; do
 done
 
 # Specific options
-if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" ] || [[ "$SUBCOM" == *-instances ]]; then
+if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}" == "update" -o "$SUBCOM" == "register" -o "$SUBCOM" == "download" -o "$SUBCOM" == "copy" -o "$SUBCOM" == "reboot" -o "$SUBCOM" == "start" -o "$SUBCOM" = "stop" ] || [[ "$SUBCOM" == *-instances ]]; then
 	while [[ $# > 0 ]]; do
 		key="$1"
 		case $key in
