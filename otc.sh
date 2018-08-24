@@ -1201,10 +1201,12 @@ imageHelp()
 	echo "    --min-ram      <MB>         # optional (default 1024)"
 	echo "    --os-version   <os_version> # optional (default Other)"
 	echo "    --property     <key=val>    # optional properties (multiple times possible)"
+	echo "    --type <type> --description <desc> # optional settings (see below)"
 	echo "otc images create NAME          # create image from ECS instance (snapshot)"
 	echo "    --image-name   <image name>"
 	echo "    --instance-id  <instance id>"
-	echo "    --description  <descriptionf># optional"
+	echo "    --description  <description># optional description"
+	echo "    --type <type>               # optional: FusionCompute (ECS, default) or Ironic (BMS)"
 	echo "otc images copy SRCIMAGE NEWIMAGENAME     # copy an IMS image within a region"
 	echo "    --description  <description>          # optional"
 	echo "    --cmk_id  <encryption key id>         # optional"
@@ -3189,6 +3191,7 @@ createIMAGE()
 			\"disk_format\": \"$DISKFORMAT\", \"min_disk\": $MINDISK,
 			\"min_ram\": $MINRAM, \"name\": \"$IMAGENAME\",
 			\"visibility\": \"private\", \"protected\": false }"
+		if test -n "$TYPE"; then REQ="${REQ%\}}, \"type\": \"$TYPE\" }"; fi
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGES" | jq '.' #'.[]'
 		return ${PIPESTATUS[0]}
@@ -3196,6 +3199,7 @@ createIMAGE()
 		# Create VM snapshot image
 		if ! is_uuid "$INSTANCE_ID"; then convertECSNameToId "$INSTANCE_ID"; INSTANCE_ID=$ECS_ID; fi
 		local REQ="{ \"name\": \"$IMAGENAME\", \"instance_id\": \"$INSTANCE_ID\" }"
+		if test -n "$TYPE"; then REQ="${REQ%\}}, \"type\": \"$TYPE\" }"; fi
 		if test -n "$DESCRIPTION"; then REQ="${REQ%\}}, \"description\": \"$DESCRIPTION\" }"; fi
 		RESP=$(curlpostauth $TOKEN "$REQ" "$AUTH_URL_IMAGESV2/action" | jq '.'; return ${PIPESTATUS[0]})
 		RC=$?
