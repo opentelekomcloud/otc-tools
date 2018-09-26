@@ -97,7 +97,11 @@ if test -n "$OS_AUTH_URL"; then
 	export OS_CLOUD_ENV=${REG%%.*}
 fi
 if test -z "$OS_PROJECT_NAME"; then
-	export OS_PROJECT_NAME="$OS_REGION_NAME"
+	if test -n "$OS_TENANT_NAME"; then
+   	export OS_PROJECT_NAME="$OS_TENANT_NAME"
+	else
+		export OS_PROJECT_NAME="$OS_REGION_NAME"
+	fi
 fi
 if test -z "$MAXGETKB"; then
 	export MAXGETKB=251
