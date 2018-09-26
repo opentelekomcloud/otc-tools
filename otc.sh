@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.27
+VERSION=0.8.28
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1510,7 +1510,7 @@ dmsHelp()
 customHelp()
 {
 	echo "--- Custom command support ---"
-	echo "otc custom [--jqfilter FILT] METHOD URL [JSON]        # Send custom command"
+	echo "otc custom [--jqfilter FILT] [--paginate ARRNAME] METHOD URL [JSON] # Send custom command"
 	echo "      METHOD=GET/PUT/POST/DELETE/HEAD, vars with \\\$ are evaluated (not sanitized!)"
 	echo "      example: otc custom GET \\\$BASEURL/v2/\\\$OS_PROJECT_ID/servers"
 	echo "      note that \\\$BASEURL gets prepended if URL starts with /"
@@ -1955,8 +1955,10 @@ convertEipToId()
 handleCustom()
 {
 	local RC
+	if test "$1" == "--paginate"; then PAGINATE="$2"; shift; shift; fi
 	if test "$1" == "--jqfilter"; then JQFILTER="$2"; shift; shift; else JQFILTER="."; fi
 	if test -n "$JQFILTER"; then JQ="jq -r \"$JQFILTER\""; else JQ="cat -"; fi
+	if test "$1" == "--paginate"; then PAGINATE="$2"; shift; shift; fi
 	METH=$1
 	# NOTE: We better TRUST the caller not to pass in malicious things here
 	#  so never call otc custom from a script that accepts non-sanitized args
@@ -1972,7 +1974,12 @@ handleCustom()
 	case "$METH" in
 		GET)
 			echo "#DEBUG: curl -X $METH $URL" 1>&2
-			curlgetauth $TOKEN "$URL" | eval "$JQ"
+			if test -n "$PAGINATE"; then
+				setlimit; setapilimit 4000 40 $PAGINATE
+				curlgetauth_pag $TOKEN "$URL" | eval "$JQ"
+			else
+				curlgetauth $TOKEN "$URL" | eval "$JQ"
+			fi
 			RC=${PIPESTATUS[0]}
 			;;
 		HEAD)
