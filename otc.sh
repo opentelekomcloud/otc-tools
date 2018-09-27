@@ -6451,8 +6451,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				CRYPTKEYID=$2; shift;;
 			--vbd)
 				VBD=1;;
-			--vbd)
-				VBD=1;;
+			--scsi)
+				SCSI=1;;
 			--datadisks)
 				DATADISKS="$2"; shift;;
 			--autorecovery)
