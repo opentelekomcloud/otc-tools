@@ -4629,7 +4629,8 @@ ECSUpdate()
 {
 	#if test "$1" = "-r"; then REPLACE=1; shift; fi
 	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
-	if test "$2" = "-r"; then REPLACE=1; fi
+	if test "$2" = "-r"; then REPLACE=1; shift; fi
+	if test -n "$2"; then shift; echo "WARN: ignoring options at wrong position $@" 1>&2; fi
 	local PARMS=""
 	local RC=0
 	if test -n "$IMAGENAME"; then appendparm "\"image\": \"$IMAGENAME\""; fi
