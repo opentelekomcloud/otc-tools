@@ -9,13 +9,16 @@ extensive tools, this one does not pull in a load of dependencies.
 Prefix any command by debug to observe the REST calls being made.
 
 For production use, we recommend using the native OpenStack python client tools
-(python-novaclient etc or the newer python-openstackclient), complemented by
-the python-otcctools for specific OTC functions.  Alternatively, there are
-otc-specific extensions to python-openstackclient in the python-otcextensions
-project (on github/OpenTelekomCloud, like all the other projects).
+(python-openstackclient) with the plugins from python-otcextensions that
+implement OTC specific functions. This is also what we preinstall on our
+latest public Linux images.
+It's also possible to use the older service specific client tools (such as
+python-novaclient etc.) and complement this by python-otctools or otc-tools.
+All of the OTC specific tools can be found on github/OpenTelekomCloud.
 
 Of course higher level tools, such as heat, ansible or terraform are a good
-choice for automation or you use openstacksdk (and shade).
+choice for automation. For a more programmatic approach, use openstacksdk
+(and shade).
 
 Usage
 -----
@@ -31,8 +34,13 @@ it and copying it into your home as ~/.otc_env.sh.
 When managing multipe OTC domains, you may create ~/.ostackrc.SUFFIX and
 ~/.s3rc.SUFFIX and set OTC_DOMAIN=SUFFIX to make otc read these files.
 
-Please have a look the otc_env.sh file and look at the output from otc help --
-this provides sufficient information to get doing.
+Syntax for otc.sh is:
+otc.sh [--global opts] COMMANDGROUP COMMAND [--command opts] [CMDPOSPARAM]
+
+Please have a look the otc_env.sh file and look at the output from otc.sh help
+-- this provides sufficient information to get doing.  otc.sh also supports
+otc.sh help COMMANDGROUP to provide only the help section that is specific to
+the command group.
 
 otc.sh relies on a GNU date, so if you are running it on MacOS X, please install
 GNU date by running `brew install gdate` and make it first in the PATH:
@@ -47,7 +55,7 @@ so feel free to use it here and contribute to fill gaps you care about. There
 is a small, but active community on github.com/OpenTelekomCloud/.
 
 The OpenStack REST API has paginated interfaces to allow the consumers to
-control how large a response may get. Since 0.7.6, otc-tools ist using this
+control how large a response may get. Since 0.7.6, otc-tools is using this
 feature to avoid exceeding the maximum response sizes on OTC. (The API gateway
 limits responses to a few hundred kB).
 So otc-tools ends up doing a few REST calls in case you request large amounts
@@ -124,7 +132,10 @@ Note the quoting for \".
 
 Note that in this mode, otc.sh really does not much more than curl except for
 handling the tokens and providing the variables like \$CINDER_URL from the
-catalog.
+catalog. The option --paginate ARRNM however might be handy for custom GET.
+(Current implementation for --paginate is somewhat inflexible in that it
+assumes records smaller than ~4k and you need to specify the array name from
+the JSON response. This will improve in a future version.)
 
 Return codes
 ------------
