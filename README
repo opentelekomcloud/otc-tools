@@ -10,11 +10,11 @@ Prefix any command by debug to observe the REST calls being made.
 
 For production use, we recommend using the native OpenStack python client tools
 (python-openstackclient) with the plugins from python-otcextensions that
-implement OTC specific functions. This is also what we preinstall on our
-latest public Linux images.
+implement OTC specific functions. This is also what we preinstall on our latest
+public Linux images.
 It's also possible to use the older service specific client tools (such as
-python-novaclient etc.) and complement this by python-otctools or otc-tools.
-All of the OTC specific tools can be found on github/OpenTelekomCloud.
+python-novaclient etc.) and complement this by python-otcclient or otc-tools.
+All of the OTC-specific tools can be found on github/OpenTelekomCloud.
 
 Of course higher level tools, such as heat, ansible or terraform are a good
 choice for automation. For a more programmatic approach, use openstacksdk
