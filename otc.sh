@@ -2079,7 +2079,27 @@ getECSList()
 	setlimit; setapilimit 2000 40 servers id
    if test -z "$PARAMSTRING" -a -n "$VM_FILTER"; then VM_FILTER="?${VM_FILTER:1}"; fi
 	curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING$VM_FILTER" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr
-	return ${PIPESTATUS[0]}
+       return ${PIPESTATUS[0]}
+}
+
+
+getECSListWithTags()
+{
+        local VM_FILTER=$(concatarr "&" "$@")
+        VM_FILTER="${VM_FILTER// /%20}"
+        #curlgetauth $TOKEN "$AUTH_URL_ECS?limit=1200" | jq -r  '.servers[] | {id: .id, name: .name} | .id+"   "+.name'
+        #setlimit 1200
+        setlimit; setapilimit 2000 40 servers id
+   if test -z "$PARAMSTRING" -a -n "$VM_FILTER"; then VM_FILTER="?${VM_FILTER:1}"; fi
+        vmtemp=`curlgetauth_pag $TOKEN "$AUTH_URL_ECS_DETAIL$PARAMSTRING$VM_FILTER" | jq -r  'def adr(a): [a[]|.[]|{addr}]|[.[].addr]|tostring; .servers[] | {id: .id, name: .name, status: .status, flavor: .flavor.id, az: .["OS-EXT-AZ:availability_zone"], addr: .addresses} | .id+"   "+.name+"   "+.status+"   "+.flavor+"   "+.az+"   "+adr(.addr) ' | arraytostr`
+#IFS='\n'
+
+         while read -r line; do
+            myid=`echo $line | awk '{print $1}'`
+            tag=`curlgetauth $TOKEN "$AUTH_URL_ECS/$myid/tags" | jq '.tags'|tr '\n' ' '|tr -d '[:space:]'`
+            echo "$line $tag"
+         done <<< "$vmtemp"
+         return ${PIPESTATUS[0]}
 }
 
 getECSDetails()
@@ -6669,6 +6689,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-short" ]; then
 	getShortECSList "$@"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list" ]; then
 	getECSList "$@"
+elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "listwithtags" ]; then
+	getECSListWithTags "$@"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "list-detail" ]; then
 	getECSDetail "$1"
 elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "details" ]; then
