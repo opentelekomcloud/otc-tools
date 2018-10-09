@@ -220,34 +220,40 @@ hashtoken()
 docurl()
 {
 	local ANS RC TMPHDR
+	TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
+	#TMPHDR=`mktemp -u $TMPDIR/curlhdr.$$.XXXXXXXXXX`
+	#mkfifo -m 0600 "$TMPHDR"
 	if test -n "$DEBUG"; then
 		TKNDEB=$(echo "$@" | hashtoken)
 		echo "#DEBUG: docurl $INS $@" | sed -e "s/-Token: MII[^ ]*/-Token: MII$TKNDEB/g" -e 's/"password": "[^"]*"/"password": "SECRET"/g' 1>&2
 		if test "$DEBUG" = "2"; then
-			TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 			ANS=`curl $INS -D $TMPHDR "$@"`
 			RC=$?
 			TKNDEB=$(cat $TMPHDR | hashtoken)
 			echo -n "#DEBUG: Header" 1>&2
 			cat $TMPHDR  | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
-			rm $TMPHDR
 		else
-			ANS=`curl $INS "$@"`
+			ANS=`curl $INS -D $TMPHDR "$@"`
 			RC=$?
 		fi
 		TKNDEB=$(echo "$ANS" | hashtoken)
 		echo "#DEBUG: ($RC) $ANS" | sed "s/X-Subject-Token: MII.*\$/X-Subject-Token: MII$TKNDEB/" 1>&2
 		#echo "$ANS"
 	else
-		ANS=`curl $INS "$@"`
+		ANS=`curl $INS -D $TMPHDR "$@"`
 		RC=$?
 		#echo "$ANS"
 	fi
+	HDRCODE=$(cat "$TMPHDR" | head -n1 | grep '^HTTP')
+	HDRCODE=$(echo "$HDRCODE" | sed 's/^HTTP\/[0-9.]* \([0-9]*\) .*$/\1/')
+	#echo "$HDRCODE" 1>&2
+	CODE=$HDRCODE
+	rm $TMPHDR
 	if test $RC != 0; then echo "$ANS" 1>&2; return $RC
 	else
 		# Sometimes function is called with '-i' and the response contains HTTP headers
 		# For a proper response processing get the pure BODY
-		local BODY HDR2 CODE2 JBODY ERROR CODE ECODE MSG
+		local BODY HDR2 CODE2 JBODY ERROR ECODE MSG
 		HDR=$(echo "$ANS" | head -n1 | grep '^HTTP')
 		if test -n "$HDR"; then
 			# strip off headers on the first empty string. It is still not 100% solution,
@@ -394,7 +400,9 @@ curlgetauth_pag()
 			-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$URL$LIMPAR$MARKPAR" >>$TMPF
 		# Remember error
 		RV=$?
+		# TODO: Handle 413 => halve page size
 		if test $RC == 0 -a $RV != 0; then RC=$RV; fi
+		# TODO: Actually, look for _links next pointer
 		local ANS=$(cat $TMPF | jq -r ".${ARRNM}[] | .${IDFIELD}")
 		NOANS=$(echo "$ANS" | wc -l)
 		LAST=$(echo "$ANS" | tail -n1 | tr -d '"')
