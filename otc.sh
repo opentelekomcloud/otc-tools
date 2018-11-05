@@ -942,6 +942,18 @@ keyval2list()
 	echo "${LIST%,}"
 }
 
+keyval2listasterix()
+{
+	local LIST=""
+	OLDIFS="$IFS"
+	IFS=","
+	for tag in $*; do
+		LIST="$LIST \"${tag/=/*}\","
+	done
+	IFS="$OLDIFS"
+	echo "${LIST%,}"
+}
+
 keyval2json()
 {
 	local JSON=""
@@ -4886,7 +4898,7 @@ VPCCreate()
 	if test -z "$VPCNAME" -a -n "$1"; then VPCNAME="$1"; fi
 	# Description?
 	if test -n "$TAGS"; then TAGJSON=",
-			\"tags\": [ $(keyval2list $TAGS) ] }"
+			\"tags\": [ $(keyval2listasterix $TAGS) ] }"
 	fi
 	local REQ_CREATE_VPC='{
 		"vpc": {
@@ -4910,7 +4922,7 @@ SUBNETCreate()
 	fi
 	if test -n "$AZ"; then AZJSON="\"availability_zone\": \"$AZ\","; fi
 	local TAGJSON=""
-	if test -n "$TAGS"; then TAGJSON="\"tags\": [ $(keyval2list $TAGS) ],
+	if test -n "$TAGS"; then TAGJSON="\"tags\": [ $(keyval2listasterix $TAGS) ],
 "
 	fi
 	# Description?
