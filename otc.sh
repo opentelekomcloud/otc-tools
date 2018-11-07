@@ -209,7 +209,7 @@ uriencodenoteq()
 uriencode()
 {
 	OUT="$(uriencodenoteq $*)"
-	OUT="${$OUT//=/%3D}"
+	OUT="${OUT//=/%3D}"
 	echo "$OUT"
 }
 
@@ -1165,9 +1165,9 @@ vpcHelp()
 	echo "--- VPC Peering ---"
 	echo "otc vpcpeer list [FILTERS]      # List VPC peerings. Optional FILTERS are key=value pairs"
 	echo "otc vpcpeer show NAME|ID        # Show details of VPC peering"
-	echo "otc vpcpeer create VPCR VPCA    # Create peering req from VPCR to VPCA"
+	echo "otc vpcpeer create VPCR VPCA    # Create peering req from VPCR to VPCA (IDs or names)"
 	echo "    --name <peername>           # optional name (will get autogen otherwise)"
-	echo "    --project-id <accproject>   # project ID of VPCA, only required if not us"
+	echo "    --project-id <accproject>   # project (tenant) ID of VPCA, only required if not us"
 	echo "otc vpcpeer accept ID|NAME      # accept peering request"
 	echo "otc vpcpeer refuse ID|NAME      # refuse peering request"
 	echo "otc vpcpeer update ID|NAME      # update peering request"
@@ -2315,10 +2315,56 @@ getVPCPeerDetail()
 {
 	ID=$1
 	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; fi
 	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings/$ID" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
+deleteVPCPeer()
+{
+	ID=$1
+	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; fi
+	curldeleteauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings/$ID"
+}
+
+createVPCPeer()
+{
+	local RVPC AVPC REQ TENID RV AV
+	RVPC="$1"
+	AVPC="$2"
+	if test -z "$NAME"; then RV="${RVPC#vpc-}"; RV="${RV#VPC-}"; AV="${AVPC#vpc-}"; AV="${AV#VPC-}"; NAME="peering-$RV-$AV"; fi
+	#if ! is_uuid "$RVPC"; then RVPC=$(curlgetauth $TOKEN $NEUTRON_URL/v2.0/routers?name=$(uriencode $RVPC) | jq .routers[].id | tr -d '"'); fi
+	if ! is_uuid "$RVPC"; then convertVPCNameToId "$RVPC"; RVPC=$VPCID; fi
+	#if ! is_uuid "$AVPC"; then AVPC=$(curlgetauth $TOKEN $NEUTRON_URL/v2.0/routers?name=$(uriencode $AVPC) | jq .routers[].id | tr -d '"'); fi
+	if ! is_uuid "$AVPC"; then convertVPCNameToId "$AVPC"; AVPC=$VPCID; fi
+	if test -z "$RVPC" -o "$RVPC" = "null"; then echo "ERROR: VPC $1 not found" 1>&2; exit 2; fi
+	if test -z "$AVPC" -o "$AVPC" = "null"; then echo "ERROR: VPC $2 not found" 1>&2; exit 2; fi
+	if test -n "$PROJECTID"; then TENID=", \"tenant_id\": \"$PROJECTID\" "; fi
+	REQ="{
+	\"peering\": {
+		\"name\": \"$NAME\",
+		\"request_vpc_info\": {
+			\"vpc_id\": \"$RVPC\"
+		},
+		\"accept_vpc_info\": {
+			\"vpc_id\": \"$AVPC\"$TENID
+		}
+	}
+}"
+	curlpostauth $TOKEN "$REQ" "$NEUTRON_URL/v2.0/vpc/peerings" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+updateVPCPeer()
+{
+	ID=$1
+	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; exit 2; fi
+	if test -z "$NAME"; then echo "ERROR: Need to specify --name" 1>&2; exit 2; fi
+	curlputauth "$TOKEN" "{ \"peering\": { \"name\": \"$NAME\" } }" "$NEUTRON_URL/v2.0/vpc/peerings/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
 
 convertEIPtoID()
 {
@@ -6631,6 +6677,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				OPTDISABLE=1;;
 			--scheduler-hints)
 				SCHEDHINT="$2"; shift;;
+			--project-id|--tenant-id|--projectid|--tenantid)
+				PROJECTID="$2"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
@@ -6918,6 +6966,17 @@ elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "list" ]; then
 	getVPCPeerList "$@"
 elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "show" ]; then
 	getVPCPeerDetail "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "create" ]; then
+	createVPCPeer "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "update" ]; then
+	updateVPCPeer "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "accept" ]; then
+	acceptVPCPeer "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "refuse" ] ||
+     [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "reject" ]; then
+	refuseVPCPeer "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "delete" ]; then
+	deleteVPCPeer "$@"
 
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "help" ]; then
 	eipHelp
