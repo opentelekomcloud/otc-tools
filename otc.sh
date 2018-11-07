@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.30
+VERSION=0.8.31
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1208,10 +1208,14 @@ eipHelp()
 	echo "    --ipv6                      # create a nat64 address"
 	echo "otc publicip update <id/ip>     # change name and/or bandwidth (same opts)"
 	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
-	echo "otc publicip bind <id/ip> <port-id>       # bind a publicip to a port"
+	echo "otc publicip bind <id/ip> <port-id>       # bind a publicip to a port / private IP"
 	echo "otc publicip unbind <id/ip>               # unbind a publicip"
 	# TODO: bandwidth
 	# TODO: publicip6
+	echo "otc publicip6 list              # list all IPv6 floating ips"
+	echo "otc publicip6 ...               # same commands available as for IPv4 (except update)"
+	echo "                                # currently not well tested (as not yet supported)"
+	echo "                                # bandwidth control is not available either"
 }
 
 sgHelp()
