@@ -189,13 +189,12 @@ is_html_err()
 	echo "$1" | grep '<[tT][iT][tT][lL][eE]> *[45][012][0-9] [A-Z]' 2>&1 >/dev/null
 }
 
-uriencode()
+uriencodenoteq()
 {
 	local OUT
 	OUT="${*//%/%25}"
 	OUT="${OUT// /%20}"
 	OUT="${OUT//\?/%3F}"
-	OUT="${OUT//=/%3D}"
 	OUT="${OUT//&/%26}"
 	OUT="${OUT//\"/%22}"
 	OUT="${OUT//\//%2F}"
@@ -204,6 +203,13 @@ uriencode()
 	OUT="${OUT//!/%21}"
 	OUT="${OUT//:/%3A}"
 	OUT="${OUT//\#/%23}"
+	echo "$OUT"
+}
+
+uriencode()
+{
+	OUT="$(uriencodenoteq $*)"
+	OUT="${$OUT//=/%3D}"
 	echo "$OUT"
 }
 
@@ -1143,7 +1149,7 @@ backupHelp()
 
 vpcHelp()
 {
-	echo "--- Virtual Private Network (VPC) ---"
+	echo "--- Virtual Private Network (VPC) Router ---"
 	echo "otc vpc list                    # list all vpc"
 	echo "otc vpc show VPC                # display VPC (Router) details"
 	echo "otc vpc delete VPC              # delete VPC"
@@ -1156,6 +1162,17 @@ vpcHelp()
 	echo "otc vpc delroute VPC DEST [NHOP]# delete VPC route"
 	echo "otc vpc en/disable-snat VPC     # enable/disable snat"
 	echo "otc vpc limits                  # list VPC related quota"
+	echo "--- VPC Peering ---"
+	echo "otc vpcpeer list [FILTERS]      # List VPC peerings. Optional FILTERS are key=value pairs"
+	echo "otc vpcpeer show NAME|ID        # Show details of VPC peering"
+	echo "otc vpcpeer create VPCR VPCA    # Create peering req from VPCR to VPCA"
+	echo "    --name <peername>           # optional name (will get autogen otherwise)"
+	echo "    --project-id <accproject>   # project ID of VPCA, only required if not us"
+	echo "otc vpcpeer accept ID|NAME      # accept peering request"
+	echo "otc vpcpeer refuse ID|NAME      # refuse peering request"
+	echo "otc vpcpeer update ID|NAME      # update peering request"
+	echo "    --name <peername>           # updated name"
+	echo "otc vpcpeer ID|NAME             # Delete peering"
 }
 
 subnetHelp()
@@ -2283,6 +2300,25 @@ getVPCLimits()
 	curlgetauth $TOKEN "${AUTH_URL_VPCS%vpcs}quotas" | jq -r 'def str(s): s|tostring; .quotas.resources[] | .type+"   "+str(.used)+"/"+str(.quota)'
 	return ${PIPESTATUS[0]}
 }
+
+getVPCPeerList()
+{
+	local FILTER
+	while test -n "$1"; do FILTER="$FILTER&$(uriencodenoteq $1)"; shift; done
+	FILTER=${FILTER/&/?}
+	#setlimit; setapilimit 320 20 vpcs
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings$FILTER" | jq -r '.peerings[] | .id+"   "+.name+"   "+.status+"   "+.request_vpc_info.vpc_id+"   "+.accept_vpc_info.vpc_id+"   "+.request_vpc_info.tenant_id+"   "+.accept_vpc_info.tenant_id'
+	return ${PIPESTATUS[0]}
+}
+
+getVPCPeerDetail()
+{
+	ID=$1
+	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
 
 convertEIPtoID()
 {
@@ -6846,7 +6882,8 @@ elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "attach-nic" ]; then
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "detach-nic" ]; then
 	ECSDetachPort "$@"
 
-elif [ "$MAINCOM" == "vpc" -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "vpc" -a "$SUBCOM" == "help" ] ||
+	  [ "$MAINCOM" == "vpcpeer" -a "$SUBCOM" == "help" ]; then
 	vpcHelp
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "list" ]; then
 	getVPCList
@@ -6876,6 +6913,11 @@ elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "disable-snat" ]; then
 	disableVPCSNAT $1
 elif [ "$MAINCOM" == "vpc"  -a "$SUBCOM" == "limits" ]; then
 	getVPCLimits
+
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "list" ]; then
+	getVPCPeerList "$@"
+elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "show" ]; then
+	getVPCPeerDetail "$@"
 
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "help" ]; then
 	eipHelp
