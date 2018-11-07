@@ -6,15 +6,20 @@ OTC specific REST interfaces.  It is used for testing by the OTC engineering
 team and can be used as a blueprint for own tooling. Unlike the more
 extensive tools, this one does not pull in a load of dependencies.
 
-Prefix any command by debug to observe the REST calls being made.
+Prefix any command by --debug to observe the REST calls being made.
+
+otc-tools is NOT recommended for production use. We do fix bugs that get
+reported to us and do accept contributions (pull requests / patches) if they
+meet our standards, but we do not actively develop this tool any further.
 
 For production use, we recommend using the native OpenStack python client tools
 (python-openstackclient) with the plugins from python-otcextensions that
 implement OTC specific functions. This is also what we preinstall on our latest
 public Linux images.
-It's also possible to use the older service specific client tools (such as
-python-novaclient etc.) and complement this by python-otcclient or otc-tools.
-All of the OTC-specific tools can be found on github/OpenTelekomCloud.
+It's also still possible to use the older service specific client tools (such
+as python-novaclient etc.) and complement this by python-otcclient or
+otc-tools, but that is deprecated now.  All of the OTC-specific tools can be
+found on github/OpenTelekomCloud.
 
 Of course higher level tools, such as heat, ansible or terraform are a good
 choice for automation. For a more programmatic approach, use openstacksdk
