@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.29
+VERSION=0.8.30
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1205,6 +1205,8 @@ eipHelp()
 	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
 	echo "otc publicip bind <id/ip> <port-id>       # bind a publicip to a port"
 	echo "otc publicip unbind <id/ip>               # unbind a publicip"
+	# TODO: bandwidth
+	# TODO: publicip6
 }
 
 sgHelp()
