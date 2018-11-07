@@ -288,6 +288,8 @@ docurl()
 		#if test -z "$CODE" -o "$CODE" == "null" && test "$ECODE" != "null"; then CODE="$ECODE"; fi
 		if test "$INDMS" != 1; then
 			MSG=$(echo "$JBODY"| jq '.message' 2>/dev/null)
+			TYP=$(echo "$JBODY"| jq '.type' 2>/dev/null)
+			DET=$(echo "$JBODY"| jq '.detail' 2>/dev/null)
 			if echo "$MSG" | grep "Token need to refresh" >/dev/null 2>&1 && test -z "$INAUTH"; then
 				echo "#Note: $MSG -> Retry" 1>&2
 				local OLDDC=$DISCARDCACHE
@@ -301,11 +303,13 @@ docurl()
 				return
 			fi
 			if test -n "$MSG" -a "$MSG" != "null"; then 
-				if test -z "$QUIETERR"; then echo "ERROR ${CODE}: $MSG" | tr -d '"' 1>&2; fi
+				if test -z "$QUIETERR"; then echo "ERROR ${CODE}: $MSG $TYP $DET" | tr -d '"' 1>&2; fi
 				return 9
 			fi
 			MSG=$(echo "$ANS"| jq '.[] | .message' 2>/dev/null)
-			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG" | tr -d '"' 1>&2; return 9; fi
+			TYP=$(echo "$ANS"| jq '.[] | .type' 2>/dev/null)
+			DET=$(echo "$ANS"| jq '.[] | .detail' 2>/dev/null)
+			if test -n "$MSG" -a "${MSG:0:4}" != "null" -a "${MSG:0:2}" != "[]"; then echo "ERROR[] ${CODE}: $MSG $TYP $DET" | tr -d '"' 1>&2; return 9; fi
 			if test -n "$ECODE" -a "$ECODE" != "null"; then RC=9; fi
 		fi
 		# PUT/HEAD only return an HTTP header
@@ -1200,7 +1204,7 @@ eipHelp()
 	echo "otc publicip create             # create a publicip"
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
-	echo "    --address           <IP addr>"
+	echo "    --address           <Public IP addr>"
 	echo "    --ipv6                      # create a nat64 address"
 	echo "otc publicip update <id/ip>     # change name and/or bandwidth (same opts)"
 	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
@@ -1704,6 +1708,11 @@ is_id()
 is_ip4()
 {
 	echo "$1" | grep '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' >/dev/null 2>&1
+}
+
+is_ip6()
+{
+	echo "$1" | grep '^[0-9a-fA-F:]*\$' >/dev/null 2>&1
 }
 
 getid()
@@ -2405,6 +2414,7 @@ getPUBLICIPSList()
 	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
 	#setlimit 500
 	setlimit; setapilimit 400 30 publicips
+	#curlgetauth_pag $TOKEN "$NEUTRON_URL/v2.0/floatingips$PARAMSTRING" | jq '.floatingips[]  | .id +"   " +.floating_ip_address +"   " +.status+"   " +.fixed_ip_address +"   "+.router_id' | tr -d '"'
 	curlgetauth_pag $TOKEN "$AUTH_URL_PUBLICIPS$PARAMSTRING" | jq 'def str(v): v|tostring; .publicips[]  | .id +"   " +.public_ip_address +"   " +.status+"   " +.private_ip_address +"   " +str(.bandwidth_size) +"   " +.bandwidth_share_type ' | tr -d '"'
 	return ${PIPESTATUS[0]}
 }
@@ -5126,8 +5136,14 @@ BindPublicIpToCreatingVM()
 
 PUBLICIPSBind()
 {
-	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
+	if ! is_uuid "$1" && is_ip4 "$1"; then convertEIPtoID $1; else EIP=$1; fi
 	local PORT_ID=$2
+	if test -z "$PORT_ID" -a -n "$FIXEDPORT"; then PORT_ID="$FIXEDPORT"; fi
+	# Add optional fixed IP to port conversion here
+	if test -z "$PORT_ID" && is_ip4 "$FIXEDIP"; then PORT_ID="$FIXEDIP"; fi
+	if ! is_uuid "$PORT_ID" && is_ip4 "$PORT_ID"; then
+		PORT_ID=$(curlgetauth $TOKEN $NEUTRON_URL/v2.0/ports?fixed_ips=ip_address=$PORT_ID | jq ' .ports[] | .id' | tr -d '"')
+	fi
 	if test -z "$PORT_ID"; then echo "ERROR: Need port-id to which the public IP should be bound to." 1>&2; exit 1; fi
 	local REQ_BIND_PUBLICIPS='{
 		"publicip": {
@@ -5151,6 +5167,104 @@ PUBLICIPSUnbind()
 
 	echo $REQ_UNBIND_PUBLICIPS
 	curlputauth "$TOKEN" "$REQ_UNBIND_PUBLICIPS" "$AUTH_URL_PUBLICIPS/$EIP" | jq '.[]'
+	return ${PIPESTATUS[0]}
+}
+
+convertEip6ToId()
+{
+
+	if test -n "$1"; then EIP="$1"; fi
+	if is_uuid "$EIP"; then FILTER="?id=$EIP"; else FILTER="?public_ip_address=$EIP"; fi
+	#setlimit; setapilimit 600 40 floatingips
+	EIP_JSON=$(curlgetauth_pag $TOKEN "$NEUTRON_URL/v2.0/eip/floatingips_v6" | jq ".floatingips[]"; return ${PIPESTATUS[0]})
+	if test $? != 0 -o -z "$EIP_JSON" -o "$EIP_JSON" = "null"; then
+		echo "ERROR: No Floating IP $EIP found" 1>&2
+		exit 3
+	fi
+	EIP_ID=$(echo "$EIP_JSON" | jq '.id' | tr -d '"')
+	EIP_IP=$(echo "$EIP_JSON" | jq '.public_ip_address' | tr -d '"')
+	EIP_STATUS=$(echo "$EIP_JSON" | jq '.status' | tr -d '"')
+	export EIP_ID EIP_STATUS
+	return 0
+}
+
+getPUBLICIPS6List()
+{
+	#curlgetauth $TOKEN "$AUTH_URL_PUBLICIPS?limit=500" | jq '.'
+	#setlimit 500
+	setlimit; setapilimit 600 40 publicips
+	curlgetauth_pag $TOKEN "$NEUTRON_URL/v2.0/eip/floatingips_v6$PARAMSTRING" | jq '.floatingips[]  | .id +"   " +.floating_ip_address +"   " +.status+"   " +.fixed_ip_address +"   "+.router_id' | tr -d '"'
+	return ${PIPESTATUS[0]}
+}
+
+getPUBLICIPS6Detail()
+{
+	if ! is_uuid "$1" && is_ip6 $1; then convertEIP6toID $1; else EIP=$1; fi
+	curlgetauth $TOKEN "$NEUTRON_URL/v2.0/eip/floatingips_v6/$EIP" | jq '.'
+	return ${PIPESTATUS[0]}
+}
+
+PUBLICIPS6Create()
+{
+	local IPAD
+	if test -n "$IPADDR"; then IPAD=", \"floating_ip_address\": \"$IPADDR\""; fi
+	if test -z "$EXTNETWORK"; then
+		EXTNETWORK=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/networks?router:external=true" | jq '.networks[].id' | tr -d '"')
+	fi
+	if test -n "$FIXEDIP"; then FIXED=", \"fixed_ip_address\": \"$FIXEDIP\""; fi
+	if test -n "$FIXEDPORT"; then FIXED=", \"port_id\": \"$FIXEDPORT\""; fi
+	if test -n "$DESCRIPTION"; then DESC=", \"description\": \"$DESCRIPTION\""; fi
+	local REQ_CREATE_FLOATINGIP="{
+		\"floatingip\": {
+			\"floating_network_id\": \"$EXTNETWORK\" $FIXED $DESC
+		}
+	}"
+
+	#echo $REQ_CREATE_PUBLICIPS 1>&2
+	curlpostauth "$TOKEN" "$REQ_CREATE_FLOATINGIP" "$NEUTRON_URL/v2.0/eip/floatingips_v6" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+PUBLICIPS6Delete()
+{
+	if ! is_uuid "$1" && is_ip6 $1; then convertEIP6toID $1; else EIP=$1; fi
+	curldeleteauth "$TOKEN" "$NEUTRON_URL/v2.0/eip/floatingips_v6/$EIP" | jq '.[]'
+	return ${PIPESTATUS[0]}
+}
+
+PUBLICIPS6Bind()
+{
+	if ! is_uuid "$1" && is_ip6 $1; then convertEIP6toID $1; else EIP=$1; fi
+	local PORT_ID=$2
+	if test -z "$PORT_ID" -a -n "$FIXEDPORT"; then PORT_ID="$FIXEDPORT"; fi
+	# TODO: Add optional fixed IP to port conversion here
+	if test -z "$PORT_ID" -a -n "$FIXEDIP"; then PORT_ID="$FIXEDIP"; fi
+	if ! is_uuid "$PORT_ID"; then
+		PORT_ID=$(curlgetauth $TOKEN $NEUTRON_URL/v2.0/ports?fixed_ips=ip_address=$PORT_ID | jq ' .ports[] | .id' | tr -d '"')
+	fi
+if test -z "$PORT_ID"; then echo "ERROR: Need port-id to which the public IP should be bound to." 1>&2; exit 1; fi
+	local REQ_BIND_FLOATINGIP='{
+		"floatingip": {
+			"port_id": "'"$PORT_ID"'"
+		}
+	}'
+
+	echo $REQ_BIND_PUBLICIPS
+	curlputauth "$TOKEN" "$REQ_BIND_FLOATINGIP" "$NEUTRON_URL/v2.0/eip/floatingips_v6/$EIP" | jq '.[]'
+	return ${PIPESTATUS[0]}
+}
+
+PUBLICIPS6Unbind()
+{
+	if ! is_uuid "$1" && is_ip6 $1; then convertEIP6toID $1; else EIP=$1; fi
+	local REQ_UNBIND_FLOATINGIP='{
+		"floatingip": {
+			"port_id": null
+		}
+	}'
+
+	echo $REQ_UNBIND_PUBLICIPS
+	curlputauth "$TOKEN" "$REQ_UNBIND_FLOATINGIP" "$NEUTRON_URL/v2.0/eip/floatingips_v6/$EIP" | jq '.[]'
 	return ${PIPESTATUS[0]}
 }
 
@@ -6647,6 +6761,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				ECSACTIONTYPE="SOFT";;
 			--fixed-ip)
 				FIXEDIP=$2; shift;;
+			--fixed-port)
+				FIXEDPORT=$2; shift;;
 			--user-data)
 				USERDATA=$2; shift;;
 			--user-data-file)
