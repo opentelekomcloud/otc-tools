@@ -220,6 +220,7 @@ hashtoken()
 docurl()
 {
 	local ANS RC TMPHDR
+	# TODO: Alternatively use -w "%{http_code}\n"
 	TMPHDR=`mktemp $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 	#TMPHDR=`mktemp -u $TMPDIR/curlhdr.$$.XXXXXXXXXX`
 	#mkfifo -m 0600 "$TMPHDR"
