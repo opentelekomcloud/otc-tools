@@ -1200,6 +1200,7 @@ eipHelp()
 	echo "otc publicip create             # create a publicip"
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
+	echo "    --address           <IP addr>"
 	echo "    --ipv6                      # create a nat64 address"
 	echo "otc publicip update <id/ip>     # change name and/or bandwidth (same opts)"
 	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
@@ -5049,11 +5050,13 @@ SUBNETCreate()
 
 PUBLICIPSCreate()
 {
+	local IPAD
 	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
 	if test -n "$DOIPV6"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
+	if test -n "$IPADDR"; then IPAD=", \"ip_address\": \"$IPADDR\""; fi
 	local REQ_CREATE_PUBLICIPS='{
 		"publicip": {
-			"type": "'$EIPTP'"
+			"type": "'$EIPTP'"'$IPAD'
 		},
 		"bandwidth": {
 			"name": "'"$BANDWIDTH_NAME"'",
@@ -6699,6 +6702,8 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				SCHEDHINT="$2"; shift;;
 			--project-id|--tenant-id|--projectid|--tenantid)
 				PROJECTID="$2"; shift;;
+			--address)
+				IPADDR="$1"; shift;;
 			-*)
 				# unknown option
 				echo "ERROR: unknown option \"$1\"" 1>&2
@@ -6998,7 +7003,8 @@ elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "refuse" ] ||
 elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "delete" ]; then
 	deleteVPCPeer "$@"
 
-elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "help" ]; then
+elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "help" ] ||
+     [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == "help" ]; then
 	eipHelp
 elif [ "$MAINCOM" == "publicip"  -a "$SUBCOM" == "list" ]; then
 	getPUBLICIPSList
@@ -7018,6 +7024,26 @@ elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == "unbind" ] ||
 	PUBLICIPSUnbind $@
 elif [ "$MAINCOM" == "publicip" -a "$SUBCOM" == find ]; then
 	convertEipToId $1
+	echo "$EIP_ID   $EIP_IP   $EIP_STATUS"
+
+elif [ "$MAINCOM" == "publicip6"  -a "$SUBCOM" == "list" ]; then
+	getPUBLICIPS6List
+elif [ "$MAINCOM" == "publicip6"  -a "$SUBCOM" == "show" ]; then
+	getPUBLICIPS6Detail $1
+elif [ "$MAINCOM" == "publicip6"  -a "$SUBCOM" == "create" ]; then
+	PUBLICIPS6Create "$@"
+elif [ "$MAINCOM" == "publicip6"  -a "$SUBCOM" == "update" ]; then
+	PUBLICIPS6Update "$@"
+elif [ "$MAINCOM" == "publicip6"  -a "$SUBCOM" == "delete" ]; then
+	PUBLICIPS6Delete $@
+elif [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == "bind" ] ||
+     [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == "associate" ]; then
+	PUBLICIPS6Bind $@
+elif [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == "unbind" ] ||
+     [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == "disassociate" ]; then
+	PUBLICIPS6Unbind $@
+elif [ "$MAINCOM" == "publicip6" -a "$SUBCOM" == find ]; then
+	convertEip6ToId $1
 	echo "$EIP_ID   $EIP_IP   $EIP_STATUS"
 
 elif [ "$MAINCOM" == "subnet" -a "$SUBCOM" == "help" ]; then
