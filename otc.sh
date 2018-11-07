@@ -1169,7 +1169,7 @@ vpcHelp()
 	echo "    --name <peername>           # optional name (will get autogen otherwise)"
 	echo "    --project-id <accproject>   # project (tenant) ID of VPCA, only required if not us"
 	echo "otc vpcpeer accept ID|NAME      # accept peering request"
-	echo "otc vpcpeer refuse ID|NAME      # refuse peering request"
+	echo "otc vpcpeer reject ID|NAME      # refuse peering request"
 	echo "otc vpcpeer update ID|NAME      # update peering request"
 	echo "    --name <peername>           # updated name"
 	echo "otc vpcpeer ID|NAME             # Delete peering"
@@ -2363,6 +2363,24 @@ updateVPCPeer()
 	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; exit 2; fi
 	if test -z "$NAME"; then echo "ERROR: Need to specify --name" 1>&2; exit 2; fi
 	curlputauth "$TOKEN" "{ \"peering\": { \"name\": \"$NAME\" } }" "$NEUTRON_URL/v2.0/vpc/peerings/$ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+acceptVPCPeer()
+{
+	ID=$1
+	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; exit 2; fi
+	curlputauth "$TOKEN" "" "$NEUTRON_URL/v2.0/vpc/peerings/$ID/accept" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
+
+rejectVPCPeer()
+{
+	ID=$1
+	if ! is_uuid "$1"; then NM="$(uriencode $1)"; ID=$(curlgetauth $TOKEN "$NEUTRON_URL/v2.0/vpc/peerings?name=$NM" | jq .peerings[].id | tr -d '"'); fi
+	if ! is_uuid "$ID"; then echo "ERROR: Peering $1 not found" 1>&2; exit 2; fi
+	curlputauth "$TOKEN" "" "$NEUTRON_URL/v2.0/vpc/peerings/$ID/reject" | jq -r '.'
 	return ${PIPESTATUS[0]}
 }
 
@@ -6974,7 +6992,7 @@ elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "accept" ]; then
 	acceptVPCPeer "$@"
 elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "refuse" ] ||
      [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "reject" ]; then
-	refuseVPCPeer "$@"
+	rejectVPCPeer "$@"
 elif [ "$MAINCOM" == "vpcpeer"  -a "$SUBCOM" == "delete" ]; then
 	deleteVPCPeer "$@"
 
