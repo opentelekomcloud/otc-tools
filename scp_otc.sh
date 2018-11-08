@@ -1,7 +1,7 @@
 #!/bin/bash
 # Little helper to scp into VMs
 #
-# (c) Kurt Garloff <t-systems@garloff.de>, 1/2018, CC-BY-SA 3.0
+# (c) Kurt Garloff <t-systems@garloff.de>, 1/2018, CC-BY-SA-4.0
 
 usage()
 {

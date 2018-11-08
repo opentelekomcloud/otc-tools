@@ -43,7 +43,7 @@
 # === Copyright
 #
 # Copyright 2016 - 2017 T-Systems International GmbH
-# License: CC-BY-SA 3.0
+# License: CC-BY-SA-4.0
 #
 [ "$1" = -x ] && shift && set -x
 
