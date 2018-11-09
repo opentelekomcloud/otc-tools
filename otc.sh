@@ -47,7 +47,7 @@
 #
 [ "$1" = -x ] && shift && set -x
 
-VERSION=0.8.31
+VERSION=0.8.32
 
 # Get Config ####################################################################
 warn_too_open()
@@ -1208,13 +1208,12 @@ eipHelp()
 	echo "    --bandwidth-name    <bandwidthame>"
 	echo "    --bandwidth         <bandwidth>"
 	echo "    --address           <Public IP addr>"
-	echo "    --ipv6                      # create a nat64 address"
+	echo "    --pep                       # create a 198.19.16/20 address"
 	echo "otc publicip update <id/ip>     # change name and/or bandwidth (same opts)"
 	echo "otc publicip delete <id/ip>     # delete a publicip (EIP)"
 	echo "otc publicip bind <id/ip> <port-id>       # bind a publicip to a port / private IP"
 	echo "otc publicip unbind <id/ip>               # unbind a publicip"
 	# TODO: bandwidth
-	# TODO: publicip6
 	echo "otc publicip6 list              # list all IPv6 floating ips"
 	echo "otc publicip6 ...               # same commands available as for IPv4 (except update)"
 	echo "                                # currently not well tested (as not yet supported)"
@@ -5077,7 +5076,7 @@ PUBLICIPSCreate()
 {
 	local IPAD
 	if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
-	if test -n "$DOIPV6"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
+	if test -n "$DOPEP"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
 	if test -n "$IPADDR"; then IPAD=", \"ip_address\": \"$IPADDR\""; fi
 	local REQ_CREATE_PUBLICIPS='{
 		"publicip": {
@@ -5099,7 +5098,7 @@ PUBLICIPSUpdate()
 {
 	if ! is_uuid "$1" && is_ip4 $1; then convertEIPtoID $1; else EIP=$1; fi
 	#if test -z "$BANDWIDTH_NAME"; then BANDWIDTH_NAME="bandwidth-${BANDWIDTH}m-$$"; fi
-	if test -n "$DOIPV6"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
+	if test -n "$DOPEP"; then local EIPTP="5_ipv6"; else EIPTP="5_bgp"; fi
 	if test -z "$BWID"; then BWID=$(curlgetauth $TOKEN $AUTH_URL_PUBLICIPS/$EIP | jq .publicip.bandwidth_id | tr -d '"'); fi
 	if test -z "$BWID" -o "$BWID" == "null"; then echo "ERROR: No such public IP $EIP" 1>&2; exit 2; fi
 	local REQ_UPDATE_BW='{
@@ -6649,7 +6648,10 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 			-n|--instance-name)
 				INSTANCE_NAME="$2"; shift;;
 			-6|--ipv6)
-				DOIPV6=1;;
+				echo "#Note: Use otc.sh publicip6 for IPv6 Floating IPs" 1>&2
+				DOPEP=1;;
+			--pep)
+				DOPEP=1;;
 			-t|--instance-id)
 				INSTANCE_ID="$2"; shift;;
 			--volume-name)
