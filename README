@@ -1,5 +1,5 @@
-About otc-tools
-===============
+About otc-tools (deprecated)
+============================
 This is the otc tool for using the Open Telekom Cloud APIs.  It is a simple
 demonstrator using shell/curl/jq to use the OpenTelekomCloud's OpenStack and
 OTC specific REST interfaces.  It is used for testing by the OTC engineering
@@ -10,7 +10,8 @@ Prefix any command by --debug to observe the REST calls being made.
 
 otc-tools is NOT recommended for production use. We do fix bugs that get
 reported to us and do accept contributions (pull requests / patches) if they
-meet our standards, but we do not actively develop this tool any further.
+meet our standards, but we do not actively develop this tool any further
+except for internal needs.
 
 For production use, we recommend using the native OpenStack python client tools
 (python-openstackclient) with the plugins from python-otcextensions that
@@ -18,12 +19,19 @@ implement OTC specific functions. This is also what we preinstall on our latest
 public Linux images.
 It's also still possible to use the older service specific client tools (such
 as python-novaclient etc.) and complement this by python-otcclient or
-otc-tools, but that is deprecated now.  All of the OTC-specific tools can be
+otc-tools, but that is deprecated now. All of the OTC-specific tools can be
 found on github/OpenTelekomCloud.
 
 Of course higher level tools, such as heat, ansible or terraform are a good
 choice for automation. For a more programmatic approach, use openstacksdk
 (and shade).
+
+The otc-tools repository (and package) also has two wrappers for openSSH,
+ssh_otc.sh and scp_otc.sh that allow you to specify source/targets by
+VM name or VM UUID instead of IP address. It uses otc.sh to resolve name/ID
+to IP address behind the scenes (and has some cleverness to know which IP
+to use in case of several IPs and to chose an EIP if needed).
+
 
 Usage
 -----
