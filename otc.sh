@@ -1010,6 +1010,7 @@ ecsHelp()
 	echo "otc ecs list-detail [ECS]  # list ecs instances in full detail (JSON)"
 	echo "otc ecs details [ECS]      # list ecs instances in some detail (table)"
 	echo "otc ecs show <vmid>        # show instance <vmid>"
+	echo "otc ecs show2 <vmid>       # show instance <vmid> (nova v2.26)"
 	echo "otc ecs console-log <vmid> # get console output from VM"
 	echo "otc ecs create -n <name>   # create ecs instance <name>"
 	echo
