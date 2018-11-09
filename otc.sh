@@ -1281,8 +1281,8 @@ imageHelp()
 
 elbHelp()
 {
-	echo "--- Elastic Load Balancer (ELB) ---"
-	echo "otc elb list            # list all load balancers"
+	echo "--- Classic Elastic Load Balancer (ELBv1) ---"
+	echo "otc elb list            # list all classic load balancers"
 	echo "otc elb show <eid>      # show elb details (eid can also be name)"
 	echo "otc elb create [<vpcid> [<name> [<bandwidth>]]]   # create new elb"
 	echo "    --vpc-name <vpcname>"
@@ -1319,9 +1319,9 @@ elbHelp()
 	echo "otc elb deletecert ID/NM        # SSL certificate deletion"
 
 	echo "--- Unified Load Balancer (ULB aka LBaaSv2) ---"
-	echo "otc ulb list            # list all unified load balancers"
-	echo "otc ulb show ULB        # show details of ULB"
-	echo "otc ulb details ULB     # show more details of ULB"
+	echo "otc ulb list            # list all unified load balancers/ELBv2"
+	echo "otc ulb show <ulb>      # show details of <ulb>"
+	echo "otc ulb details <ulb>   # show more details of <ulb>"
 }
 
 asHelp()
