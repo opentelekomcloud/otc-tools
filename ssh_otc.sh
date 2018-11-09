@@ -60,6 +60,36 @@ getVPC()
 	return 1
 }
 
+ipval()
+{
+	declare -i val=0
+	OLDIFS="$IFS"
+	IFS="."
+	for oct in $1; do
+		val=$(((val<<8)+$oct))
+	done
+	IFS="$OLDIFS"
+	echo "$val"
+}
+
+# $1: net/pref
+# $2-: IPs to test
+# echos matching IP (if any)
+ipmatch()
+{
+	PREF=${1#*/}
+	MASK=$((0xffffffff^(0xffffffff>>$PREF)))
+	NET=$(ipval ${1%%/*})
+	NET=$((NET&MASK))
+	shift
+	#echo "$PREF $MASK $NET"
+	for ip in "$@"; do
+		#echo "Debug: ipval $ip & $MASK == $NET: $(ipval $ip): $(($(ipval $ip)&$MASK))" 1>&2
+		if test $(($(ipval $ip)&$MASK)) == $NET; then echo "$ip"; return 0; fi
+	done
+	return 1	
+}
+
 getvm()
 {
 	VM=$1
@@ -70,7 +100,7 @@ getvm()
 	fi
 
 	VMINFO=$(otc.sh vm show $VM) || { echo "No such VM \"$VM\"" 1>&2; exit 2; }
-	IP=$(echo "$VMINFO" | jq '.interfaceAttachments[].fixed_ips[].ip_address' | tr -d '"' | head -n1)
+	IPS=$(echo "$VMINFO" | jq '.interfaceAttachments[] | select(.port_state == "ACTIVE") | .fixed_ips[].ip_address' | tr -d '"')
 	NAME=$(echo "$VMINFO" | jq '.server.name' | tr -d '"')
 	FLAVOR=$(echo "$VMINFO" | jq '.server.flavor.id' | tr -d '"')
 	IMGID=$(echo "$VMINFO" | jq '.server.image.id' | tr -d '"')
@@ -85,17 +115,25 @@ getvm()
 		OSVER=$(echo "$IMGINFO" | jq '.__os_version' | tr -d '"')
 	fi
 	if [[ "$OSVER" = "Ubuntu"* ]] && [ "$USER" == "linux" ]; then USER=ubuntu; fi
-	echo -e "${YELLOW}#VM Info: $VM $NAME $FLAVOR $IMGNAME $OSVER${NORM}" 1>&2
+	MYSUB=$(ip route show | grep '^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*/[0-9]* '); MYSUB=${MYSUB%% *}
+	#echo "$Debug: ipmatch $MYSUB" $IPS
+	IP=$(ipmatch $MYSUB $IPS)
+	echo -e "${YELLOW}#VM Info: $VM $NAME $FLAVOR $IMGNAME $OSVER${NORM}" $IPS 1>&2
+	# Fallback to old behavior
+	if test -z "$IP" -a -n "$IPS"; then IP=$(echo "$IPS" | tail -n1); fi
 
 	# Check VPC and use EIP if present and needed
 	MYVPC=$(otc.sh mds meta_data 2>/dev/null | jq .meta.vpc_id | tr -d '"')
-	if test -z "$MYVPC" -o "$MYVPC" == "null" || test "$(getVPC)" != "$MYVPC"; then
-		NPORT=$(echo "$VMINFO" | jq .interfaceAttachments[].port_id | head -n1 | tr -d '"')
-		EIP=$(otc.sh eip list | grep " $IP " | awk '{ print $2; }')
-		if test -n "$EIP"; then
-			echo "#Using EIP $EIP instead of IP $IP" 1>&2
-			IP=$EIP
-		fi
+	if test -z "$MYVPC" -o "$MYVPC" == "null" -o -z "$IP" || test "$(getVPC)" != "$MYVPC"; then
+		#NPORT=$(echo "$VMINFO" | jq '.interfaceAttachments[] | select(.port_state == "ACTIVE") | .port_id' | tr -d '"')
+		for ip in $IPS; do
+			EIP=$(otc.sh eip list | grep " $ip " | awk '{ print $2; }')
+			if test -n "$EIP"; then 
+				echo "#Using EIP $EIP ($ip) instead of IP $IP" 1>&2
+				IP=$EIP
+				break
+			fi
+		done
 	fi
 }
 
