@@ -326,12 +326,12 @@ docurl()
 
 curlpost()
 {
-	docurl -i -sS -H "Content-Type: application/json" -d "$1" "$2"
+	docurl -i -sS -H "Content-Type: application/json" -d "$@"
 }
 
 curlhead()
 {
-	docurl -I -sS -X HEAD -H "Content-Type: application/json" -H "Accept: application/json" "$1"
+	docurl -I -sS -X HEAD -H "Content-Type: application/json" -H "Accept: application/json" "$@"
 }
 
 curlpostauth()
@@ -342,7 +342,7 @@ curlpostauth()
 		-H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" \
 		-H "X-Language: en-us" \
-		-d "$1" "$2"
+		-d "$@"
 }
 
 curlputauth()
@@ -350,10 +350,10 @@ curlputauth()
 	TKN="$1"; shift
 	if test -n "$1"; then
 		docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
-			-H "X-Auth-Token: $TKN" -d "$1" "$2"
+			-H "X-Auth-Token: $TKN" -d "$@"
 	else
 		docurl -sS -X PUT -H "Content-Type: application/json" -H "Accept: application/json" \
-			-H "X-Auth-Token: $TKN" "$2"
+			-H "X-Auth-Token: $TKN" "$@"
 	fi
 }
 
@@ -361,20 +361,20 @@ curlputauthbinfile()
 {
 	TKN="$1"; shift
 	docurl -sS -X PUT -H "Content-Type: application/octet-stream" \
-		-H "X-Auth-Token: $TKN" -T "$1" "$2"
+		-H "X-Auth-Token: $TKN" -T "$@"
 }
 
 curlgetauth()
 {
 	TKN="$1"; shift
 	docurl -sS -X GET -H "Content-Type: application/json" -H "Accept: application/json" \
-		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$1"
+		-H "X-Auth-Token: $TKN" -H "X-Language: en-us" "$@"
 }
 
 curlheadauth()
 {
 	TKN="$1"; shift
-	docurl -sS -X HEAD --head -H "X-Auth-Token: $TKN" "$1"
+	docurl -sS -X HEAD --head -H "X-Auth-Token: $TKN" "$@"
 }
 
 curlheadauthparm()
@@ -427,12 +427,14 @@ curlgetauth_pag()
 curldeleteauth()
 {
 	TKN="$1"; shift
+	URL="$1"; shift
 	if test -n "$2"; then
-		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "$2" -H "X-Auth-Token: $TKN" "$1"
-		docurl -sS -X DELETE -H "Accept: application/json" -H "$2" -H "X-Auth-Token: $TKN" "$1"
+		HDR="$1"; shift
+		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "$HDR" -H "X-Auth-Token: $TKN" "$URL" "$@"
+		docurl -sS -X DELETE -H "Accept: application/json" -H "$HDR" -H "X-Auth-Token: $TKN" "$URL" "$@"
 	else
-		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
-		docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$1"
+		#docurl -sS -X DELETE -H "Content-Type: application/json" -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$URL" "$@"
+		docurl -sS -X DELETE -H "Accept: application/json" -H "X-Auth-Token: $TKN" "$URL" "$@"
 	fi
 }
 
@@ -443,7 +445,7 @@ curldeleteauth_language()
 		-H "Content-Type: application/json" \
 		-H "Accept: application/json" \
 		-H "X-Language: en-us" \
-		-H "X-Auth-Token: $TKN" "$1"
+		-H "X-Auth-Token: $TKN" "$@"
 }
 
 curlpatchauth()
@@ -454,7 +456,7 @@ curlpatchauth()
 		-H "Content-Type: $CTYPE" \
 		-H "Accept: application/json" \
 		-H "X-Auth-Token: $TKN" \
-		-d "$1" "$2"
+		-d "$@" 
 }
 
 # ARGS: TKN URL PATH OP VALUE [CONTENTTYPE]
@@ -499,7 +501,7 @@ curldeleteauthwithjsonparameter()
 	docurl -sS -X DELETE \
 		-H "Content-Type: application/json" \
 		-H "X-Language: en-us" \
-		-H "X-Auth-Token: $TKN" -d "$1" "$2" | jq '.'
+		-H "X-Auth-Token: $TKN" -d "$@" | jq '.'
 }
 
 unset SUBNETAZ
@@ -2081,6 +2083,14 @@ handleCustom()
 	return $RC
 }
 
+
+getECSv2()
+{
+	if ! is_uuid "$1"; then convertECSNameToId "$1"; else ECS_ID="$1"; fi
+	#X-OpenStack-Nova-API-Version: 2.26
+	curlgetauth $TOKEN -H "X-OpenStack-Nova-API-Version: 2.26" "${NOVA_URL/v2/v2.1}/servers/$ECS_ID" | jq -r '.'
+	return ${PIPESTATUS[0]}
+}
 
 getECSVM()
 {
@@ -6949,6 +6959,8 @@ elif [ "$MAINCOM" == "ecs"  -a "$SUBCOM" == "details" ]; then
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show" ] ||
      [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "vm" ]; then
 	getECSVM $1
+elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "show2" ]; then
+	getECSv2 $1
 
 elif [ "$MAINCOM" == "ecs" -a "$SUBCOM" == "limits" ]; then
 	getLimits
