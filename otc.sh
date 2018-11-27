@@ -1049,7 +1049,7 @@ ecsHelp()
 	echo "    --az                  <AZ>		# determined from subnet by default"
 	echo "    --tags KEY=[VAL][,KEY=VAL[,...]]# add key-value pairs as tags"
 	echo "    --inherit-tags                  # tag created rootdisk as well"
-	echo "    --autorecovery true/false       # set autorecovery (Xen only)"
+	echo "    --autorecovery true/false       # set autorecovery"
 	echo "    --[no]wait"
 	echo "otc ecs create2            # create vm with v2 API (same params, incomplete)"
 	echo
@@ -6733,7 +6733,7 @@ if [ "${SUBCOM:0:6}" == "create" -o "$SUBCOM" == "addlistener" -o "${SUBCOM:0:6}
 				SCSI=1;;
 			--datadisks)
 				DATADISKS="$2"; shift;;
-			--autorecovery)
+			--autorecovery|--auto-recovery)
 				AUTORECOV="$(echo $2 | tr 'A-Z' 'a-z')"; shift;;
 			--tags)
 				TAGS="$2"; shift
