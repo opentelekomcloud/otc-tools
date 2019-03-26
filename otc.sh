@@ -3246,16 +3246,24 @@ showRecord()
 
 listRecords()
 {
-	# TODO pagination
+    PAGESIZE=100
 	if test -z "$1"; then
-		curlgetauth $TOKEN "${AUTH_URL_DNS%zones}recordsets"  | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
+        URL="${AUTH_URL_DNS%zones}recordsets?limit=$PAGESIZE"
 	else
 		ID=$(domainNameID $1) || exit
-		curlgetauth $TOKEN "$AUTH_URL_DNS/$ID/recordsets" | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
-	fi
-	return ${PIPESTATUS[0]}
+        URL="$AUTH_URL_DNS/$ID/recordsets?limit=$PAGESIZE"
+        echo $URL
+        fi
+        while : ; do
+        next_link=$(curlgetauth $TOKEN "$URL" | tee -a /tmp/dns.$$.json | jq -r '.links.next')
+                [ -z "$next_link" ] && break
+        [ $next_link == "null" ] && break
+                URL="$next_link"
+    done
+    cat /tmp/dns.$$.json | jq -r 'def str(s): s|tostring; .recordsets[] | .id+"   "+.name+"   "+.status+"   "+.type+"   "+str(.ttl)+"   "+str(.records)' | arraytostr
+          unlink /tmp/dns.$$.json
+        return ${PIPESTATUS[0]}    
 }
-
 deleteRecord()
 {
 	curldeleteauth $TOKEN "$AUTH_URL_DNS/$1/recordsets/$2" | jq .
